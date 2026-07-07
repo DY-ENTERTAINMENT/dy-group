@@ -3,6 +3,7 @@ import { Camera, Coffee, Clock, FileClock, LogIn, LogOut } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { getBrowserGeoPosition } from '../services/attendance-location.service';
 import { type AttendanceRecordItem, attendanceService, getPublicIpAddress } from '../services/attendance.service';
 import type { AttendancePunchType } from '../types/database';
 
@@ -84,28 +85,13 @@ export function AttendancePage() {
   }
 
   function loadLocation() {
-    if (!navigator.geolocation) {
-      setError('当前浏览器不支持 GPS 定位。');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGeoState({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-      },
-      () => {
-        setError('无法获取 GPS。请允许浏览器使用定位后再试。');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0,
-      },
-    );
+    void getBrowserGeoPosition()
+      .then((position) => {
+        setGeoState(position);
+      })
+      .catch((locationError) => {
+        setError(locationError instanceof Error ? locationError.message : '无法取得当前位置，请检查浏览器定位权限或网络后重试。');
+      });
   }
 
   async function loadIpAddress() {
@@ -143,7 +129,7 @@ export function AttendancePage() {
     }
 
     if (!geoState) {
-      setError('请先允许 GPS 定位。');
+      setError('请允许浏览器定位权限，否则无法打卡。');
       return;
     }
 

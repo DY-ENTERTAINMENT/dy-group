@@ -1423,6 +1423,16 @@ a {
   accent-color: var(--primary);
 }
 
+.location-preview {
+  display: grid;
+  gap: 6px;
+  min-height: 48px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
 .staff-list-panel {
   min-width: 0;
   overflow: hidden;

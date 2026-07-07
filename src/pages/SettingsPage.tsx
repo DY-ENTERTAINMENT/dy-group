@@ -1158,7 +1158,8 @@ function getPermissionGroupKey(item: (typeof menuItems)[number]) {
     item.key === 'registration-review' ||
     item.key === 'leave-review' ||
     item.key === 'attendance-management' ||
-    item.key === 'public-holidays'
+    item.key === 'public-holidays' ||
+    item.key === 'attendance-locations'
   ) return 'hr';
   return item.key;
 }
@@ -1245,7 +1246,7 @@ function getCurrentSpecialPermissionName(target: PermissionModalTarget | null, n
 }
 
 function getDefaultPermissionKeys(name: string) {
-  if (name.includes('HR')) return ['hr', 'staff', 'registration-review', 'leave-review', 'attendance-management'];
+  if (name.includes('HR')) return ['hr', 'staff', 'registration-review', 'leave-review', 'attendance-management', 'attendance-locations'];
   if (name.includes('高级管理员')) return ['scout', 'agent', 'designer', 'hr'];
   if (name.includes('管理员')) return ['scout', 'agent', 'designer', 'hr'];
   if (name.includes('经纪')) return ['agent'];

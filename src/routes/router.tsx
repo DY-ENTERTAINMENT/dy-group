@@ -6,6 +6,7 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { SchedulePage } from '../pages/SchedulePage';
 import { StaffPage } from '../pages/StaffPage';
 import { AttendancePage } from '../pages/AttendancePage';
+import { AttendanceLocationPage } from '../pages/AttendanceLocationPage';
 import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
 import { LeavePage } from '../pages/LeavePage';
 import { LeaveReviewPage } from '../pages/LeaveReviewPage';
@@ -82,6 +83,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="public-holidays">
                 <PublicHolidayPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('attendance-locations'),
+            element: (
+              <RequirePermission permissionKey="attendance-locations">
+                <AttendanceLocationPage />
               </RequirePermission>
             ),
           },

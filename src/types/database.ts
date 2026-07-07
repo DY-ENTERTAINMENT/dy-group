@@ -132,7 +132,24 @@ export type AttendanceRecord = {
   overtime_minutes: number | null;
   is_abnormal: boolean;
   abnormal_types: string[];
+  attendance_location_id: string | null;
+  distance_meters: number | null;
+  location_check_result: string | null;
   created_at: string;
+};
+
+export type AttendanceLocation = {
+  id: string;
+  region_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Shift = {
@@ -330,7 +347,7 @@ export type Database = {
       attendance_records: {
         Row: AttendanceRecord;
         Insert: Pick<AttendanceRecord, 'profile_id' | 'punch_type' | 'photo_path' | 'latitude' | 'longitude' | 'device_info'> &
-          Partial<Pick<AttendanceRecord, 'id' | 'employee_id' | 'punched_at' | 'accuracy' | 'ip_address' | 'break_minutes' | 'overtime_minutes' | 'is_abnormal' | 'abnormal_types' | 'created_at'>>;
+          Partial<Pick<AttendanceRecord, 'id' | 'employee_id' | 'punched_at' | 'accuracy' | 'ip_address' | 'break_minutes' | 'overtime_minutes' | 'is_abnormal' | 'abnormal_types' | 'attendance_location_id' | 'distance_meters' | 'location_check_result' | 'created_at'>>;
         Update: Partial<Omit<AttendanceRecord, 'id' | 'created_at'>>;
         Relationships: [
           {
@@ -343,6 +360,42 @@ export type Database = {
           {
             foreignKeyName: 'attendance_records_profile_id_fkey';
             columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'attendance_records_attendance_location_id_fkey';
+            columns: ['attendance_location_id'];
+            isOneToOne: false;
+            referencedRelation: 'attendance_locations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      attendance_locations: {
+        Row: AttendanceLocation;
+        Insert: Pick<AttendanceLocation, 'region_id' | 'name' | 'latitude' | 'longitude'> &
+          Partial<Pick<AttendanceLocation, 'id' | 'radius_meters' | 'is_active' | 'created_by' | 'updated_by' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<AttendanceLocation, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_locations_region_id_fkey';
+            columns: ['region_id'];
+            isOneToOne: false;
+            referencedRelation: 'regions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'attendance_locations_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'attendance_locations_updated_by_fkey';
+            columns: ['updated_by'];
             isOneToOne: false;
             referencedRelation: 'profiles';
             referencedColumns: ['id'];
@@ -581,6 +634,27 @@ export type Database = {
       current_user_can_cancel_calendar_leave: {
         Args: Record<string, never>;
         Returns: boolean;
+      };
+      calculate_distance_meters: {
+        Args: {
+          lat1: number;
+          lon1: number;
+          lat2: number;
+          lon2: number;
+        };
+        Returns: number;
+      };
+      create_attendance_record_checked: {
+        Args: {
+          p_punch_type: AttendancePunchType;
+          p_photo_path: string;
+          p_latitude: number;
+          p_longitude: number;
+          p_accuracy: number | null;
+          p_ip_address: string | null;
+          p_device_info: string;
+        };
+        Returns: string;
       };
       cancel_calendar_leave_item: {
         Args: {

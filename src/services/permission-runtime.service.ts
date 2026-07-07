@@ -17,6 +17,7 @@ const parentPermissionKeys: Record<string, string> = {
   'leave-review': 'hr',
   'attendance-management': 'hr',
   'public-holidays': 'hr',
+  'attendance-locations': 'hr',
 };
 
 export const permissionRuntimeService = {

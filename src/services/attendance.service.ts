@@ -41,19 +41,16 @@ export const attendanceService = {
   },
 
   async createAttendanceRecord(payload: AttendanceCapturePayload) {
-    const employee = await findEmployeeByProfileId(payload.profileId);
     const photoPath = await uploadAttendancePhoto(payload.profileId, payload.punchType, payload.photoBlob);
 
-    const { error } = await supabase.from('attendance_records').insert({
-      profile_id: payload.profileId,
-      employee_id: employee?.id ?? null,
-      punch_type: payload.punchType,
-      photo_path: photoPath,
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      accuracy: payload.accuracy,
-      ip_address: payload.ipAddress,
-      device_info: payload.deviceInfo,
+    const { error } = await supabase.rpc('create_attendance_record_checked', {
+      p_punch_type: payload.punchType,
+      p_photo_path: photoPath,
+      p_latitude: payload.latitude,
+      p_longitude: payload.longitude,
+      p_accuracy: payload.accuracy,
+      p_ip_address: payload.ipAddress,
+      p_device_info: payload.deviceInfo,
     });
 
     if (error) {
@@ -98,19 +95,4 @@ async function uploadAttendancePhoto(profileId: string, punchType: AttendancePun
   }
 
   return path;
-}
-
-async function findEmployeeByProfileId(profileId: string) {
-  const { data, error } = await supabase
-    .from('employees')
-    .select('id')
-    .eq('profile_id', profileId)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
 }
