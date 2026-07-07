@@ -4,7 +4,6 @@ import { NavLink } from 'react-router-dom';
 import { menuItems, toolGroupOrder } from '../routes/menu';
 import logoUrl from '../assets/logo.png';
 import { usePermissions } from '../hooks/usePermissions';
-import { useAuth } from '../hooks/useAuth';
 
 type SidebarProps = {
   collapsed: boolean;
@@ -14,8 +13,6 @@ type SidebarProps = {
 
 export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarProps) {
   const permissions = usePermissions();
-  const { profile } = useAuth();
-  const canManagePublicHolidays = ['super_admin', 'admin', 'hr'].includes(profile?.role ?? '');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     工作工具: true,
   });
@@ -29,10 +26,9 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
       menuItems.filter((item) => {
         if (!item.section) return true;
         if (item.key === 'settings') return permissions.isSuperAdmin;
-        if (item.key === 'public-holidays') return canManagePublicHolidays;
         return permissions.canView(item.key);
       }),
-    [canManagePublicHolidays, permissions],
+    [permissions],
   );
   const standaloneItems = visibleMenuItems.filter((item) => !item.section);
   const groupedSections = useMemo(

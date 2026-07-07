@@ -8,6 +8,7 @@ import {
   publicHolidayService,
 } from '../services/public-holiday.service';
 import type { Region } from '../types/database';
+import { usePermissions } from '../hooks/usePermissions';
 
 const emptyForm: PublicHolidayFormValues = {
   holiday_name: '',
@@ -17,6 +18,8 @@ const emptyForm: PublicHolidayFormValues = {
 };
 
 export function PublicHolidayPage() {
+  const permissions = usePermissions();
+  const canUsePublicHolidays = permissions.canUse('public-holidays');
   const [year, setYear] = useState(new Date().getFullYear());
   const [regionFilter, setRegionFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -164,10 +167,12 @@ export function PublicHolidayPage() {
             <span>人事部</span>
             <h3>公共假期</h3>
           </div>
-          <button className="primary-button compact-button" type="button" onClick={openCreateModal}>
-            <Plus size={16} />
-            新增公共假期
-          </button>
+          {canUsePublicHolidays ? (
+            <button className="primary-button compact-button" type="button" onClick={openCreateModal}>
+              <Plus size={16} />
+              新增公共假期
+            </button>
+          ) : null}
         </div>
 
         <div className="attendance-filters public-holiday-filters">
@@ -219,7 +224,7 @@ export function PublicHolidayPage() {
                   <th>日期</th>
                   <th>区域</th>
                   <th>备注</th>
-                  <th>操作</th>
+                  {canUsePublicHolidays ? <th>操作</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -231,22 +236,24 @@ export function PublicHolidayPage() {
                     <td>{formatDate(holiday.holiday_date)}</td>
                     <td>{formatRegion(holiday)}</td>
                     <td>{holiday.note || '-'}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="secondary-button compact-button" type="button" onClick={() => openEditModal(holiday)}>
-                          <Edit3 size={15} />
-                          编辑
-                        </button>
-                        <button
-                          className="secondary-button compact-button danger-text-button"
-                          type="button"
-                          onClick={() => setDeletingHoliday(holiday)}
-                        >
-                          <Trash2 size={15} />
-                          删除
-                        </button>
-                      </div>
-                    </td>
+                    {canUsePublicHolidays ? (
+                      <td>
+                        <div className="row-actions">
+                          <button className="secondary-button compact-button" type="button" onClick={() => openEditModal(holiday)}>
+                            <Edit3 size={15} />
+                            编辑
+                          </button>
+                          <button
+                            className="secondary-button compact-button danger-text-button"
+                            type="button"
+                            onClick={() => setDeletingHoliday(holiday)}
+                          >
+                            <Trash2 size={15} />
+                            删除
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

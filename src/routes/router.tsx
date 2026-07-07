@@ -80,9 +80,9 @@ export const router = createBrowserRouter([
           {
             path: getMenuPath('public-holidays'),
             element: (
-              <RequireRole allowedRoles={['super_admin', 'admin', 'hr']}>
+              <RequirePermission permissionKey="public-holidays">
                 <PublicHolidayPage />
-              </RequireRole>
+              </RequirePermission>
             ),
           },
           {
