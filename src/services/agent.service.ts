@@ -1,0 +1,398 @@
+﻿import { supabase } from '../lib/supabase';
+import { getEmployeeName, platformLabels, creatorTypeLabels, type CreatorPlatform, type CreatorProfile, type CreatorType } from './scout.service';
+import type { Employee, Region } from '../types/database';
+
+export type RevenueRecord = {
+  id: string;
+  creator_profile_id: string;
+  revenue_month: string;
+  revenue_date: string;
+  revenue_amount: number;
+  kpi_days: number;
+  kpi_hours: number;
+  kpi_revenue: number;
+  achieved_days: number;
+  achieved_hours: number;
+  achieved_revenue: number;
+  creator: CreatorProfile | null;
+};
+
+export type AdjustmentStatus = 'pending' | 'approved' | 'rejected';
+export type AdjustmentType = 'to_online' | 'to_company' | 'to_5_1' | 'change_manager' | 'change_scout' | 'change_bank' | 'special';
+export type DesignRequestStatus = 'unclaimed' | 'in_progress' | 'confirming' | 'revision' | 'ok' | 'completed' | 'cancelled';
+export type DesignRequestType = 'banner' | 'standee' | 'poster' | 'special';
+export type PrintMethod = 'print' | 'no_print' | 'self_print';
+
+export type AgentOptions = {
+  regions: Region[];
+  employees: Array<Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'>>;
+  currentEmployee: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'> | null;
+};
+
+export type AdjustmentRequest = {
+  id: string;
+  platform: CreatorPlatform;
+  platform_user_id: string | null;
+  creator_profile_id: string | null;
+  request_type: AdjustmentType;
+  effective_date: string | null;
+  full_name: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  target_nickname: string | null;
+  target_email: string | null;
+  content: string | null;
+  status: AdjustmentStatus;
+  created_at: string;
+  creator: Pick<CreatorProfile, 'id' | 'creator_name' | 'platform_account' | 'platform_user_id'> | null;
+};
+
+export type AdjustmentFormValues = {
+  platform: CreatorPlatform;
+  platform_user_id: string;
+  request_type: AdjustmentType;
+  effective_date: string;
+  full_name: string;
+  bank_name: string;
+  bank_account: string;
+  target_nickname: string;
+  target_email: string;
+  content: string;
+};
+
+export type DesignRequest = {
+  id: string;
+  request_type: DesignRequestType;
+  status: DesignRequestStatus;
+  platform: CreatorPlatform | null;
+  platform_user_id: string | null;
+  creator_name: string | null;
+  platform_account: string | null;
+  fan_nickname: string | null;
+  fan_level: string | null;
+  design_content: string | null;
+  design_elements: string | null;
+  print_method: PrintMethod | null;
+  special_content: string | null;
+  reference_urls: string[];
+  design_urls: string[];
+  revision_note: string | null;
+  agent_employee_id: string | null;
+  designer_employee_id: string | null;
+  accepted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  agent: Pick<Employee, 'id' | 'full_name' | 'nickname'> | null;
+  designer: Pick<Employee, 'id' | 'full_name' | 'nickname'> | null;
+};
+
+export type DesignFormValues = {
+  request_type: DesignRequestType;
+  platform: CreatorPlatform;
+  platform_user_id: string;
+  creator_name: string;
+  platform_account: string;
+  fan_nickname: string;
+  fan_level: string;
+  design_content: string;
+  design_elements: string;
+  print_method: PrintMethod;
+  special_content: string;
+  reference_urls: string;
+};
+
+export type RevenueSummary = {
+  total: number;
+  plusFiveOne: number;
+  nonFiveOne: number;
+};
+
+const db = supabase as any;
+
+const creatorSelect = `
+  id,
+  joined_date,
+  platform,
+  platform_user_id,
+  platform_account,
+  region_id,
+  creator_name,
+  scout_employee_id,
+  scout_profile_id,
+  manager_employee_id,
+  creator_type,
+  bank_name,
+  bank_account,
+  created_at,
+  updated_at,
+  regions:region_id(id, code, name),
+  scout:employees!creator_profiles_scout_employee_id_fkey(id, full_name, nickname),
+  manager:employees!creator_profiles_manager_employee_id_fkey(id, full_name, nickname)
+`;
+
+const revenueSelect = `
+  id,
+  creator_profile_id,
+  revenue_month,
+  revenue_date,
+  revenue_amount,
+  kpi_days,
+  kpi_hours,
+  kpi_revenue,
+  achieved_days,
+  achieved_hours,
+  achieved_revenue,
+  creator:creator_profiles!creator_revenue_records_creator_profile_id_fkey(${creatorSelect})
+`;
+
+const designSelect = `
+  id,
+  request_type,
+  status,
+  platform,
+  platform_user_id,
+  creator_name,
+  platform_account,
+  fan_nickname,
+  fan_level,
+  design_content,
+  design_elements,
+  print_method,
+  special_content,
+  reference_urls,
+  design_urls,
+  revision_note,
+  agent_employee_id,
+  designer_employee_id,
+  accepted_at,
+  completed_at,
+  created_at,
+  agent:employees!designer_requests_agent_employee_id_fkey(id, full_name, nickname),
+  designer:employees!designer_requests_designer_employee_id_fkey(id, full_name, nickname)
+`;
+
+export const adjustmentTypeLabels: Record<AdjustmentType, string> = {
+  to_online: '转线上',
+  to_company: '转公司提',
+  to_5_1: '转5+1',
+  change_manager: '转经纪人',
+  change_scout: '转星探',
+  change_bank: '更换银行户口',
+  special: '特殊申请',
+};
+
+export const adjustmentStatusLabels: Record<AdjustmentStatus, string> = {
+  pending: '审核中',
+  approved: '已通过',
+  rejected: '不通过',
+};
+
+export const designTypeLabels: Record<DesignRequestType, string> = {
+  banner: '布条',
+  standee: '立牌',
+  poster: '海报',
+  special: '特殊申请',
+};
+
+export const designStatusLabels: Record<DesignRequestStatus, string> = {
+  unclaimed: '未接单',
+  in_progress: '制作中',
+  confirming: '跟主播确认中',
+  revision: '调整中',
+  ok: 'OK',
+  completed: '完成',
+  cancelled: '已取消',
+};
+
+export const printMethodLabels: Record<PrintMethod, string> = {
+  print: '打印',
+  no_print: '不打印',
+  self_print: '自费打印',
+};
+
+export const agentService = {
+  async getOptions(profileId?: string): Promise<AgentOptions> {
+    const [regionsResult, employeesResult] = await Promise.all([
+      supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+      supabase.from('employees').select('id, full_name, nickname, profile_id, region_id, email').is('deleted_at', null).order('full_name', { ascending: true }),
+    ]);
+    if (regionsResult.error) throw regionsResult.error;
+    if (employeesResult.error) throw employeesResult.error;
+    const employees = (employeesResult.data ?? []) as AgentOptions['employees'];
+    return { regions: regionsResult.data ?? [], employees, currentEmployee: employees.find((employee) => employee.profile_id === profileId) ?? null };
+  },
+
+  async listManagedCreators(profileId: string, filters: { month?: string; platform?: string; regionId?: string }) {
+    const options = await this.getOptions(profileId);
+    if (!options.currentEmployee) return [];
+    let query = db.from('creator_profiles').select(creatorSelect).eq('manager_employee_id', options.currentEmployee.id).order('joined_date', { ascending: false });
+    if (filters.platform) query = query.eq('platform', filters.platform);
+    if (filters.regionId) query = query.eq('region_id', filters.regionId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).filter((row: any) => !filters.month || String(row.joined_date).startsWith(filters.month)).map(mapCreatorRow);
+  },
+
+  async listRevenueData(input: { profileId?: string; month: string; platform?: string; regionId?: string; management?: boolean }) {
+    let creatorIds: string[] | null = null;
+    if (!input.management && input.profileId) {
+      const creators = await this.listManagedCreators(input.profileId, { platform: input.platform, regionId: input.regionId });
+      const nextCreatorIds = creators.map((creator: CreatorProfile) => creator.id);
+      if (nextCreatorIds.length === 0) return [];
+      creatorIds = nextCreatorIds;
+    }
+
+    let query = db.from('creator_revenue_records').select(revenueSelect).eq('revenue_month', input.month).order('revenue_date', { ascending: false });
+    if (creatorIds !== null) query = query.in('creator_profile_id', creatorIds);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? [])
+      .map(mapRevenueRow)
+      .filter((row: RevenueRecord) => !input.platform || row.creator?.platform === input.platform)
+      .filter((row: RevenueRecord) => !input.regionId || row.creator?.region_id === input.regionId);
+  },
+
+  async listAdjustments(profileId: string): Promise<AdjustmentRequest[]> {
+    const { data, error } = await db
+      .from('creator_adjustment_requests')
+      .select('*, creator:creator_profiles(id, creator_name, platform_account, platform_user_id)')
+      .eq('requester_profile_id', profileId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async createAdjustment(profileId: string, values: AdjustmentFormValues) {
+    const { error } = await db.from('creator_adjustment_requests').insert({ requester_profile_id: profileId, ...normalizeAdjustment(values) });
+    if (error) throw error;
+  },
+
+  async listDesignRequests(filters: { profileId?: string; designerProfileId?: string; mode: 'agent' | 'intake' | 'progress' }) {
+    let query = db.from('designer_requests').select(designSelect).order('created_at', { ascending: filters.mode === 'intake' });
+    if (filters.mode === 'agent' && filters.profileId) query = query.eq('agent_profile_id', filters.profileId);
+    if (filters.mode === 'intake') query = query.eq('status', 'unclaimed');
+    if (filters.mode === 'progress' && filters.designerProfileId) query = query.eq('designer_profile_id', filters.designerProfileId).neq('status', 'completed').neq('status', 'cancelled');
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map(mapDesignRow);
+  },
+
+  async createDesignRequest(profileId: string, values: DesignFormValues) {
+    const options = await this.getOptions(profileId);
+    const { error } = await db.from('designer_requests').insert({ agent_profile_id: profileId, agent_employee_id: options.currentEmployee?.id ?? null, ...normalizeDesign(values) });
+    if (error) throw error;
+  },
+
+  async claimDesignRequest(profileId: string, requestId: string) {
+    const options = await this.getOptions(profileId);
+    const { error } = await db.from('designer_requests').update({ status: 'in_progress', designer_profile_id: profileId, designer_employee_id: options.currentEmployee?.id ?? null, accepted_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) throw error;
+  },
+
+  async updateDesignStatus(requestId: string, status: DesignRequestStatus, extras: { revisionNote?: string; designUrls?: string } = {}) {
+    const payload: Record<string, unknown> = { status };
+    if (extras.revisionNote !== undefined) payload.revision_note = extras.revisionNote.trim() || null;
+    if (extras.designUrls !== undefined) payload.design_urls = splitLines(extras.designUrls);
+    if (status === 'completed') payload.completed_at = new Date().toISOString();
+    const { error } = await db.from('designer_requests').update(payload).eq('id', requestId);
+    if (error) throw error;
+  },
+};
+
+export function summarizeRevenue(records: RevenueRecord[]): RevenueSummary {
+  return records.reduce<RevenueSummary>((summary, record) => {
+    const value = Number(record.revenue_amount) || 0;
+    summary.total += value;
+    if (record.creator?.creator_type === '5+1') summary.plusFiveOne += value;
+    else summary.nonFiveOne += value;
+    return summary;
+  }, { total: 0, plusFiveOne: 0, nonFiveOne: 0 });
+}
+
+export function createRevenueBreakdown(records: RevenueRecord[]) {
+  return {
+    total: summarizeRevenue(records),
+    tiktok: summarizeRevenue(records.filter((record) => record.creator?.platform === 'tiktok')),
+    douyin: summarizeRevenue(records.filter((record) => record.creator?.platform === 'douyin')),
+  };
+}
+
+export function formatMoney(value: number) {
+  return `RM ${value.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export { getEmployeeName, platformLabels, creatorTypeLabels };
+
+function normalizeAdjustment(values: AdjustmentFormValues) {
+  return {
+    platform: values.platform,
+    platform_user_id: values.platform_user_id.trim() || null,
+    request_type: values.request_type,
+    effective_date: values.effective_date || null,
+    full_name: values.full_name.trim() || null,
+    bank_name: values.bank_name.trim() || null,
+    bank_account: values.bank_account.trim() || null,
+    target_nickname: values.target_nickname.trim() || null,
+    target_email: values.target_email.trim() || null,
+    content: values.content.trim() || null,
+  };
+}
+
+function normalizeDesign(values: DesignFormValues) {
+  const isSpecial = values.request_type === 'special';
+  return {
+    request_type: values.request_type,
+    platform: isSpecial ? null : values.platform,
+    platform_user_id: isSpecial ? null : values.platform_user_id.trim() || null,
+    creator_name: isSpecial ? null : values.creator_name.trim() || null,
+    platform_account: isSpecial ? null : values.platform_account.trim() || null,
+    fan_nickname: values.request_type === 'banner' || values.request_type === 'standee' ? values.fan_nickname.trim() || null : null,
+    fan_level: values.request_type === 'banner' || values.request_type === 'standee' ? values.fan_level.trim() || null : null,
+    design_content: values.request_type === 'poster' || values.request_type === 'banner' || values.request_type === 'standee' ? values.design_content.trim() || null : null,
+    design_elements: values.request_type === 'poster' ? values.design_elements.trim() || null : null,
+    print_method: values.request_type === 'banner' || values.request_type === 'standee' ? values.print_method : null,
+    special_content: isSpecial ? values.special_content.trim() || null : null,
+    reference_urls: splitLines(values.reference_urls),
+  };
+}
+
+function splitLines(value: string) {
+  return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+}
+
+function mapCreatorRow(row: any): CreatorProfile {
+  return {
+    id: row.id,
+    joined_date: row.joined_date,
+    platform: row.platform,
+    platform_user_id: row.platform_user_id,
+    platform_account: row.platform_account,
+    region_id: row.region_id,
+    creator_name: row.creator_name,
+    scout_employee_id: row.scout_employee_id,
+    scout_profile_id: row.scout_profile_id,
+    manager_employee_id: row.manager_employee_id,
+    creator_type: row.creator_type,
+    bank_name: row.bank_name,
+    bank_account: row.bank_account,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    region: row.regions,
+    scout: row.scout,
+    manager: row.manager,
+  };
+}
+
+function mapRevenueRow(row: any): RevenueRecord {
+  return { ...row, creator: row.creator ? mapCreatorRow(row.creator) : null };
+}
+
+function mapDesignRow(row: any): DesignRequest {
+  return {
+    ...row,
+    reference_urls: row.reference_urls ?? [],
+    design_urls: row.design_urls ?? [],
+  };
+}
+
+

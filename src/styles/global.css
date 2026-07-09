@@ -4743,3 +4743,44 @@ button.leave-chip:disabled {
     padding: 14px;
   }
 }
+
+.agent-page,
+.designer-page {
+  display: grid;
+  gap: 18px;
+}
+
+.agent-count-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-count-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-weight: 800;
+  background: var(--panel-soft);
+}
+
+.agent-count-strip b {
+  color: var(--primary-dark);
+  font-size: 18px;
+}
+
+.agent-table {
+  min-width: 920px;
+}
+
+.agent-table td > span,
+.agent-table td > strong {
+  display: block;
+}

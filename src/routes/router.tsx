@@ -22,6 +22,8 @@ import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 import { RegisterReviewPage } from '../pages/RegisterReviewPage';
 import { RegistrationReviewPage } from '../pages/RegistrationReviewPage';
 import { ScoutPage } from '../pages/ScoutPage';
+import { AgentPage } from '../pages/AgentPage';
+import { DesignerPage } from '../pages/DesignerPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
 import { RequireRole } from '../components/RequireRole';
@@ -96,6 +98,54 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: getMenuPath('agent-revenue-data'),
+            element: (
+              <RequirePermission permissionKey="agent-revenue-data">
+                <AgentPage mode="revenue" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('agent-creator-data'),
+            element: (
+              <RequirePermission permissionKey="agent-creator-data">
+                <AgentPage mode="creators" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('agent-adjustment-requests'),
+            element: (
+              <RequirePermission permissionKey="agent-adjustment-requests">
+                <AgentPage mode="adjustments" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('agent-design-requests'),
+            element: (
+              <RequirePermission permissionKey="agent-design-requests">
+                <AgentPage mode="design-requests" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('designer-intake'),
+            element: (
+              <RequirePermission permissionKey="designer-intake">
+                <DesignerPage mode="intake" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('designer-progress'),
+            element: (
+              <RequirePermission permissionKey="designer-progress">
+                <DesignerPage mode="progress" />
+              </RequirePermission>
+            ),
+          },
+          {
             path: getMenuPath('scout-recruiting-data'),
             element: (
               <RequirePermission permissionKey="scout-recruiting-data">
@@ -124,6 +174,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="scout-streamer-stats">
                 <ScoutPage mode="personal-streamers" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('management-revenue-data'),
+            element: (
+              <RequirePermission permissionKey="management-revenue-data">
+                <AgentPage mode="management-revenue" />
               </RequirePermission>
             ),
           },

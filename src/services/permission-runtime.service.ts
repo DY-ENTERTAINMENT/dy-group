@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import type { AppRole, Profile } from '../types/database';
 import type { PermissionAccess, PermissionState } from './permission-management.service';
 
@@ -12,6 +12,12 @@ export type RuntimePermissions = {
 const db = supabase as any;
 
 const parentPermissionKeys: Record<string, string> = {
+  'agent-revenue-data': 'agent',
+  'agent-creator-data': 'agent',
+  'agent-adjustment-requests': 'agent',
+  'agent-design-requests': 'agent',
+  'designer-intake': 'designer',
+  'designer-progress': 'designer',
   'scout-recruiting-data': 'scout',
   'scout-recruit-list': 'scout',
   'scout-onboarding': 'scout',
