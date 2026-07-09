@@ -4,13 +4,16 @@ import {
   CalendarDays,
   ClipboardCheck,
   Clock3,
+  Database,
   FileClock,
   Home,
+  ListChecks,
   MapPin,
   Palette,
   Route,
   Settings,
   Sparkles,
+  UserCheck,
   UserRound,
   UsersRound,
 } from 'lucide-react';
@@ -57,13 +60,36 @@ export const menuItems: MenuItem[] = [
     icon: Route,
   },
   {
-    key: 'scout',
-    label: '星探',
-    path: '/tools/scout',
+    key: 'scout-recruiting-data',
+    label: '招募数据',
+    path: '/tools/scout/recruiting-data',
     icon: Sparkles,
     section: '工作工具',
     group: '星探',
-    disabled: true,
+  },
+  {
+    key: 'scout-recruit-list',
+    label: '名单',
+    path: '/tools/scout/recruit-list',
+    icon: ListChecks,
+    section: '工作工具',
+    group: '星探',
+  },
+  {
+    key: 'scout-onboarding',
+    label: '入公会',
+    path: '/tools/scout/onboarding',
+    icon: UserCheck,
+    section: '工作工具',
+    group: '星探',
+  },
+  {
+    key: 'scout-streamer-stats',
+    label: '主播统计',
+    path: '/tools/scout/streamer-stats',
+    icon: Database,
+    section: '工作工具',
+    group: '星探',
   },
   {
     key: 'agent',
@@ -132,11 +158,27 @@ export const menuItems: MenuItem[] = [
     group: '人事部',
   },
   {
+    key: 'management-streamer-stats',
+    label: '总主播统计',
+    path: '/management/streamer-stats',
+    icon: Database,
+    section: '管理',
+    group: '管理',
+  },
+  {
+    key: 'management-recruiting-data',
+    label: '总招募数据',
+    path: '/management/recruiting-data',
+    icon: Sparkles,
+    section: '管理',
+    group: '管理',
+  },
+  {
     key: 'settings',
     label: '系统设置',
     path: '/settings',
     icon: Settings,
-    section: '工作工具',
+    section: '管理',
     group: '管理',
   },
 ];
@@ -152,3 +194,5 @@ export function getMenuPath(key: MenuItem['key']) {
 
   return item.path.replace(/^\//, '');
 }
+
+

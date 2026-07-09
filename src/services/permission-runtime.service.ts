@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import type { AppRole, Profile } from '../types/database';
 import type { PermissionAccess, PermissionState } from './permission-management.service';
 
@@ -12,6 +12,10 @@ export type RuntimePermissions = {
 const db = supabase as any;
 
 const parentPermissionKeys: Record<string, string> = {
+  'scout-recruiting-data': 'scout',
+  'scout-recruit-list': 'scout',
+  'scout-onboarding': 'scout',
+  'scout-streamer-stats': 'scout',
   staff: 'hr',
   'registration-review': 'hr',
   'leave-review': 'hr',
@@ -137,3 +141,4 @@ function mergePermissionAccess(permissions: PermissionState, permissionKey: stri
     use: nextUse,
   };
 }
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Edit3, Plus, RefreshCw, Search, Settings2, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { SystemModal } from '../components/SystemModal';
@@ -1169,6 +1169,7 @@ function getPermissionGroupName(groupKey: string) {
   if (groupKey === 'scout') return '星探';
   if (groupKey === 'agent') return '经纪人';
   if (groupKey === 'designer') return '美工';
+  if (groupKey === 'management') return '管理';
   return groupKey;
 }
 
@@ -1390,3 +1391,4 @@ function getMobileSettingsTitle(moduleKey: SettingsModule['key']) {
   if (moduleKey === 'employment_types') return '雇佣';
   return '权限';
 }
+

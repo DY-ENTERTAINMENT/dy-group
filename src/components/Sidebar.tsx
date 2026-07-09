@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Menu } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { menuItems, toolGroupOrder } from '../routes/menu';
@@ -17,6 +17,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
     工作工具: true,
   });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    星探: true,
     人事部: true,
     管理: true,
   });
@@ -174,3 +175,4 @@ function SidebarLink({
     </NavLink>
   );
 }
+

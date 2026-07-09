@@ -21,6 +21,7 @@ import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 import { RegisterReviewPage } from '../pages/RegisterReviewPage';
 import { RegistrationReviewPage } from '../pages/RegistrationReviewPage';
+import { ScoutPage } from '../pages/ScoutPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
 import { RequireRole } from '../components/RequireRole';
@@ -95,6 +96,54 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: getMenuPath('scout-recruiting-data'),
+            element: (
+              <RequirePermission permissionKey="scout-recruiting-data">
+                <ScoutPage mode="personal-recruiting" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('scout-recruit-list'),
+            element: (
+              <RequirePermission permissionKey="scout-recruit-list">
+                <ScoutPage mode="recruit-list" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('scout-onboarding'),
+            element: (
+              <RequirePermission permissionKey="scout-onboarding">
+                <ScoutPage mode="onboarding" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('scout-streamer-stats'),
+            element: (
+              <RequirePermission permissionKey="scout-streamer-stats">
+                <ScoutPage mode="personal-streamers" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('management-streamer-stats'),
+            element: (
+              <RequirePermission permissionKey="management-streamer-stats">
+                <ScoutPage mode="management-streamers" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('management-recruiting-data'),
+            element: (
+              <RequirePermission permissionKey="management-recruiting-data">
+                <ScoutPage mode="management-recruiting" />
+              </RequirePermission>
+            ),
+          },
+          {
             path: 'attendance',
             element: <AttendancePage />,
           },
@@ -156,3 +205,4 @@ export const router = createBrowserRouter([
     element: <NotFoundPage />,
   },
 ]);
+

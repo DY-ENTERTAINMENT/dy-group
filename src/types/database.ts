@@ -1,4 +1,4 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type ProfileStatus = 'pending_review' | 'approved' | 'rejected' | 'suspended';
 export type EmployeeStatus = 'probation' | 'active' | 'inactive' | 'left';
@@ -9,6 +9,9 @@ export type AttendancePunchType = 'clock_in' | 'break_start' | 'break_end' | 'cl
 export type ScheduleEventType = 'meeting' | 'training' | 'shooting' | 'live' | 'visit' | 'other';
 export type ScheduleEventStatus = 'active' | 'cancelled';
 export type RecurringTodoFrequency = 'daily' | 'weekly' | 'monthly' | 'month_end' | 'custom';
+export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
+export type CreatorPlatform = 'tiktok' | 'douyin';
+export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
 
 export type Profile = {
   id: string;
@@ -242,6 +245,40 @@ export type RecurringTodoItem = {
   updated_at: string;
 };
 
+export type ScoutCandidate = {
+  id: string;
+  scout_profile_id: string;
+  name: string;
+  gender: string | null;
+  age: number | null;
+  source: string | null;
+  contact: string | null;
+  current_job: string | null;
+  remark: string | null;
+  status: CandidateStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatorProfile = {
+  id: string;
+  joined_date: string;
+  platform: CreatorPlatform;
+  platform_user_id: string;
+  platform_account: string;
+  region_id: string | null;
+  creator_name: string;
+  scout_employee_id: string | null;
+  scout_profile_id: string | null;
+  manager_employee_id: string | null;
+  creator_type: CreatorType;
+  bank_name: string | null;
+  bank_account: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
 export type Database = {
   public: {
     Tables: {
@@ -527,7 +564,75 @@ export type Database = {
           },
         ];
       };
-    };
+      scout_candidates: {
+        Row: ScoutCandidate;
+        Insert: Pick<ScoutCandidate, 'scout_profile_id' | 'name'> &
+          Partial<Pick<ScoutCandidate, 'id' | 'gender' | 'age' | 'source' | 'contact' | 'current_job' | 'remark' | 'status' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<ScoutCandidate, 'id' | 'scout_profile_id' | 'created_at' | 'updated_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'scout_candidates_scout_profile_id_fkey';
+            columns: ['scout_profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      creator_profiles: {
+        Row: CreatorProfile;
+        Insert: Pick<
+          CreatorProfile,
+          'joined_date' | 'platform' | 'platform_user_id' | 'platform_account' | 'creator_name' | 'creator_type'
+        > &
+          Partial<
+            Pick<
+              CreatorProfile,
+              | 'id'
+              | 'region_id'
+              | 'scout_employee_id'
+              | 'scout_profile_id'
+              | 'manager_employee_id'
+              | 'bank_name'
+              | 'bank_account'
+              | 'created_by'
+              | 'updated_by'
+              | 'created_at'
+              | 'updated_at'
+            >
+          >;
+        Update: Partial<Omit<CreatorProfile, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'creator_profiles_region_id_fkey';
+            columns: ['region_id'];
+            isOneToOne: false;
+            referencedRelation: 'regions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'creator_profiles_scout_employee_id_fkey';
+            columns: ['scout_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'creator_profiles_scout_profile_id_fkey';
+            columns: ['scout_profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'creator_profiles_manager_employee_id_fkey';
+            columns: ['manager_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };    };
     Views: Record<string, never>;
     Functions: {
       approve_leave_request: {
@@ -678,7 +783,11 @@ export type Database = {
       leave_type: LeaveType;
       leave_request_status: LeaveRequestStatus;
       attendance_punch_type: AttendancePunchType;
+      candidate_status: CandidateStatus;
+      creator_platform: CreatorPlatform;
+      creator_type: CreatorType;
     };
     CompositeTypes: Record<string, never>;
   };
 };
+
