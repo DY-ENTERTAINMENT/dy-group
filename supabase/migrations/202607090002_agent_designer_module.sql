@@ -1,4 +1,4 @@
-﻿do $$
+do $$
 begin
   create type public.creator_adjustment_status as enum ('pending', 'approved', 'rejected');
 exception when duplicate_object then null;
