@@ -118,6 +118,8 @@ export function StaffPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+
     setSaving(true);
     setError('');
     setMessage('');
@@ -133,17 +135,34 @@ export function StaffPage() {
       }
 
       if (editingEmployee) {
-        await staffService.updateEmployee(editingEmployee.id, nextValues);
-        setMessage('工作人员资料已更新。');
+        validateWorkTimes(nextValues.start_work_time, nextValues.end_work_time);
+        const workTimeChanged =
+          normalizeTime(nextValues.start_work_time) !== normalizeTime(editingEmployee.start_work_time) ||
+          normalizeTime(nextValues.end_work_time) !== normalizeTime(editingEmployee.end_work_time);
+        const updatedEmployee = await staffService.updateEmployee(editingEmployee.id, nextValues);
+
+        if (
+          normalizeTime(updatedEmployee.start_work_time) !== normalizeTime(nextValues.start_work_time) ||
+          normalizeTime(updatedEmployee.end_work_time) !== normalizeTime(nextValues.end_work_time)
+        ) {
+          throw new Error('数据库重新读取到的工作时间与本次修改不一致。');
+        }
+
+        setEmployees((current) => current.map((employee) => (employee.id === updatedEmployee.id ? updatedEmployee : employee)));
+        setEditingEmployee(updatedEmployee);
+        setFormValues(toFormValues(updatedEmployee));
+        setMessage(workTimeChanged ? '工作时间已成功更新' : '工作人员资料已成功更新');
       } else {
+        validateWorkTimes(nextValues.start_work_time, nextValues.end_work_time);
         await staffService.createEmployee(nextValues);
         setMessage('工作人员已新增。');
+        resetForm();
+        await loadStaffData();
       }
-
-      resetForm();
-      await loadStaffData();
     } catch (saveError) {
-      setError(`保存工作人员资料失败：${getErrorMessage(saveError)}`);
+      console.error('Failed to save staff work time', saveError);
+      const actionLabel = editingEmployee ? '工作时间更新失败' : '新增工作人员失败';
+      setError(`${actionLabel}：${getStaffSaveErrorMessage(saveError)}`);
     } finally {
       setSaving(false);
     }
@@ -665,8 +684,8 @@ function toFormValues(employee: EmployeeListItem): EmployeeFormValues {
     job_title_id: employee.job_title_id ?? '',
     status: employee.status,
     hire_date: employee.hire_date ?? '',
-    start_work_time: employee.start_work_time ?? '',
-    end_work_time: employee.end_work_time ?? '',
+    start_work_time: normalizeTime(employee.start_work_time),
+    end_work_time: normalizeTime(employee.end_work_time),
     require_attendance: employee.require_attendance,
   };
 }
@@ -719,4 +738,67 @@ function getErrorMessage(error: unknown) {
     if (typeof message === 'string' && message.trim()) return message;
   }
   return '未知错误';
+}
+
+function normalizeTime(value: string | null | undefined) {
+  return value ? value.slice(0, 5) : '';
+}
+
+function validateWorkTimes(startTime: string, endTime: string) {
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+  if (!timePattern.test(startTime) || !timePattern.test(endTime)) {
+    throw new Error('开始时间和结束时间格式不正确。');
+  }
+
+  if (endTime <= startTime) {
+    throw new Error('下班时间必须晚于上班时间。');
+  }
+}
+
+function getStaffSaveErrorMessage(error: unknown) {
+  const rawMessage = getErrorMessage(error);
+  const normalizedMessage = rawMessage.toLowerCase();
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : '';
+
+  if (rawMessage.includes('开始时间和结束时间格式不正确') || rawMessage.includes('下班时间必须晚于上班时间')) {
+    return rawMessage;
+  }
+
+  if (rawMessage.includes('数据库没有更新任何资料')) {
+    return rawMessage;
+  }
+
+  if (rawMessage.includes('找不到对应的工作人员记录')) {
+    return rawMessage;
+  }
+
+  if (rawMessage.includes('员工编号已存在') || rawMessage.includes('员工编号不可为空')) {
+    return rawMessage;
+  }
+
+  if (rawMessage.includes('请求超时')) {
+    return '请求超时，请检查网络后重试';
+  }
+
+  if (code === '42501' || normalizedMessage.includes('permission') || normalizedMessage.includes('row-level security') || rawMessage.includes('无权')) {
+    return '没有权限修改该工作人员，请确认区域和工作人员权限。';
+  }
+
+  if (
+    normalizedMessage.includes('failed to fetch') ||
+    normalizedMessage.includes('network') ||
+    normalizedMessage.includes('load failed')
+  ) {
+    return '网络连接失败，请稍后再试。';
+  }
+
+  if (code === '23514' || normalizedMessage.includes('check constraint')) {
+    return '数据库拒绝了此次操作，请检查工作时间是否符合规定。';
+  }
+
+  return '数据库拒绝了此次操作，请稍后再试或联系系统管理员。';
 }

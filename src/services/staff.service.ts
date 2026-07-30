@@ -117,6 +117,8 @@ const employeeSelect = `
   job_titles:job_title_id(id, name)
 `;
 
+const staffUpdateTimeoutMs = 15_000;
+
 export const staffService = {
   async listEmployees() {
     const { error: confirmError } = await supabase.rpc('auto_confirm_probation_employees');
@@ -178,12 +180,39 @@ export const staffService = {
   },
 
   async updateEmployee(employeeId: string, values: EmployeeFormValues) {
-    await ensureEmployeeCodeAvailable(values.employee_code, employeeId);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), staffUpdateTimeoutMs);
 
-    const { error } = await supabase.from('employees').update(normalizeEmployeePayload(values)).eq('id', employeeId);
+    try {
+      await ensureEmployeeCodeAvailable(values.employee_code, employeeId, controller.signal);
 
-    if (error) {
+      const { data, error } = await supabase
+        .from('employees')
+        .update(normalizeEmployeePayload(values))
+        .eq('id', employeeId)
+        .select('id')
+        .abortSignal(controller.signal)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('数据库没有更新任何资料，可能没有权限修改该工作人员或记录不存在。');
+      }
+
+      return await getEmployeeById(employeeId, controller.signal);
+    } catch (error) {
+      if (controller.signal.aborted) {
+        const timeoutError = new Error('请求超时，请检查网络后重试。') as Error & { cause?: unknown };
+        timeoutError.cause = error;
+        throw timeoutError;
+      }
+
       throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   },
 
@@ -196,7 +225,7 @@ export const staffService = {
   },
 };
 
-async function ensureEmployeeCodeAvailable(value: string, currentEmployeeId?: string) {
+async function ensureEmployeeCodeAvailable(value: string, currentEmployeeId?: string, signal?: AbortSignal) {
   const employeeCode = normalizeEmployeeCode(value);
   if (!employeeCode) return;
 
@@ -204,6 +233,10 @@ async function ensureEmployeeCodeAvailable(value: string, currentEmployeeId?: st
 
   if (currentEmployeeId) {
     query = query.neq('id', currentEmployeeId);
+  }
+
+  if (signal) {
+    query = query.abortSignal(signal);
   }
 
   const { data, error } = await query.maybeSingle();
@@ -217,11 +250,43 @@ async function ensureEmployeeCodeAvailable(value: string, currentEmployeeId?: st
   }
 }
 
-async function getReviewerMap(rows: EmployeeRowWithRelations[]) {
+async function getEmployeeById(employeeId: string, signal?: AbortSignal) {
+  let query = supabase
+    .from('employees')
+    .select(employeeSelect)
+    .eq('id', employeeId)
+    .is('deleted_at', null);
+
+  if (signal) {
+    query = query.abortSignal(signal);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('找不到对应的工作人员记录，无法确认工作时间是否保存成功。');
+  }
+
+  const row = data as unknown as EmployeeRowWithRelations;
+  const reviewerMap = await getReviewerMap([row], signal);
+  return mapEmployeeRow(row, reviewerMap);
+}
+
+async function getReviewerMap(rows: EmployeeRowWithRelations[], signal?: AbortSignal) {
   const reviewerIds = Array.from(new Set(rows.map((row) => row.reviewed_by).filter(Boolean))) as string[];
   if (reviewerIds.length === 0) return new Map<string, Pick<Profile, 'id' | 'full_name' | 'email'>>();
 
-  const { data, error } = await supabase.from('profiles').select('id, full_name, email').in('id', reviewerIds);
+  let query = supabase.from('profiles').select('id, full_name, email').in('id', reviewerIds);
+
+  if (signal) {
+    query = query.abortSignal(signal);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
