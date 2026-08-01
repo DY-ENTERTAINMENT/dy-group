@@ -430,12 +430,12 @@ function LeaveRequestModal({
                 <option value="annual">年假</option>
                 <option value="medical">病假</option>
                 <option value="unpaid">无薪假</option>
-                <option value="replacement">Replacement</option>
+                <option value="replacement">调休日</option>
               </select>
             </label>
 
             <label className="form-field">
-              <span>{isReplacement ? 'Make-up Saturday' : '开始日期'}</span>
+              <span>{isReplacement ? '补班日期' : '开始日期'}</span>
               <input
                 type="date"
                 value={values.start_date}
@@ -445,7 +445,7 @@ function LeaveRequestModal({
             </label>
 
             <label className="form-field">
-              <span>{isReplacement ? 'Leave Date' : '结束日期'}</span>
+              <span>{isReplacement ? '调休日期' : '结束日期'}</span>
               <input
                 type="date"
                 value={values.end_date}
