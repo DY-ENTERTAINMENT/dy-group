@@ -111,7 +111,15 @@ export const attendanceManagementService = {
       publicHolidaysQuery = publicHolidaysQuery.or(`region_id.is.null,region_id.eq.${regionId}`);
     }
 
-    const [employeesResult, attendanceResult, leaveResult, restResult, publicHolidaysResult, regionsResult] = await Promise.all([
+    const [
+      employeesResult,
+      attendanceResult,
+      leaveResult,
+      replacementLeaveResult,
+      restResult,
+      publicHolidaysResult,
+      regionsResult,
+    ] = await Promise.all([
       scopedEmployeesQuery,
       supabase
         .from('attendance_records')
@@ -122,8 +130,17 @@ export const attendanceManagementService = {
       supabase
         .from('leave_requests')
         .select('*')
+        .neq('leave_type', 'replacement')
         .lte('start_date', range.endDate)
         .gte('end_date', range.startDate)
+        .order('start_date', { ascending: true }),
+      supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('leave_type', 'replacement')
+        .or(
+          `and(start_date.gte.${range.startDate},start_date.lte.${range.endDate}),and(end_date.gte.${range.startDate},end_date.lte.${range.endDate})`,
+        )
         .order('start_date', { ascending: true }),
       supabase.rpc('get_rest_day_calendar', {
         cycle_year: Number(yearText),
@@ -146,6 +163,10 @@ export const attendanceManagementService = {
       throw leaveResult.error;
     }
 
+    if (replacementLeaveResult.error) {
+      throw replacementLeaveResult.error;
+    }
+
     if (restResult.error) {
       throw restResult.error;
     }
@@ -161,7 +182,7 @@ export const attendanceManagementService = {
     return {
       employees: ((employeesResult.data ?? []) as unknown as EmployeeRowWithRelations[]).map(mapEmployeeRow),
       attendanceRecords: attendanceResult.data ?? [],
-      leaveRequests: leaveResult.data ?? [],
+      leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
       regions: regionsResult.data ?? [],
@@ -201,6 +222,16 @@ function mapEmployeeRow(row: EmployeeRowWithRelations): AttendanceEmployee {
     employment_type: row.employment_types,
     job_title: row.job_titles,
   };
+}
+
+function mergeLeaveRequests(primary: LeaveRequest[], secondary: LeaveRequest[]) {
+  const map = new Map<string, LeaveRequest>();
+
+  [...primary, ...secondary].forEach((request) => {
+    map.set(request.id, request);
+  });
+
+  return [...map.values()];
 }
 
 function toDateKey(date: Date) {

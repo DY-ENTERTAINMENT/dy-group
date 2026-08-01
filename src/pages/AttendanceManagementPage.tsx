@@ -474,6 +474,7 @@ function buildSummaries(
   const today = toDateKey(new Date());
   const recordsByEmployeeDate = groupAttendanceRecords(attendanceRecords);
   const leavesByEmployeeDate = groupLeaveRequests(leaveRequests, dates);
+  const replacementMakeUpDatesByEmployeeDate = groupApprovedReplacementMakeUpDates(leaveRequests, dates);
   const restDaysByEmployeeDate = groupRestDays(restDays);
   const publicHolidaysByRegionDate = groupPublicHolidays(publicHolidays);
 
@@ -503,17 +504,19 @@ function buildSummaries(
       const breakEnd = records.find((record) => record.punch_type === 'break_end') ?? null;
       const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out') ?? null;
       const leave = leavesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
+      const replacementMakeUpDate = replacementMakeUpDatesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const restDay = restDaysByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const publicHoliday = getPublicHolidayForDate(publicHolidaysByRegionDate, employee.region_id, date);
       const breakMinutes = breakStart && breakEnd ? minutesBetween(breakStart.punched_at, breakEnd.punched_at) : 0;
       const workHours = clockIn && clockOut ? minutesBetween(clockIn.punched_at, clockOut.punched_at) / 60 : null;
       const statuses: string[] = [];
       const isPastOrToday = date <= today;
-      const nonWorkingDay = isWeekend(date) || Boolean(publicHoliday);
+      const weekend = isWeekend(date);
+      const nonWorkingDay = Boolean(publicHoliday) || (weekend && !replacementMakeUpDate);
 
       if (publicHoliday) {
         statuses.push('公共假期');
-      } else if (isWeekend(date)) {
+      } else if (weekend && !replacementMakeUpDate) {
         statuses.push('周末');
       }
 
@@ -630,11 +633,39 @@ function groupLeaveRequests(requests: LeaveRequest[], dates: string[]) {
       return;
     }
 
+    if (request.leave_type === 'replacement') {
+      if (request.status === 'approved' && dateSet.has(request.end_date)) {
+        map.set(`${request.employee_id}:${request.end_date}`, request);
+      }
+
+      return;
+    }
+
     getDateRange(request.start_date, request.end_date).forEach((date) => {
       if (dateSet.has(date)) {
         map.set(`${request.employee_id}:${date}`, request);
       }
     });
+  });
+
+  return map;
+}
+
+function groupApprovedReplacementMakeUpDates(requests: LeaveRequest[], dates: string[]) {
+  const map = new Map<string, LeaveRequest>();
+  const dateSet = new Set(dates);
+
+  requests.forEach((request) => {
+    if (
+      !request.employee_id ||
+      request.leave_type !== 'replacement' ||
+      request.status !== 'approved' ||
+      !dateSet.has(request.start_date)
+    ) {
+      return;
+    }
+
+    map.set(`${request.employee_id}:${request.start_date}`, request);
   });
 
   return map;

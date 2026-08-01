@@ -79,11 +79,29 @@ export const leaveService = {
   },
 
   async createLeaveRequest(profileId: string, values: LeaveFormValues) {
+    const employee = await findEmployeeByProfileId(profileId);
+
     if (values.leave_type === 'replacement') {
-      throw new Error('换休假已停用，不能提交新的换休申请。');
+      await validateReplacementLeaveRequest(employee, values);
+
+      const { error } = await supabase.from('leave_requests').insert({
+        profile_id: profileId,
+        employee_id: employee?.id ?? null,
+        leave_type: values.leave_type,
+        start_date: values.start_date,
+        end_date: values.end_date,
+        reason: values.reason.trim(),
+        medical_attachment_url: values.medical_attachment_url?.trim() || null,
+        status: 'pending',
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return;
     }
 
-    const employee = await findEmployeeByProfileId(profileId);
     const publicHolidays = await listPublicHolidaysForRange(values.start_date, values.end_date, employee?.region_id ?? null);
     const workingDays = countWorkingLeaveDays(values.start_date, values.end_date, employee?.region_id ?? null, publicHolidays);
 
@@ -267,6 +285,67 @@ async function findEmployeeByProfileId(profileId: string) {
   return data;
 }
 
+async function validateReplacementLeaveRequest(
+  employee: Pick<Employee, 'id' | 'region_id'> | null,
+  values: LeaveFormValues,
+) {
+  if (!employee?.id) {
+    throw new Error('无法确认员工资料，请先在工作人员页面绑定员工资料。');
+  }
+
+  if (!values.reason.trim()) {
+    throw new Error('请填写申请原因。');
+  }
+
+  const makeUpDate = values.start_date;
+  const leaveDate = values.end_date;
+
+  if (!isValidDateKey(makeUpDate) || !isValidDateKey(leaveDate)) {
+    throw new Error('请选择有效的调休日日期。');
+  }
+
+  if (!isSaturday(makeUpDate)) {
+    throw new Error('Make-up Saturday 必须是星期六。');
+  }
+
+  if (isSunday(makeUpDate) || isSunday(leaveDate)) {
+    throw new Error('调休日日期不能选择星期日。');
+  }
+
+  if (!isWeekday(leaveDate)) {
+    throw new Error('Leave Date 必须是星期一至星期五。');
+  }
+
+  const publicHolidays = await listPublicHolidaysForDates([makeUpDate, leaveDate], employee.region_id);
+  if (publicHolidays.length > 0) {
+    throw new Error('Make-up Saturday 和 Leave Date 不能是公共假期。');
+  }
+
+  const restDayConflict = await findConfirmedRestDayConflict(employee.id, [makeUpDate, leaveDate]);
+  if (restDayConflict?.rest_date === makeUpDate) {
+    throw new Error('Make-up Saturday 已是排休日，不能申请调休日。');
+  }
+
+  if (restDayConflict?.rest_date === leaveDate) {
+    throw new Error('Leave Date 已是排休日，不能申请调休日。');
+  }
+
+  const approvedLeaveConflict = await hasApprovedLeaveOnDate(employee.id, leaveDate);
+  if (approvedLeaveConflict) {
+    throw new Error('Leave Date 已有已通过的请假申请。');
+  }
+
+  const approvedOrdinaryLeaveConflict = await hasApprovedOrdinaryLeaveOnDate(employee.id, makeUpDate);
+  if (approvedOrdinaryLeaveConflict) {
+    throw new Error('Make-up Saturday 不可与已批准的年假、病假或无薪假重叠。');
+  }
+
+  const replacementConflict = await hasReplacementDateConflict(employee.id, [makeUpDate, leaveDate]);
+  if (replacementConflict) {
+    throw new Error('该员工已有相同日期的调休日申请。');
+  }
+}
+
 function calculateLeaveEntitlement(employee: Pick<Employee, 'status' | 'probation_confirm_date'> | null): {
   annual: number;
   medical: number;
@@ -332,6 +411,94 @@ async function listPublicHolidaysForRange(startDate: string, endDate: string, re
   return (data ?? []) as PublicHoliday[];
 }
 
+async function listPublicHolidaysForDates(dates: string[], regionId: string | null) {
+  let query = supabase
+    .from('public_holidays')
+    .select('id, holiday_name, holiday_date, region_id, note, is_active, created_by, updated_by, created_at, updated_at')
+    .eq('is_active', true)
+    .in('holiday_date', [...new Set(dates)]);
+
+  query = regionId ? query.or(`region_id.is.null,region_id.eq.${regionId}`) : query.is('region_id', null);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as PublicHoliday[];
+}
+
+async function findConfirmedRestDayConflict(employeeId: string, dates: string[]) {
+  const { data, error } = await supabase
+    .from('rest_days')
+    .select('rest_date')
+    .eq('employee_id', employeeId)
+    .eq('status', 'confirmed')
+    .in('rest_date', [...new Set(dates)])
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.[0] ?? null;
+}
+
+async function hasApprovedLeaveOnDate(employeeId: string, date: string) {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .eq('status', 'approved')
+    .lte('start_date', date)
+    .gte('end_date', date)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.length);
+}
+
+async function hasApprovedOrdinaryLeaveOnDate(employeeId: string, date: string) {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .in('leave_type', ['annual', 'medical', 'unpaid'])
+    .eq('status', 'approved')
+    .lte('start_date', date)
+    .gte('end_date', date)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.length);
+}
+
+async function hasReplacementDateConflict(employeeId: string, dates: string[]) {
+  const uniqueDates = [...new Set(dates)];
+  const dateFilters = uniqueDates.flatMap((date) => [`start_date.eq.${date}`, `end_date.eq.${date}`]).join(',');
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .eq('leave_type', 'replacement')
+    .neq('status', 'rejected')
+    .or(dateFilters)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.length);
+}
+
 function countLeaveWorkingDaysInYear(
   startDate: string,
   endDate: string,
@@ -378,6 +545,32 @@ function countWorkingLeaveDays(startDate: string, endDate: string, regionId: str
 function isWeekend(date: string) {
   const day = new Date(`${date}T00:00:00`).getDay();
   return day === 0 || day === 6;
+}
+
+function isSaturday(date: string) {
+  return getDayOfWeek(date) === 6;
+}
+
+function isSunday(date: string) {
+  return getDayOfWeek(date) === 0;
+}
+
+function isWeekday(date: string) {
+  const day = getDayOfWeek(date);
+  return day >= 1 && day <= 5;
+}
+
+function getDayOfWeek(date: string) {
+  return new Date(`${date}T00:00:00`).getDay();
+}
+
+function isValidDateKey(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false;
+  }
+
+  const value = new Date(`${date}T00:00:00`);
+  return !Number.isNaN(value.getTime()) && toDateKeyFromDate(value) === date;
 }
 
 function toDateKeyFromDate(date: Date) {

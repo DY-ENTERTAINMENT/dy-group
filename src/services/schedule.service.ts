@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { LeaveType, Region } from '../types/database';
 
-export type CalendarLeaveType = Exclude<LeaveType, 'replacement'>;
+export type CalendarLeaveType = LeaveType;
 
 export type LeaveCalendarItem = {
   leave_request_id: string;
@@ -77,9 +77,7 @@ export const scheduleService = {
       throw publicHolidaysResult.error;
     }
 
-    const approvedLeaves = ((leavesResult.data ?? []) as LeaveCalendarRpcRow[])
-      .filter((leave) => leave.leave_type !== 'replacement')
-      .map((leave) => ({
+    const approvedLeaves = ((leavesResult.data ?? []) as LeaveCalendarRpcRow[]).map((leave) => ({
         ...leave,
         leave_type: leave.leave_type as CalendarLeaveType,
         source_type: leave.leave_type,
