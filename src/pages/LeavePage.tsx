@@ -392,6 +392,7 @@ function LeaveRequestModal({
   uploadingAttachment,
 }: LeaveRequestModalProps) {
   const isMedical = values.leave_type === 'medical';
+  const isReplacement = values.leave_type === 'replacement';
 
   return (
     <SystemModal
@@ -429,11 +430,12 @@ function LeaveRequestModal({
                 <option value="annual">年假</option>
                 <option value="medical">病假</option>
                 <option value="unpaid">无薪假</option>
+                <option value="replacement">Replacement</option>
               </select>
             </label>
 
             <label className="form-field">
-              <span>开始日期</span>
+              <span>{isReplacement ? 'Make-up Saturday' : '开始日期'}</span>
               <input
                 type="date"
                 value={values.start_date}
@@ -443,7 +445,7 @@ function LeaveRequestModal({
             </label>
 
             <label className="form-field">
-              <span>结束日期</span>
+              <span>{isReplacement ? 'Leave Date' : '结束日期'}</span>
               <input
                 type="date"
                 value={values.end_date}
