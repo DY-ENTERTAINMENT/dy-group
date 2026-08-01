@@ -18,7 +18,7 @@ const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
   medical: '病假',
   unpaid: '无薪假',
-  replacement: '换休假',
+  replacement: '调休',
 };
 
 const statusLabels: Record<LeaveRequestStatus, string> = {
@@ -430,7 +430,7 @@ function LeaveRequestModal({
                 <option value="annual">年假</option>
                 <option value="medical">病假</option>
                 <option value="unpaid">无薪假</option>
-                <option value="replacement">调休日</option>
+                <option value="replacement">调休</option>
               </select>
             </label>
 
@@ -526,7 +526,7 @@ function LeaveRequestTable({ requests }: { requests: LeaveRequestItem[] }) {
 
 function formatLeaveDate(request: LeaveRequestItem) {
   if (request.leave_type === 'replacement') {
-    return `原本休假日 ${request.start_date}，换去日期 ${request.end_date}`;
+    return `补班日期 ${request.start_date}，调休日期 ${request.end_date}`;
   }
 
   return `${request.start_date} 至 ${request.end_date}`;
