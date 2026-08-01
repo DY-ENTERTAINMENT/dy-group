@@ -18,7 +18,7 @@ const leaveTypeLabels: Record<CalendarLeaveType, string> = {
   annual: '年假',
   medical: '病假',
   unpaid: '无薪假',
-  replacement: '调休日',
+  replacement: '调休',
 };
 
 const cancellationReasons = ['人员取消申请', '录入错误', '重复申请', 'HR调整', '其他'] as const;

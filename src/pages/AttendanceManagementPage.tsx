@@ -51,7 +51,7 @@ const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
   medical: '病假',
   unpaid: '无薪假',
-  replacement: '换休假',
+  replacement: '调休',
 };
 
 export function AttendanceManagementPage() {
@@ -274,7 +274,7 @@ function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSumma
             <StatCard label="年假次数" value={summary.leaveCounts.annual} />
             <StatCard label="病假次数" value={summary.leaveCounts.medical} />
             <StatCard label="无薪假次数" value={summary.leaveCounts.unpaid} />
-            <StatCard label="换休次数" value={summary.leaveCounts.replacement} />
+            <StatCard label="调休次数" value={summary.leaveCounts.replacement} />
           </div>
         </section>
 

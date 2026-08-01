@@ -179,7 +179,7 @@ export function LeaveReviewPage() {
                 <strong>{leaveTypeLabels[selectedRequest.leave_type]}</strong>
               </div>
               <div>
-                <span>{selectedRequest.leave_type === 'replacement' ? '换休日期' : '日期'}</span>
+                <span>{selectedRequest.leave_type === 'replacement' ? '调休日期' : '日期'}</span>
                 <strong>{formatLeaveDate(selectedRequest)}</strong>
               </div>
               <div>
@@ -255,7 +255,7 @@ export function LeaveReviewPage() {
 
 function formatLeaveDate(request: LeaveRequestItem) {
   if (request.leave_type === 'replacement') {
-    return `原本休假日 ${request.start_date}，换去日期 ${request.end_date}`;
+    return `补班日期 ${request.start_date}，调休日期 ${request.end_date}`;
   }
 
   return `${request.start_date} 至 ${request.end_date}`;
