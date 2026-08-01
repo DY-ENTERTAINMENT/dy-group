@@ -18,7 +18,7 @@ const leaveTypeLabels: Record<CalendarLeaveType, string> = {
   annual: '年假',
   medical: '病假',
   unpaid: '无薪假',
-  replacement: 'Replacement',
+  replacement: '调休日',
 };
 
 const cancellationReasons = ['人员取消申请', '录入错误', '重复申请', 'HR调整', '其他'] as const;
@@ -454,8 +454,8 @@ export function SchedulePage() {
               ['人员', selectedLeave.employee_name],
               ['区域', selectedLeave.region_code],
               ['假别', leaveTypeLabels[selectedLeave.leave_type]],
-              [selectedLeave.leave_type === 'replacement' ? 'Make-up Saturday' : '开始日期', selectedLeave.start_date],
-              [selectedLeave.leave_type === 'replacement' ? 'Leave Date' : '结束日期', selectedLeave.end_date],
+              [selectedLeave.leave_type === 'replacement' ? '补班日期' : '开始日期', selectedLeave.start_date],
+              [selectedLeave.leave_type === 'replacement' ? '调休日期' : '结束日期', selectedLeave.end_date],
               ['申请人', selectedLeave.applicant_name],
               ['审核人', selectedLeave.reviewer_name],
               ['审核时间', formatDateTime(selectedLeave.reviewed_at)],
