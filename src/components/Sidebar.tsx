@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Menu } from 'lucide-react';
+import {
+  Briefcase,
+  BriefcaseBusiness,
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  Paintbrush,
+  Shield,
+  UserSearch,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { menuItems, toolGroupOrder } from '../routes/menu';
 import logoUrl from '../assets/logo.png';
@@ -9,6 +20,18 @@ type SidebarProps = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onNavigate?: () => void;
+};
+
+const sectionIcons: Record<string, LucideIcon> = {
+  工作工具: BriefcaseBusiness,
+  管理: Shield,
+};
+
+const groupIcons: Record<string, LucideIcon> = {
+  星探: UserSearch,
+  经纪人: Briefcase,
+  美工: Paintbrush,
+  人事部: Users,
 };
 
 export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarProps) {
@@ -28,15 +51,20 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
   const standaloneItems = visibleMenuItems.filter((item) => !item.section);
   const groupedSections = useMemo(
     () =>
-      visibleMenuItems.reduce<Record<string, Record<string, typeof menuItems>>>((sections, item) => {
+      visibleMenuItems.reduce<Record<string, { items: typeof menuItems; groups: Record<string, typeof menuItems> }>>((sections, item) => {
         if (!item.section) {
           return sections;
         }
 
-        const groupName = item.group ?? '其他';
-        sections[item.section] = sections[item.section] ?? {};
-        sections[item.section][groupName] = sections[item.section][groupName] ?? [];
-        sections[item.section][groupName].push(item);
+        sections[item.section] = sections[item.section] ?? { items: [], groups: {} };
+
+        if (!item.group) {
+          sections[item.section].items.push(item);
+          return sections;
+        }
+
+        sections[item.section].groups[item.group] = sections[item.section].groups[item.group] ?? [];
+        sections[item.section].groups[item.group].push(item);
 
         return sections;
       }, {}),
@@ -71,29 +99,38 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
           <SidebarLink key={item.path} item={item} collapsed={collapsed} nested={false} onNavigate={onNavigate} />
         ))}
 
-        {Object.entries(groupedSections).map(([sectionName, groups]) => {
+        {Object.entries(groupedSections).map(([sectionName, section]) => {
           const sectionExpanded = expandedSections[sectionName] ?? false;
-          const sortedGroups = Object.entries(groups).sort(
-            ([groupA], [groupB]) => toolGroupOrder.indexOf(groupA) - toolGroupOrder.indexOf(groupB),
-          );
+          const SectionIcon = sectionIcons[sectionName];
+          const sectionDisplayName = getSectionDisplayName(sectionName);
+          const flattenedGroupItems = section.groups[sectionName] ?? [];
+          const sortedGroups = Object.entries(section.groups).sort(([groupA], [groupB]) => getGroupOrder(groupA) - getGroupOrder(groupB));
 
           return (
             <div className="nav-section" key={sectionName}>
               <button
                 className="nav-toggle"
                 type="button"
-                title={collapsed ? sectionName : undefined}
+                title={collapsed ? sectionDisplayName : undefined}
                 onClick={() => toggleSection(sectionName)}
               >
-                {sectionExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                <span>{sectionName}</span>
+                <span className="nav-chevron">{sectionExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
+                {SectionIcon ? <SectionIcon className="nav-menu-icon" size={20} /> : null}
+                <span>{sectionDisplayName}</span>
               </button>
 
               {sectionExpanded ? (
                 <div className="nav-section-body">
+                  {[...section.items, ...flattenedGroupItems].map((item) => (
+                    <SidebarLink key={item.path} item={item} collapsed={collapsed} nested onNavigate={onNavigate} />
+                  ))}
+
                   {sortedGroups.map(([groupName, items]) => {
+                    if (groupName === sectionName) return null;
+
                     const groupExpanded = expandedGroups[groupName] ?? false;
                     const onlyDisabledPlaceholder = items.every((item) => item.disabled);
+                    const GroupIcon = groupIcons[groupName];
 
                     return (
                       <div className="nav-group" key={groupName}>
@@ -108,7 +145,10 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
                           }}
                           disabled={onlyDisabledPlaceholder}
                         >
-                          {groupExpanded && !onlyDisabledPlaceholder ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          <span className="nav-chevron">
+                            {groupExpanded && !onlyDisabledPlaceholder ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </span>
+                          {GroupIcon ? <GroupIcon className="nav-menu-icon" size={18} /> : null}
                           <span>{groupName}</span>
                         </button>
 
@@ -132,6 +172,15 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
   );
 }
 
+function getGroupOrder(groupName: string) {
+  const order = toolGroupOrder.indexOf(groupName);
+  return order === -1 ? Number.MAX_SAFE_INTEGER : order;
+}
+
+function getSectionDisplayName(sectionName: string) {
+  return sectionName;
+}
+
 function SidebarLink({
   item,
   collapsed,
@@ -148,7 +197,7 @@ function SidebarLink({
   if (item.disabled) {
     return (
       <span className={nested ? 'nav-link nested muted' : 'nav-link muted'} title={collapsed ? item.label : undefined}>
-        <Icon size={18} />
+        <Icon size={nested ? 18 : 20} />
         <span>{item.label}</span>
       </span>
     );
@@ -164,7 +213,7 @@ function SidebarLink({
         return isActive ? `${baseClass} active` : baseClass;
       }}
     >
-      <Icon size={18} />
+      <Icon size={nested ? 18 : 20} />
       <span>{item.label}</span>
     </NavLink>
   );
