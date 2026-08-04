@@ -536,6 +536,12 @@ a {
   cursor: default;
 }
 
+.sidebar .nav-link,
+.sidebar .nav-toggle,
+.sidebar .nav-group-toggle {
+  font-size: 17px;
+}
+
 .nav-link.nested {
   padding-left: 32px;
 }
