@@ -13,16 +13,8 @@ type SidebarProps = {
 
 export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarProps) {
   const permissions = usePermissions();
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    工作工具: true,
-  });
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    星探: true,
-    经纪人: true,
-    美工: true,
-    人事部: true,
-    管理: true,
-  });
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const visibleMenuItems = useMemo(
     () =>
