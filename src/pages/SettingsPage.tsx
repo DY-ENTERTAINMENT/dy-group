@@ -120,6 +120,13 @@ const employeeStatusOrder: Record<string, number> = {
   left: 3,
 };
 const reservedPermissionKeys = new Set(['settings']);
+const permissionGroupKeys: Record<string, string> = {
+  星探: 'scout',
+  经纪人: 'agent',
+  美工: 'designer',
+  人事部: 'hr',
+  管理: 'management',
+};
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1153,14 +1160,7 @@ function buildPermissionItems(): PermissionItem[] {
 }
 
 function getPermissionGroupKey(item: (typeof menuItems)[number]) {
-  if (
-    item.key === 'staff' ||
-    item.key === 'registration-review' ||
-    item.key === 'leave-review' ||
-    item.key === 'attendance-management' ||
-    item.key === 'public-holidays' ||
-    item.key === 'attendance-locations'
-  ) return 'hr';
+  if (item.group && permissionGroupKeys[item.group]) return permissionGroupKeys[item.group];
   return item.key;
 }
 
