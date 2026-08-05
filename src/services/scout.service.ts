@@ -69,6 +69,12 @@ export type OnboardingManagerOption = {
   display_name: string;
 };
 
+export type CreatorManagerDisplayName = {
+  creator_id: string;
+  manager_employee_id: string;
+  manager_display_name: string;
+};
+
 export type RecruitSummary = {
   total: number;
   plusFiveOne: number;
@@ -155,6 +161,17 @@ export const scoutService = {
     return ((data ?? []) as Array<{ employee_id: string; display_name: string }>).map((employee) => ({
       id: employee.employee_id,
       display_name: employee.display_name,
+    }));
+  },
+
+  async listVisibleCreatorManagerDisplayNames(): Promise<CreatorManagerDisplayName[]> {
+    const { data, error } = await db.rpc('get_visible_creator_manager_display_names');
+    if (error) throw error;
+
+    return ((data ?? []) as CreatorManagerDisplayName[]).map((manager) => ({
+      creator_id: manager.creator_id,
+      manager_employee_id: manager.manager_employee_id,
+      manager_display_name: manager.manager_display_name,
     }));
   },
 

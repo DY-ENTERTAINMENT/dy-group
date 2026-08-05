@@ -16,6 +16,7 @@ import {
   summarizeCreators,
   type Candidate,
   type CandidateFormValues,
+  type CreatorManagerDisplayName,
   type CreatorFormValues,
   type CreatorPlatform,
   type CreatorProfile,
@@ -66,6 +67,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const canManageCreators = permissions.canUse(isManagementMode ? 'management-streamer-stats' : 'scout-onboarding');
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
+  const [creatorManagerNames, setCreatorManagerNames] = useState<CreatorManagerDisplayName[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [month, setMonth] = useState(currentMonth);
@@ -99,6 +101,14 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         return true;
       }),
     [creatorTypeFilter, creators, managerFilter, platformFilter, regionFilter, scoutFilter],
+  );
+  const managerDisplayNameByCreatorId = useMemo(
+    () =>
+      creatorManagerNames.reduce<Record<string, string>>((names, manager) => {
+        names[manager.creator_id] = manager.manager_display_name;
+        return names;
+      }, {}),
+    [creatorManagerNames],
   );
   const managementMonthCreators = useMemo(
     () => filterCreatorsByMonth(filteredCreators, month),
@@ -151,6 +161,17 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       } catch (managerOptionsError) {
         console.error('Failed to load onboarding manager options', managerOptionsError);
         setManagerOptions([]);
+      }
+
+      if (mode === 'personal-streamers' || mode === 'management-streamers') {
+        try {
+          setCreatorManagerNames(await scoutService.listVisibleCreatorManagerDisplayNames());
+        } catch (creatorManagerNamesError) {
+          console.error('Failed to load creator manager display names', creatorManagerNamesError);
+          setCreatorManagerNames([]);
+        }
+      } else {
+        setCreatorManagerNames([]);
       }
     } catch (loadError) {
       setError(`读取星探资料失败：${getErrorMessage(loadError)}`);
@@ -334,6 +355,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onScoutFilter={setScoutFilter}
           onManagerFilter={setManagerFilter}
           onCreatorTypeFilter={setCreatorTypeFilter}
+          managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
         />
       ) : null}
@@ -532,6 +554,7 @@ function CreatorStatsPanel({
   onScoutFilter,
   onManagerFilter,
   onCreatorTypeFilter,
+  managerDisplayNameByCreatorId,
   onEdit,
 }: {
   loading: boolean;
@@ -549,6 +572,7 @@ function CreatorStatsPanel({
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
   onCreatorTypeFilter: (value: string) => void;
+  managerDisplayNameByCreatorId: Record<string, string>;
   onEdit: (creator: CreatorProfile) => void;
 }) {
   return (
@@ -572,7 +596,7 @@ function CreatorStatsPanel({
       ) : creators.length === 0 ? (
         <div className="table-state">暂无主播资料。</div>
       ) : (
-        <CreatorTable creators={creators} canEdit={canEdit} onEdit={onEdit} />
+        <CreatorTable creators={creators} managerDisplayNameByCreatorId={managerDisplayNameByCreatorId} canEdit={canEdit} onEdit={onEdit} />
       )}
     </div>
   );
@@ -623,7 +647,17 @@ function CreatorFilters(props: {
   );
 }
 
-function CreatorTable({ creators, canEdit, onEdit }: { creators: CreatorProfile[]; canEdit: boolean; onEdit: (creator: CreatorProfile) => void }) {
+function CreatorTable({
+  creators,
+  managerDisplayNameByCreatorId,
+  canEdit,
+  onEdit,
+}: {
+  creators: CreatorProfile[];
+  managerDisplayNameByCreatorId: Record<string, string>;
+  canEdit: boolean;
+  onEdit: (creator: CreatorProfile) => void;
+}) {
   return (
     <div className="staff-table-wrap">
       <table className="staff-table scout-table">
@@ -653,7 +687,7 @@ function CreatorTable({ creators, canEdit, onEdit }: { creators: CreatorProfile[
               <td>{creator.creator_name}</td>
               <td>{creator.region?.code ?? '-'}</td>
               <td>{getEmployeeName(creator.scout) || '-'}</td>
-              <td>{getEmployeeName(creator.manager) || '-'}</td>
+              <td>{getEmployeeName(creator.manager) || managerDisplayNameByCreatorId[creator.id] || '-'}</td>
               <td>{creatorTypeLabels[creator.creator_type]}</td>
               <td>{creator.bank_name || '-'}</td>
               <td>{creator.bank_account || '-'}</td>
