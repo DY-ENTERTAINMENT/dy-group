@@ -64,6 +64,11 @@ export type ScoutOptions = {
   employees: Array<Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id'>>;
 };
 
+export type OnboardingManagerOption = {
+  id: string;
+  display_name: string;
+};
+
 export type RecruitSummary = {
   total: number;
   plusFiveOne: number;
@@ -141,6 +146,16 @@ export const scoutService = {
       regions: regionsResult.data ?? [],
       employees: (employeesResult.data ?? []) as ScoutOptions['employees'],
     };
+  },
+
+  async listOnboardingManagerOptions(): Promise<OnboardingManagerOption[]> {
+    const { data, error } = await db.rpc('get_scout_onboarding_manager_options');
+    if (error) throw error;
+
+    return ((data ?? []) as Array<{ employee_id: string; display_name: string }>).map((employee) => ({
+      id: employee.employee_id,
+      display_name: employee.display_name,
+    }));
   },
 
   async listCandidates(profileId: string): Promise<Candidate[]> {
