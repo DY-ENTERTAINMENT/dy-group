@@ -20,6 +20,7 @@ import {
   type CreatorPlatform,
   type CreatorProfile,
   type CreatorType,
+  type OnboardingManagerOption,
   type ScoutOptions,
 } from '../services/scout.service';
 
@@ -64,6 +65,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const isManagementMode = mode.startsWith('management');
   const canManageCreators = permissions.canUse(isManagementMode ? 'management-streamer-stats' : 'scout-onboarding');
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
+  const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [month, setMonth] = useState(currentMonth);
@@ -142,6 +144,13 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         if (currentEmployee) {
           setCreatorForm((current) => ({ ...current, scout_employee_id: currentEmployee.id, region_id: currentEmployee.region_id ?? current.region_id }));
         }
+      }
+
+      try {
+        setManagerOptions(await scoutService.listOnboardingManagerOptions());
+      } catch (managerOptionsError) {
+        console.error('Failed to load onboarding manager options', managerOptionsError);
+        setManagerOptions([]);
       }
     } catch (loadError) {
       setError(`读取星探资料失败：${getErrorMessage(loadError)}`);
@@ -358,6 +367,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         <CreatorModal
           values={creatorForm}
           options={options}
+          managerOptions={managerOptions}
           editingCreator={editingCreator}
           saving={saving}
           onChange={setCreatorForm}
@@ -806,6 +816,7 @@ function CandidateModal(props: {
 function CreatorModal(props: {
   values: CreatorFormValues;
   options: ScoutOptions;
+  managerOptions: OnboardingManagerOption[];
   editingCreator: CreatorProfile | null;
   saving: boolean;
   onChange: (values: CreatorFormValues) => void;
@@ -853,7 +864,7 @@ function CreatorModal(props: {
           </SelectField>
           <TextField label={platformNameLabel} value={props.values.creator_name} onChange={(value) => props.onChange({ ...props.values, creator_name: value })} required />
           <EmployeeSelect label="星探" value={props.values.scout_employee_id} employees={props.options.employees} onChange={(value) => props.onChange({ ...props.values, scout_employee_id: value })} required />
-          <EmployeeSelect label="经纪人" value={props.values.manager_employee_id} employees={props.options.employees} onChange={(value) => props.onChange({ ...props.values, manager_employee_id: value })} required />
+          <OnboardingManagerSelect label="经纪人" value={props.values.manager_employee_id} managers={props.managerOptions} onChange={(value) => props.onChange({ ...props.values, manager_employee_id: value })} required />
           <SelectField label="主播形式" value={props.values.creator_type} onChange={(value) => props.onChange({ ...props.values, creator_type: value as CreatorType })}>
             {creatorTypes.map((type) => (
               <option key={type} value={type}>
@@ -938,6 +949,31 @@ function EmployeeSelect({
       {employees.map((employee) => (
         <option key={employee.id} value={employee.id}>
           {employee.nickname || employee.full_name}
+        </option>
+      ))}
+    </SelectField>
+  );
+}
+
+function OnboardingManagerSelect({
+  label,
+  value,
+  managers,
+  onChange,
+  required,
+}: {
+  label: string;
+  value: string;
+  managers: OnboardingManagerOption[];
+  onChange: (value: string) => void;
+  required?: boolean;
+}) {
+  return (
+    <SelectField label={label} value={value} onChange={onChange} required={required}>
+      <option value="">请选择</option>
+      {managers.map((manager) => (
+        <option key={manager.id} value={manager.id}>
+          {manager.display_name}
         </option>
       ))}
     </SelectField>
