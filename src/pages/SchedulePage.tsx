@@ -28,6 +28,8 @@ type CalendarDayItem =
   { type: 'public-holiday'; holiday: PublicHolidayCalendarItem } |
   { type: 'leave'; leave: LeaveCalendarItem };
 
+type EmployeeSelection = 'all' | string[];
+
 export function SchedulePage() {
   const { profile } = useAuth();
   const [month, setMonth] = useState(getCurrentRestCycle());
@@ -36,7 +38,7 @@ export function SchedulePage() {
   const [leaves, setLeaves] = useState<LeaveCalendarItem[]>([]);
   const [publicHolidays, setPublicHolidays] = useState<PublicHolidayCalendarItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<EmployeeSelection>('all');
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedLeaveTypes, setSelectedLeaveTypes] = useState<CalendarLeaveType[]>(leaveTypeOptions);
   const [peopleFilterOpen, setPeopleFilterOpen] = useState(false);
@@ -87,9 +89,9 @@ export function SchedulePage() {
       [employee.name, employee.fullName, employee.employeeCode, employee.regionCode].filter(Boolean).join(' ').toLowerCase().includes(keyword),
     );
   }, [employeeOptions, employeeSearch]);
-  const activeEmployeeIds = selectedEmployeeIds.length > 0 ? selectedEmployeeIds : employeeOptions.map((employee) => employee.id);
+  const activeEmployeeIds = selectedEmployeeIds === 'all' ? employeeOptions.map((employee) => employee.id) : selectedEmployeeIds;
   const peopleSummary = useMemo(() => {
-    if (selectedEmployeeIds.length === 0 || activeEmployeeIds.length === employeeOptions.length) {
+    if (selectedEmployeeIds === 'all') {
       return '所有人';
     }
 
@@ -97,8 +99,8 @@ export function SchedulePage() {
     if (selectedEmployees.length === 1) return selectedEmployees[0].name;
     if (selectedEmployees.length > 1) return `${selectedEmployees[0].name} +${selectedEmployees.length - 1}`;
 
-    return '所有人';
-  }, [activeEmployeeIds, employeeOptions, selectedEmployeeIds.length]);
+    return '未选择人员';
+  }, [activeEmployeeIds, employeeOptions, selectedEmployeeIds]);
   const leaveTypeFilterValue = selectedLeaveTypes.length === leaveTypeOptions.length ? '' : selectedLeaveTypes[0];
   const filteredLeaves = useMemo(
     () =>
@@ -150,11 +152,16 @@ export function SchedulePage() {
   }, []);
 
   useEffect(() => {
-    if (selectedEmployeeIds.length === 0) return;
+    if (selectedEmployeeIds === 'all') return;
 
     const availableIds = new Set(employeeOptions.map((employee) => employee.id));
-    setSelectedEmployeeIds((current) => current.filter((employeeId) => availableIds.has(employeeId)));
-  }, [employeeOptions, selectedEmployeeIds.length]);
+    setSelectedEmployeeIds((current) => {
+      if (current === 'all') return current;
+
+      const nextIds = current.filter((employeeId) => availableIds.has(employeeId));
+      return nextIds.length === current.length ? current : nextIds;
+    });
+  }, [employeeOptions, selectedEmployeeIds]);
 
   async function loadLeaveCalendar() {
     setLoading(true);
@@ -191,12 +198,12 @@ export function SchedulePage() {
   }
 
   function toggleEmployee(employeeId: string) {
-    const currentIds = selectedEmployeeIds.length > 0 ? selectedEmployeeIds : employeeOptions.map((employee) => employee.id);
+    const currentIds = selectedEmployeeIds === 'all' ? employeeOptions.map((employee) => employee.id) : selectedEmployeeIds;
     const nextIds = currentIds.includes(employeeId)
       ? currentIds.filter((id) => id !== employeeId)
       : [...currentIds, employeeId];
 
-    setSelectedEmployeeIds(nextIds.length === employeeOptions.length ? [] : nextIds);
+    setSelectedEmployeeIds(nextIds.length === employeeOptions.length ? 'all' : nextIds);
   }
 
   function openCancelModal(leave: LeaveCalendarItem) {
@@ -374,8 +381,8 @@ export function SchedulePage() {
             <label className="filter-check-row">
               <input
                 type="checkbox"
-                checked={selectedEmployeeIds.length === 0 || activeEmployeeIds.length === employeeOptions.length}
-                onChange={() => setSelectedEmployeeIds([])}
+                checked={selectedEmployeeIds === 'all'}
+                onChange={(event) => setSelectedEmployeeIds(event.target.checked ? 'all' : [])}
               />
               <span>所有人</span>
             </label>
