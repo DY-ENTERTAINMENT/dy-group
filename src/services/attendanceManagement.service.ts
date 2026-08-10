@@ -74,6 +74,16 @@ type EmployeeRowWithRelations = Pick<
 };
 
 export const attendanceManagementService = {
+  async getAttendancePhotoSignedUrl(photoPath: string): Promise<string> {
+    const { data, error } = await supabase.storage.from('attendance-photos').createSignedUrl(photoPath, 60);
+
+    if (error) {
+      throw error;
+    }
+
+    return data.signedUrl;
+  },
+
   async getPeriodData(month: string, regionId: string): Promise<AttendancePeriodData> {
     const range = getAttendancePeriodRange(month);
     const employeesQuery = supabase
