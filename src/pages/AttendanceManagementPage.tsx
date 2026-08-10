@@ -318,6 +318,8 @@ function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSumma
 
 function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[]; onClose: () => void }) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [openingPhotoId, setOpeningPhotoId] = useState('');
+  const [photoError, setPhotoError] = useState('');
   const groupedEmployees = useMemo(() => {
     const map = new Map<string, { employee: AttendanceEmployee; records: AbnormalRecord[] }>();
 
@@ -330,6 +332,34 @@ function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[
     return [...map.values()].sort((a, b) => b.records.length - a.records.length);
   }, [records]);
   const selected = groupedEmployees.find((item) => item.employee.id === selectedEmployeeId) ?? null;
+
+  async function handleOpenPhoto(record: AbnormalRecord) {
+    if (!record.photoPath) return;
+
+    setPhotoError('');
+    setOpeningPhotoId(record.id);
+    const photoWindow = window.open('', '_blank');
+
+    if (!photoWindow) {
+      setPhotoError('浏览器阻止了新窗口，请允许弹出窗口后重试。');
+      setOpeningPhotoId('');
+      return;
+    }
+
+    photoWindow.opener = null;
+
+    try {
+      const signedUrl = await attendanceManagementService.getAttendancePhotoSignedUrl(record.photoPath);
+      setPhotoError('');
+      photoWindow.location.href = signedUrl;
+    } catch {
+      const message = '读取打卡照片失败，请稍后重试或联系管理员。';
+      setPhotoError(message);
+      photoWindow.document.body.textContent = message;
+    } finally {
+      setOpeningPhotoId('');
+    }
+  }
 
   return (
     <SystemModal
@@ -367,6 +397,7 @@ function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[
 
         <section className="employee-detail-section">
           <h4>工作资料</h4>
+          {photoError ? <p className="form-alert table-alert">{photoError}</p> : null}
           {records.length === 0 ? (
             <div className="table-state">当前周期暂无异常打卡。</div>
           ) : selected ? (
@@ -378,6 +409,7 @@ function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[
                     <th>异常类型</th>
                     <th>原因</th>
                     <th>打卡时间</th>
+                    <th>照片</th>
                     <th>备注</th>
                   </tr>
                 </thead>
@@ -388,6 +420,23 @@ function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[
                       <td>{record.type}</td>
                       <td>{record.type}</td>
                       <td>{new Date(record.punchedAt).toLocaleString('zh-CN')}</td>
+                      <td>
+                        {record.photoPath ? (
+                          <>
+                            <button
+                              className="secondary-button compact-button"
+                              type="button"
+                              onClick={() => handleOpenPhoto(record)}
+                              disabled={openingPhotoId === record.id}
+                            >
+                              <Eye size={16} />
+                              <span>{openingPhotoId === record.id ? '读取中' : '查看照片'}</span>
+                            </button>
+                          </>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
                       <td className="device-cell">GPS：{record.gps} / IP：{record.ip} / 设备：{record.deviceInfo}</td>
                     </tr>
                   ))}
