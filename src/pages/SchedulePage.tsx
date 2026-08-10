@@ -113,10 +113,8 @@ export function SchedulePage() {
     const map = new Map<string, LeaveCalendarItem[]>();
 
     filteredLeaves.forEach((leave) => {
-      const current = map.get(leave.leave_date) ?? [];
-      current.push(leave);
-      current.sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-CN'));
-      map.set(leave.leave_date, current);
+      const displayDates = leave.leave_type === 'replacement' ? [leave.start_date, leave.end_date] : [leave.leave_date];
+      [...new Set(displayDates)].forEach((date) => addLeaveToDate(map, date, leave));
     });
 
     return map;
@@ -328,7 +326,7 @@ export function SchedulePage() {
                   </header>
 
                   {dayItems.length === 0 ? (
-                    <p>暂无休假</p>
+                    <p>{emptyDayLabel(date)}</p>
                   ) : (
                     <div className="leave-calendar-list">
                       {visibleItems.map((item) =>
@@ -340,10 +338,10 @@ export function SchedulePage() {
                           <button
                             type="button"
                             className={`leave-chip leave-type-${item.leave.leave_type}`}
-                            key={`${item.leave.leave_request_id}:${item.leave.leave_date}:${item.leave.employee_id}`}
+                            key={`${item.leave.leave_request_id}:${date}:${item.leave.employee_id}`}
                             onClick={() => setSelectedLeave(item.leave)}
                           >
-                            {item.leave.employee_name}（{leaveTypeLabels[item.leave.leave_type]}）
+                            {item.leave.employee_name}（{leaveDisplayLabel(item.leave, date)}）
                           </button>
                         ),
                       )}
@@ -423,14 +421,14 @@ export function SchedulePage() {
                 <button
                   type="button"
                   className="leave-day-row"
-                  key={`${item.leave.leave_request_id}:${item.leave.leave_date}:${item.leave.employee_id}`}
+                  key={`${item.leave.leave_request_id}:${selectedDay}:${item.leave.employee_id}`}
                   onClick={() => {
                     setSelectedDay(null);
                     setSelectedLeave(item.leave);
                   }}
                 >
                   <strong>{item.leave.employee_name}</strong>
-                  <span className={`leave-chip leave-type-${item.leave.leave_type}`}>{leaveTypeLabels[item.leave.leave_type]}</span>
+                  <span className={`leave-chip leave-type-${item.leave.leave_type}`}>{leaveDisplayLabel(item.leave, selectedDay)}</span>
                 </button>
               ),
             )}
@@ -596,9 +594,33 @@ function getCalendarDayItems(
   return [...holidays, ...leaveItems];
 }
 
+function addLeaveToDate(map: Map<string, LeaveCalendarItem[]>, date: string, leave: LeaveCalendarItem) {
+  const current = map.get(date) ?? [];
+  current.push(leave);
+  current.sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-CN'));
+  map.set(date, current);
+}
+
+function leaveDisplayLabel(leave: LeaveCalendarItem, date: string) {
+  if (leave.leave_type === 'replacement') {
+    return isSaturday(date) ? '补休' : '调休';
+  }
+
+  return leaveTypeLabels[leave.leave_type];
+}
+
+function isSaturday(date: string) {
+  return new Date(`${date}T00:00:00`).getDay() === 6;
+}
+
 function isWeekend(date: string) {
   const day = new Date(`${date}T00:00:00`).getDay();
   return day === 0 || day === 6;
+}
+
+function emptyDayLabel(date: string) {
+  const day = new Date(`${date}T00:00:00`).getDay();
+  return day >= 1 && day <= 5 ? '工作' : '休息';
 }
 
 function formatDateTime(value: string | null | undefined) {
