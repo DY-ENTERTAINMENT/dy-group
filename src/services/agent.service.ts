@@ -120,6 +120,7 @@ const creatorSelect = `
   scout_employee_id,
   scout_profile_id,
   manager_employee_id,
+  status,
   creator_type,
   bank_name,
   bank_account,
@@ -225,7 +226,12 @@ export const agentService = {
   async listManagedCreators(profileId: string, filters: { month?: string; platform?: string; regionId?: string }) {
     const options = await this.getOptions(profileId);
     if (!options.currentEmployee) return [];
-    let query = db.from('creator_profiles').select(creatorSelect).eq('manager_employee_id', options.currentEmployee.id).order('joined_date', { ascending: false });
+    let query = db
+      .from('creator_profiles')
+      .select(creatorSelect)
+      .eq('manager_employee_id', options.currentEmployee.id)
+      .eq('status', 'active')
+      .order('joined_date', { ascending: false });
     if (filters.platform) query = query.eq('platform', filters.platform);
     if (filters.regionId) query = query.eq('region_id', filters.regionId);
     const { data, error } = await query;
@@ -247,6 +253,7 @@ export const agentService = {
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? [])
+      .filter((row: any) => row.creator?.status !== 'invalid')
       .map(mapRevenueRow)
       .filter((row: RevenueRecord) => !input.platform || row.creator?.platform === input.platform)
       .filter((row: RevenueRecord) => !input.regionId || row.creator?.region_id === input.regionId);

@@ -4,6 +4,8 @@ import type { Employee, Region } from '../types/database';
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
+export type CreatorStatus = 'active' | 'invalid';
+export type CreatorStatusFilter = CreatorStatus | 'all';
 
 export type CandidateFormValues = {
   name: string;
@@ -50,6 +52,7 @@ export type CreatorProfile = {
   scout_profile_id: string | null;
   manager_employee_id: string | null;
   creator_type: CreatorType;
+  status?: CreatorStatus;
   bank_name: string | null;
   bank_account: string | null;
   created_at: string;
@@ -111,6 +114,7 @@ const creatorSelect = `
   scout_profile_id,
   manager_employee_id,
   creator_type,
+  status,
   bank_name,
   bank_account,
   created_at,
@@ -205,8 +209,10 @@ export const scoutService = {
     if (error) throw error;
   },
 
-  async listCreators(filters: { personalProfileId?: string; platform?: string; regionId?: string; scoutEmployeeId?: string; managerEmployeeId?: string; creatorType?: string }) {
+  async listCreators(filters: { personalProfileId?: string; platform?: string; regionId?: string; scoutEmployeeId?: string; managerEmployeeId?: string; creatorType?: string; status?: CreatorStatusFilter }) {
     let query = db.from('creator_profiles').select(creatorSelect).order('joined_date', { ascending: false });
+    const statusFilter = filters.status ?? 'active';
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
 
     if (filters.personalProfileId) query = query.eq('scout_profile_id', filters.personalProfileId);
     if (filters.platform) query = query.eq('platform', filters.platform);
@@ -227,6 +233,16 @@ export const scoutService = {
 
   async updateCreator(creatorId: string, values: CreatorFormValues) {
     const { error } = await db.from('creator_profiles').update(await normalizeCreator(values)).eq('id', creatorId);
+    if (error) throw error;
+  },
+
+  async setCreatorStatus(creatorProfileId: string, toStatus: CreatorStatus, reason?: string | null) {
+    const { error } = await db.rpc('set_creator_profile_status', {
+      p_creator_profile_id: creatorProfileId,
+      p_to_status: toStatus,
+      p_reason: reason ?? null,
+    });
+
     if (error) throw error;
   },
 };
@@ -344,6 +360,7 @@ function mapCreatorRow(row: any): CreatorProfile {
     scout_profile_id: row.scout_profile_id,
     manager_employee_id: row.manager_employee_id,
     creator_type: row.creator_type,
+    status: row.status,
     bank_name: row.bank_name,
     bank_account: row.bank_account,
     created_at: row.created_at,

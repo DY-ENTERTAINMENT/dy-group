@@ -20,6 +20,7 @@ import {
   type CreatorFormValues,
   type CreatorPlatform,
   type CreatorProfile,
+  type CreatorStatusFilter,
   type CreatorType,
   type OnboardingManagerOption,
   type ScoutOptions,
@@ -65,6 +66,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const permissions = usePermissions();
   const isManagementMode = mode.startsWith('management');
   const canManageCreators = permissions.canUse(isManagementMode ? 'management-streamer-stats' : 'scout-onboarding');
+  const canManageCreatorStatus = mode === 'management-streamers' && permissions.isSuperAdmin;
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
   const [creatorManagerNames, setCreatorManagerNames] = useState<CreatorManagerDisplayName[]>([]);
@@ -76,10 +78,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [scoutFilter, setScoutFilter] = useState('');
   const [managerFilter, setManagerFilter] = useState('');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
+  const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [creatorForm, setCreatorForm] = useState<CreatorFormValues>(emptyCreatorForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
+  const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -131,7 +135,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
   useEffect(() => {
     void loadData();
-  }, [mode, profile?.id]);
+  }, [creatorStatusFilter, mode, profile?.id]);
 
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
@@ -141,7 +145,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     try {
       const [nextOptions, nextCreators, nextCandidates] = await Promise.all([
         scoutService.getOptions(),
-        scoutService.listCreators({ personalProfileId }),
+        scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
       ]);
 
@@ -302,6 +306,48 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorForm(emptyCreatorForm);
   }
 
+  function openCreatorStatus(creator: CreatorProfile) {
+    setStatusCreator(creator);
+  }
+
+  function closeCreatorStatus() {
+    setStatusCreator(null);
+  }
+
+  async function setCreatorInvalid(creator: CreatorProfile, reason: string) {
+    setSaving(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await scoutService.setCreatorStatus(creator.id, 'invalid', reason);
+      setMessage('主播已设为无效。');
+      closeCreatorStatus();
+      await loadData();
+    } catch (statusError) {
+      setError(`更新主播状态失败：${getErrorMessage(statusError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setCreatorActive(creator: CreatorProfile) {
+    setSaving(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await scoutService.setCreatorStatus(creator.id, 'active', null);
+      setMessage('主播已恢复为在职。');
+      closeCreatorStatus();
+      await loadData();
+    } catch (statusError) {
+      setError(`更新主播状态失败：${getErrorMessage(statusError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="scout-page">
       <div className="toolbar-actions staff-actions-row">
@@ -345,18 +391,22 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           options={options}
           isManagement={mode === 'management-streamers'}
           canEdit={canManageCreators}
+          canManageStatus={canManageCreatorStatus}
           platformFilter={platformFilter}
           regionFilter={regionFilter}
           scoutFilter={scoutFilter}
           managerFilter={managerFilter}
           creatorTypeFilter={creatorTypeFilter}
+          creatorStatusFilter={creatorStatusFilter}
           onPlatformFilter={setPlatformFilter}
           onRegionFilter={setRegionFilter}
           onScoutFilter={setScoutFilter}
           onManagerFilter={setManagerFilter}
           onCreatorTypeFilter={setCreatorTypeFilter}
+          onCreatorStatusFilter={setCreatorStatusFilter}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
+          onStatus={openCreatorStatus}
         />
       ) : null}
 
@@ -397,6 +447,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onSubmit={submitCreator}
         />
       ) : null}
+
+      {statusCreator ? <CreatorStatusModal creator={statusCreator} saving={saving} onClose={closeCreatorStatus} onSetInvalid={setCreatorInvalid} onSetActive={setCreatorActive} /> : null}
     </section>
   );
 }
@@ -544,36 +596,44 @@ function CreatorStatsPanel({
   options,
   isManagement,
   canEdit,
+  canManageStatus,
   platformFilter,
   regionFilter,
   scoutFilter,
   managerFilter,
   creatorTypeFilter,
+  creatorStatusFilter,
   onPlatformFilter,
   onRegionFilter,
   onScoutFilter,
   onManagerFilter,
   onCreatorTypeFilter,
+  onCreatorStatusFilter,
   managerDisplayNameByCreatorId,
   onEdit,
+  onStatus,
 }: {
   loading: boolean;
   creators: CreatorProfile[];
   options: ScoutOptions;
   isManagement: boolean;
   canEdit: boolean;
+  canManageStatus: boolean;
   platformFilter: string;
   regionFilter: string;
   scoutFilter: string;
   managerFilter: string;
   creatorTypeFilter: string;
+  creatorStatusFilter: CreatorStatusFilter;
   onPlatformFilter: (value: string) => void;
   onRegionFilter: (value: string) => void;
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
   onCreatorTypeFilter: (value: string) => void;
+  onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
   managerDisplayNameByCreatorId: Record<string, string>;
   onEdit: (creator: CreatorProfile) => void;
+  onStatus: (creator: CreatorProfile) => void;
 }) {
   return (
     <div className="staff-list-panel">
@@ -585,18 +645,20 @@ function CreatorStatsPanel({
         scoutFilter={scoutFilter}
         managerFilter={managerFilter}
         creatorTypeFilter={creatorTypeFilter}
+        creatorStatusFilter={creatorStatusFilter}
         onPlatformFilter={onPlatformFilter}
         onRegionFilter={onRegionFilter}
         onScoutFilter={onScoutFilter}
         onManagerFilter={onManagerFilter}
         onCreatorTypeFilter={onCreatorTypeFilter}
+        onCreatorStatusFilter={onCreatorStatusFilter}
       />
       {loading ? (
         <div className="table-state">正在读取主播统计...</div>
       ) : creators.length === 0 ? (
         <div className="table-state">暂无主播资料。</div>
       ) : (
-        <CreatorTable creators={creators} managerDisplayNameByCreatorId={managerDisplayNameByCreatorId} canEdit={canEdit} onEdit={onEdit} />
+        <CreatorTable creators={creators} managerDisplayNameByCreatorId={managerDisplayNameByCreatorId} canEdit={canEdit} canManageStatus={canManageStatus} onEdit={onEdit} onStatus={onStatus} />
       )}
     </div>
   );
@@ -610,11 +672,13 @@ function CreatorFilters(props: {
   scoutFilter: string;
   managerFilter: string;
   creatorTypeFilter: string;
+  creatorStatusFilter: CreatorStatusFilter;
   onPlatformFilter: (value: string) => void;
   onRegionFilter: (value: string) => void;
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
   onCreatorTypeFilter: (value: string) => void;
+  onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
 }) {
   return (
     <div className="scout-filters">
@@ -643,6 +707,13 @@ function CreatorFilters(props: {
           </option>
         ))}
       </SelectField>
+      {props.isManagement ? (
+        <SelectField label="状态" value={props.creatorStatusFilter} onChange={(value) => props.onCreatorStatusFilter(value as CreatorStatusFilter)}>
+          <option value="active">在职</option>
+          <option value="invalid">无效</option>
+          <option value="all">全部</option>
+        </SelectField>
+      ) : null}
     </div>
   );
 }
@@ -651,12 +722,16 @@ function CreatorTable({
   creators,
   managerDisplayNameByCreatorId,
   canEdit,
+  canManageStatus,
   onEdit,
+  onStatus,
 }: {
   creators: CreatorProfile[];
   managerDisplayNameByCreatorId: Record<string, string>;
   canEdit: boolean;
+  canManageStatus: boolean;
   onEdit: (creator: CreatorProfile) => void;
+  onStatus: (creator: CreatorProfile) => void;
 }) {
   return (
     <div className="staff-table-wrap">
@@ -674,7 +749,7 @@ function CreatorTable({
             <th>主播形式</th>
             <th>银行</th>
             <th>银行户口</th>
-            {canEdit ? <th>操作</th> : null}
+            {canEdit || canManageStatus ? <th>操作</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -691,11 +766,20 @@ function CreatorTable({
               <td>{creatorTypeLabels[creator.creator_type]}</td>
               <td>{creator.bank_name || '-'}</td>
               <td>{creator.bank_account || '-'}</td>
-              {canEdit ? (
+              {canEdit || canManageStatus ? (
                 <td>
-                  <button className="icon-button" type="button" onClick={() => onEdit(creator)} aria-label="编辑主播">
-                    <Edit3 size={16} />
-                  </button>
+                  <div className="row-actions">
+                    {canEdit ? (
+                      <button className="icon-button" type="button" onClick={() => onEdit(creator)} aria-label="编辑主播">
+                        <Edit3 size={16} />
+                      </button>
+                    ) : null}
+                    {canManageStatus ? (
+                      <button className="secondary-button compact-button" type="button" onClick={() => onStatus(creator)}>
+                        状态
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               ) : null}
             </tr>
@@ -703,6 +787,87 @@ function CreatorTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function CreatorStatusModal({
+  creator,
+  saving,
+  onClose,
+  onSetInvalid,
+  onSetActive,
+}: {
+  creator: CreatorProfile;
+  saving: boolean;
+  onClose: () => void;
+  onSetInvalid: (creator: CreatorProfile, reason: string) => Promise<void>;
+  onSetActive: (creator: CreatorProfile) => Promise<void>;
+}) {
+  const isInvalid = creator.status === 'invalid';
+  const [showInvalidReason, setShowInvalidReason] = useState(false);
+  const [invalidReason, setInvalidReason] = useState('');
+  const [invalidReasonError, setInvalidReasonError] = useState('');
+
+  async function submitInvalidReason(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const reason = invalidReason.trim();
+    if (!reason) {
+      setInvalidReasonError('请填写无效原因。');
+      return;
+    }
+    const confirmed = window.confirm('确认将该主播设为“无效”？\n\n该主播将不再计入主播数量和招募统计。\n流水页面会隐藏，但数据库历史流水不会删除。');
+    if (!confirmed) return;
+    await onSetInvalid(creator, reason);
+  }
+
+  async function submitRestore() {
+    const confirmed = window.confirm('确认将该主播恢复为“在职”？\n\n恢复后该主播会重新计入原本主播数量和招募统计，原历史流水也会重新显示。');
+    if (!confirmed) return;
+    await onSetActive(creator);
+  }
+
+  return (
+    <SystemModal
+      title="主播状态"
+      subtitle={creator.creator_name}
+      ariaLabel="主播状态"
+      onClose={onClose}
+      footer={
+        <button className="secondary-button compact-button" type="button" onClick={onClose}>
+          关闭
+        </button>
+      }
+    >
+      <form className="form-grid" onSubmit={submitInvalidReason}>
+        <label className="form-field">
+          <span>当前状态</span>
+          <strong>{isInvalid ? '无效' : '在职'}</strong>
+        </label>
+        <label className="form-field">
+          <span>操作选项</span>
+          <button className="secondary-button compact-button" type="button" disabled={saving} onClick={() => { if (isInvalid) void submitRestore(); else setShowInvalidReason(true); }}>
+            {isInvalid ? '恢复' : '设为无效'}
+          </button>
+        </label>
+        {!isInvalid && showInvalidReason ? (
+          <label className="form-field form-field-wide">
+            <span>无效原因</span>
+            <textarea
+              value={invalidReason}
+              onChange={(event) => {
+                setInvalidReason(event.target.value);
+                if (event.target.value.trim()) setInvalidReasonError('');
+              }}
+              required
+            />
+            {invalidReasonError ? <small className="form-error">{invalidReasonError}</small> : null}
+            <button className="primary-button compact-button" type="submit" disabled={saving}>
+              {saving ? '提交中...' : '确认'}
+            </button>
+          </label>
+        ) : null}
+      </form>
+    </SystemModal>
   );
 }
 
