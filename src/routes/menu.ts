@@ -57,6 +57,12 @@ export const menuItems: MenuItem[] = [
     icon: FileClock,
   },
   {
+    key: 'work-time-adjustment-employee',
+    label: '工时调整',
+    path: '/work-time-adjustment',
+    icon: Clock3,
+  },
+  {
     key: 'itinerary',
     label: '行程表',
     path: '/itinerary',
@@ -163,6 +169,14 @@ export const menuItems: MenuItem[] = [
     label: '请假审核',
     path: '/hr/leave-reviews',
     icon: FileClock,
+    section: '工作工具',
+    group: '人事部',
+  },
+  {
+    key: 'work-time-adjustment',
+    label: '工时调整审核',
+    path: '/hr/work-time-adjustments',
+    icon: Clock3,
     section: '工作工具',
     group: '人事部',
   },

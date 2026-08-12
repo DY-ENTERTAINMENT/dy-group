@@ -12,6 +12,14 @@ export type RecurringTodoFrequency = 'daily' | 'weekly' | 'monthly' | 'month_end
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
+export type WorkTimeAdjustmentDetailStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'revoked';
+export type WorkTimeAdjustmentAuditAction =
+  | 'request_created'
+  | 'detail_updated'
+  | 'detail_cancelled'
+  | 'detail_approved'
+  | 'detail_rejected'
+  | 'detail_revoked';
 
 export type Profile = {
   id: string;
@@ -219,6 +227,63 @@ export type PublicHoliday = {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WorkTimeAdjustmentRequest = {
+  id: string;
+  profile_id: string;
+  employee_id: string;
+  region_id: string;
+  requested_start_date: string;
+  requested_end_date: string;
+  original_start_work_time: string;
+  original_end_work_time: string;
+  requested_start_time: string;
+  requested_end_time: string;
+  reason: string;
+  attachment_path: string | null;
+  attachment_original_name: string | null;
+  attachment_content_type: string | null;
+  attachment_size_bytes: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkTimeAdjustmentRequestDate = {
+  id: string;
+  request_id: string;
+  profile_id: string;
+  employee_id: string;
+  region_id: string;
+  work_date: string;
+  original_start_work_time: string;
+  original_end_work_time: string;
+  adjusted_start_time: string;
+  adjusted_end_time: string;
+  status: WorkTimeAdjustmentDetailStatus;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  revoke_note: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkTimeAdjustmentAuditHistory = {
+  id: string;
+  request_id: string;
+  detail_id: string | null;
+  actor_profile_id: string | null;
+  actor_employee_id: string | null;
+  action: WorkTimeAdjustmentAuditAction;
+  from_status: WorkTimeAdjustmentDetailStatus | null;
+  to_status: WorkTimeAdjustmentDetailStatus | null;
+  note: string | null;
+  metadata: Json;
+  created_at: string;
 };
 
 export type TodoItem = {
@@ -534,6 +599,183 @@ export type Database = {
           },
         ];
       };
+      work_time_adjustment_requests: {
+        Row: WorkTimeAdjustmentRequest;
+        Insert: Pick<
+          WorkTimeAdjustmentRequest,
+          | 'profile_id'
+          | 'employee_id'
+          | 'region_id'
+          | 'requested_start_date'
+          | 'requested_end_date'
+          | 'original_start_work_time'
+          | 'original_end_work_time'
+          | 'requested_start_time'
+          | 'requested_end_time'
+          | 'reason'
+        > &
+          Partial<
+            Pick<
+              WorkTimeAdjustmentRequest,
+              | 'id'
+              | 'attachment_path'
+              | 'attachment_original_name'
+              | 'attachment_content_type'
+              | 'attachment_size_bytes'
+              | 'created_at'
+              | 'updated_at'
+            >
+          >;
+        Update: Partial<Omit<WorkTimeAdjustmentRequest, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'work_time_adjustment_requests_profile_id_fkey';
+            columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_requests_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_requests_region_id_fkey';
+            columns: ['region_id'];
+            isOneToOne: false;
+            referencedRelation: 'regions';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      work_time_adjustment_request_dates: {
+        Row: WorkTimeAdjustmentRequestDate;
+        Insert: Pick<
+          WorkTimeAdjustmentRequestDate,
+          | 'request_id'
+          | 'profile_id'
+          | 'employee_id'
+          | 'region_id'
+          | 'work_date'
+          | 'original_start_work_time'
+          | 'original_end_work_time'
+          | 'adjusted_start_time'
+          | 'adjusted_end_time'
+        > &
+          Partial<
+            Pick<
+              WorkTimeAdjustmentRequestDate,
+              | 'id'
+              | 'status'
+              | 'review_note'
+              | 'reviewed_by'
+              | 'reviewed_at'
+              | 'revoked_by'
+              | 'revoked_at'
+              | 'revoke_note'
+              | 'cancelled_at'
+              | 'created_at'
+              | 'updated_at'
+            >
+          >;
+        Update: Partial<Omit<WorkTimeAdjustmentRequestDate, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_request_id_fkey';
+            columns: ['request_id'];
+            isOneToOne: false;
+            referencedRelation: 'work_time_adjustment_requests';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_profile_id_fkey';
+            columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_region_id_fkey';
+            columns: ['region_id'];
+            isOneToOne: false;
+            referencedRelation: 'regions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_request_dates_revoked_by_fkey';
+            columns: ['revoked_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      work_time_adjustment_audit_history: {
+        Row: WorkTimeAdjustmentAuditHistory;
+        Insert: Pick<WorkTimeAdjustmentAuditHistory, 'request_id' | 'action'> &
+          Partial<
+            Pick<
+              WorkTimeAdjustmentAuditHistory,
+              | 'id'
+              | 'detail_id'
+              | 'actor_profile_id'
+              | 'actor_employee_id'
+              | 'from_status'
+              | 'to_status'
+              | 'note'
+              | 'metadata'
+              | 'created_at'
+            >
+          >;
+        Update: Partial<Omit<WorkTimeAdjustmentAuditHistory, 'id' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'work_time_adjustment_audit_history_request_id_fkey';
+            columns: ['request_id'];
+            isOneToOne: false;
+            referencedRelation: 'work_time_adjustment_requests';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_audit_history_detail_id_fkey';
+            columns: ['detail_id'];
+            isOneToOne: false;
+            referencedRelation: 'work_time_adjustment_request_dates';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_audit_history_actor_profile_id_fkey';
+            columns: ['actor_profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'work_time_adjustment_audit_history_actor_employee_id_fkey';
+            columns: ['actor_employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       todo_items: {
         Row: TodoItem;
         Insert: Pick<TodoItem, 'profile_id' | 'title'> &
@@ -761,6 +1003,23 @@ export type Database = {
         };
         Returns: string;
       };
+      get_attendance_effective_work_times: {
+        Args: {
+          p_start_date: string;
+          p_end_date: string;
+          p_region_id?: string | null;
+        };
+        Returns: {
+          employee_id: string;
+          work_date: string;
+          effective_start_time: string;
+          effective_end_time: string;
+          is_from_work_time_adjustment: boolean;
+          detail_id: string;
+          request_id: string;
+          approved_at: string;
+        }[];
+      };
       cancel_calendar_leave_item: {
         Args: {
           item_id: string;
@@ -775,6 +1034,81 @@ export type Database = {
         };
         Returns: void;
       };
+      current_malaysia_business_date: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      current_user_kch_employee: {
+        Args: Record<string, never>;
+        Returns: {
+          profile_id: string;
+          employee_id: string;
+          region_id: string;
+        }[];
+      };
+      current_user_can_review_work_time_adjustment: {
+        Args: {
+          p_region_id: string;
+        };
+        Returns: boolean;
+      };
+      get_effective_work_time_adjustment: {
+        Args: {
+          p_employee_id: string;
+          p_work_date: string;
+        };
+        Returns: {
+          detail_id: string;
+          request_id: string;
+          employee_id: string;
+          work_date: string;
+          adjusted_start_time: string;
+          adjusted_end_time: string;
+          approved_at: string;
+        }[];
+      };
+      create_work_time_adjustment_request: {
+        Args: {
+          p_start_date: string;
+          p_end_date: string;
+          p_adjusted_start_time: string;
+          p_reason: string;
+          p_attachment_path?: string | null;
+          p_attachment_original_name?: string | null;
+          p_attachment_content_type?: string | null;
+          p_attachment_size_bytes?: number | null;
+        };
+        Returns: string;
+      };
+      update_pending_work_time_adjustment_date: {
+        Args: {
+          p_detail_id: string;
+          p_adjusted_start_time: string;
+        };
+        Returns: void;
+      };
+      cancel_pending_work_time_adjustment_date: {
+        Args: {
+          p_detail_id: string;
+          p_note?: string | null;
+        };
+        Returns: void;
+      };
+      review_work_time_adjustment_date: {
+        Args: {
+          p_detail_id: string;
+          p_status: string;
+          p_note?: string | null;
+        };
+        Returns: void;
+      };
+      revoke_approved_work_time_adjustment_date: {
+        Args: {
+          p_detail_id: string;
+          p_note: string;
+        };
+        Returns: void;
+      };
     };
     Enums: {
       profile_status: ProfileStatus;
@@ -786,6 +1120,8 @@ export type Database = {
       candidate_status: CandidateStatus;
       creator_platform: CreatorPlatform;
       creator_type: CreatorType;
+      work_time_adjustment_detail_status: WorkTimeAdjustmentDetailStatus;
+      work_time_adjustment_audit_action: WorkTimeAdjustmentAuditAction;
     };
     CompositeTypes: Record<string, never>;
   };

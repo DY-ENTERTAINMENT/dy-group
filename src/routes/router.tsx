@@ -9,7 +9,9 @@ import { AttendancePage } from '../pages/AttendancePage';
 import { AttendanceLocationPage } from '../pages/AttendanceLocationPage';
 import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
 import { LeavePage } from '../pages/LeavePage';
+import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
 import { LeaveReviewPage } from '../pages/LeaveReviewPage';
+import { WorkTimeAdjustmentReviewPage } from '../pages/WorkTimeAdjustmentReviewPage';
 import { RestPlanningPage } from '../pages/RestPlanningPage';
 import { PublicHolidayPage } from '../pages/PublicHolidayPage';
 import { ItineraryPage } from '../pages/ItineraryPage';
@@ -70,6 +72,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="leave-review">
                 <LeaveReviewPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'hr/work-time-adjustments',
+            element: (
+              <RequirePermission permissionKey="work-time-adjustment">
+                <WorkTimeAdjustmentReviewPage />
               </RequirePermission>
             ),
           },
@@ -208,6 +218,10 @@ export const router = createBrowserRouter([
           {
             path: 'leave',
             element: <LeavePage />,
+          },
+          {
+            path: 'work-time-adjustment',
+            element: <WorkTimeAdjustmentPage />,
           },
           {
             path: 'itinerary',
