@@ -554,7 +554,7 @@ function RegionFeaturePermissionPanel() {
 
   async function handleToggle(row: RegionPermissionMatrixRow, permissionKey: RegionFeaturePermissionKey, enabled: boolean) {
     const setting = row.settings[permissionKey];
-    if (!setting || isRegionFeatureToggleDisabled(row, permissionKey)) {
+    if (!setting) {
       return;
     }
 
@@ -633,9 +633,9 @@ function RegionFeaturePermissionPanel() {
                   {managedRegionFeaturePermissions.map((feature) => {
                     const setting = row.settings[feature.key];
                     const checked = Boolean(setting?.can_view && setting.can_use);
-                    const disabled = !setting || isRegionFeatureToggleDisabled(row, feature.key);
+                    const disabled = !setting;
                     const saving = savingKey === setting?.id;
-                    const title = getRegionFeatureToggleTitle(row, feature.key, Boolean(setting));
+                    const title = getRegionFeatureToggleTitle(Boolean(setting));
 
                     return (
                       <td key={feature.key}>
@@ -1534,19 +1534,9 @@ function getRegionFeatureLabel(permissionKey: RegionFeaturePermissionKey) {
   return managedRegionFeaturePermissions.find((feature) => feature.key === permissionKey)?.label ?? permissionKey;
 }
 
-function isRegionFeatureToggleDisabled(row: RegionPermissionMatrixRow, permissionKey: RegionFeaturePermissionKey) {
-  return row.region.code === 'KL' && permissionKey === 'work-time-adjustment-employee';
-}
-
 function getRegionFeatureToggleTitle(
-  row: RegionPermissionMatrixRow,
-  permissionKey: RegionFeaturePermissionKey,
   hasExistingSetting: boolean,
 ) {
-  if (isRegionFeatureToggleDisabled(row, permissionKey)) {
-    return '后台尚未支持 KL 工时调整';
-  }
-
   if (!hasExistingSetting) {
     return '尚未有现有设置记录';
   }
