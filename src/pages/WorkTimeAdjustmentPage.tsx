@@ -297,7 +297,7 @@ export function WorkTimeAdjustmentPage() {
                                 {workTimeAdjustmentStatusLabels[detail.status]}
                               </span>
                             </td>
-                            <td>{detail.review_note || detail.revoke_note || '-'}</td>
+                            <td>{formatDetailNote(detail)}</td>
                             <td>
                               {detail.status === 'pending' ? (
                                 <div className="row-actions">
@@ -523,6 +523,14 @@ function formatDateRange(startDate: string, endDate: string) {
   }
 
   return `${formatDate(startDate)} 至 ${formatDate(endDate)}`;
+}
+
+function formatDetailNote(detail: WorkTimeAdjustmentRequestDate) {
+  if (detail.status === 'revoked') {
+    return `撤销原因：${detail.revoke_note || '-'}`;
+  }
+
+  return detail.review_note || '-';
 }
 
 function formatDate(value: string) {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import {
@@ -28,7 +28,9 @@ export function WorkTimeAdjustmentReviewPage() {
   const [details, setDetails] = useState<WorkTimeAdjustmentReviewDetail[]>([]);
   const [statusFilter, setStatusFilter] = useState<WorkTimeAdjustmentReviewStatusFilter>('pending');
   const [selectedReview, setSelectedReview] = useState<ReviewModalState | null>(null);
+  const [selectedRevoke, setSelectedRevoke] = useState<WorkTimeAdjustmentReviewDetail | null>(null);
   const [reviewNote, setReviewNote] = useState('');
+  const [revokeNote, setRevokeNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -61,6 +63,13 @@ export function WorkTimeAdjustmentReviewPage() {
     setMessage('');
   }
 
+  function openRevoke(detail: WorkTimeAdjustmentReviewDetail) {
+    setSelectedRevoke(detail);
+    setRevokeNote('');
+    setError('');
+    setMessage('');
+  }
+
   async function handleSubmitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -86,6 +95,37 @@ export function WorkTimeAdjustmentReviewPage() {
     } catch (reviewError) {
       console.error('工时调整审核失败', reviewError);
       setError(reviewError instanceof Error ? `工时调整审核失败：${reviewError.message}` : '工时调整审核失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitRevoke(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedRevoke || submitting) {
+      return;
+    }
+
+    const trimmedNote = revokeNote.trim();
+    if (!trimmedNote) {
+      setError('请填写撤销原因。');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await workTimeAdjustmentService.revokeApprovedDate(selectedRevoke.id, trimmedNote);
+      setMessage('工时调整申请已撤销通过。');
+      setSelectedRevoke(null);
+      setRevokeNote('');
+      await loadDetails();
+    } catch (revokeError) {
+      console.error('工时调整撤销失败', revokeError);
+      setError(revokeError instanceof Error ? `工时调整撤销失败：${revokeError.message}` : '工时调整撤销失败。');
     } finally {
       setSubmitting(false);
     }
@@ -149,6 +189,7 @@ export function WorkTimeAdjustmentReviewPage() {
                   <th>调整后工作时间</th>
                   <th>申请原因</th>
                   <th>状态</th>
+                  <th>审核 / 撤销备注</th>
                   <th>申请时间</th>
                   <th>附件</th>
                   <th>操作</th>
@@ -172,6 +213,7 @@ export function WorkTimeAdjustmentReviewPage() {
                         {workTimeAdjustmentStatusLabels[detail.status]}
                       </span>
                     </td>
+                    <td>{formatReviewNote(detail)}</td>
                     <td>{detail.request ? formatDateTime(detail.request.created_at) : '未取得'}</td>
                     <td>{detail.request?.attachment_path ? '有附件' : '无附件'}</td>
                     <td>
@@ -194,6 +236,15 @@ export function WorkTimeAdjustmentReviewPage() {
                             <span>拒绝</span>
                           </button>
                         </div>
+                      ) : detail.status === 'approved' ? (
+                        <button
+                          className="secondary-button compact-button danger-text-button"
+                          type="button"
+                          onClick={() => openRevoke(detail)}
+                        >
+                          <RotateCcw size={15} />
+                          <span>撤销通过</span>
+                        </button>
                       ) : (
                         '-'
                       )}
@@ -277,6 +328,68 @@ export function WorkTimeAdjustmentReviewPage() {
           </form>
         </SystemModal>
       ) : null}
+
+      {selectedRevoke ? (
+        <SystemModal
+          title="撤销已通过的工时调整"
+          subtitle="工时调整审核"
+          ariaLabel="撤销已通过的工时调整"
+          wide={false}
+          onClose={() => setSelectedRevoke(null)}
+          footer={
+            <>
+              <button
+                className="secondary-button compact-button"
+                type="button"
+                onClick={() => setSelectedRevoke(null)}
+                disabled={submitting}
+              >
+                取消
+              </button>
+              <button
+                className="secondary-button compact-button danger-text-button"
+                type="submit"
+                form="work-time-adjustment-revoke-form"
+                disabled={submitting}
+              >
+                <RotateCcw size={18} />
+                <span>{submitting ? '处理中...' : '确认撤销'}</span>
+              </button>
+            </>
+          }
+        >
+          <form id="work-time-adjustment-revoke-form" onSubmit={handleSubmitRevoke}>
+            <div className="detail-list">
+              <div>
+                <span>员工姓名</span>
+                <strong>{selectedRevoke.employee?.full_name ?? '未取得员工姓名'}</strong>
+              </div>
+              <div>
+                <span>申请日期</span>
+                <strong>{formatDate(selectedRevoke.work_date)}</strong>
+              </div>
+              <div>
+                <span>调整后工作时间</span>
+                <strong>
+                  {formatTime(selectedRevoke.adjusted_start_time)} 至 {formatTime(selectedRevoke.adjusted_end_time)}
+                </strong>
+              </div>
+            </div>
+
+            <label className="form-field">
+              <span>撤销原因</span>
+              <textarea
+                value={revokeNote}
+                onChange={(event) => setRevokeNote(event.target.value)}
+                placeholder="请输入撤销原因"
+                required
+              />
+            </label>
+
+            {error ? <p className="form-alert">{error}</p> : null}
+          </form>
+        </SystemModal>
+      ) : null}
     </section>
   );
 }
@@ -297,6 +410,18 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function formatReviewNote(detail: WorkTimeAdjustmentReviewDetail) {
+  if (detail.status === 'revoked') {
+    return detail.revoke_note || '-';
+  }
+
+  if (detail.status === 'approved' || detail.status === 'rejected') {
+    return detail.review_note || '-';
+  }
+
+  return '-';
 }
 
 function formatTime(value: string) {

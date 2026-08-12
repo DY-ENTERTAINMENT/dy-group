@@ -160,6 +160,17 @@ export const workTimeAdjustmentService = {
     }
   },
 
+  async revokeApprovedDate(detailId: string, note: string) {
+    const { error } = await supabase.rpc('revoke_approved_work_time_adjustment_date', {
+      p_detail_id: detailId,
+      p_note: note,
+    });
+
+    if (error) {
+      throw error;
+    }
+  },
+
   async updatePendingDate(detailId: string, adjustedStartTime: string) {
     const { error } = await supabase.rpc('update_pending_work_time_adjustment_date', {
       p_detail_id: detailId,
