@@ -2,14 +2,21 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Edit3, Plus, RefreshCw, Search, Settings2, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { SystemModal } from '../components/SystemModal';
+import { useAuth } from '../hooks/useAuth';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { type SettingsFormValues, type SettingsModuleKey, type SettingsRecord, settingsService } from '../services/settings.service';
 import { type EmployeeListItem, type StaffOptions, staffService } from '../services/staff.service';
 import { type SpecialPermissionTemplate, permissionManagementService } from '../services/permission-management.service';
+import {
+  type RegionPermissionMatrixRow,
+  managedRegionFeaturePermissions,
+  regionPermissionSettingsService,
+} from '../services/region-permission-settings.service';
+import type { RegionFeaturePermissionKey } from '../services/permission-runtime.service';
 import { menuItems } from '../routes/menu';
 
 type SettingsModule = {
-  key: SettingsModuleKey | 'permissions';
+  key: SettingsModuleKey | 'permissions' | 'region_permissions';
   title: string;
   description: string;
   nameLabel: string;
@@ -42,6 +49,12 @@ const modules: SettingsModule[] = [
     description: '此模块将在员工资料与组织架构稳定后开放。',
     nameLabel: '权限名称',
   },
+  {
+    key: 'region_permissions',
+    title: '地区功能权限',
+    description: '管理不同地区是否开放指定功能。',
+    nameLabel: '功能权限',
+  },
 ];
 
 const settingsTabAliases: Record<string, SettingsModule['key']> = {
@@ -50,6 +63,7 @@ const settingsTabAliases: Record<string, SettingsModule['key']> = {
   positions: 'job_titles',
   employment_types: 'employment_types',
   permissions: 'permissions',
+  region_permissions: 'region_permissions',
 };
 
 const settingsTabParams: Record<SettingsModule['key'], string> = {
@@ -57,6 +71,7 @@ const settingsTabParams: Record<SettingsModule['key'], string> = {
   job_titles: 'positions',
   employment_types: 'employment_types',
   permissions: 'permissions',
+  region_permissions: 'region_permissions',
 };
 
 const emptyForm: SettingsFormValues = {
@@ -130,6 +145,7 @@ const permissionGroupKeys: Record<string, string> = {
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { profile } = useAuth();
   const [activeModuleKey, setActiveModuleKey] = useState<SettingsModule['key']>(() => getSettingsTabFromParams(searchParams));
   const [records, setRecords] = useState<SettingsRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<SettingsRecord | null>(null);
@@ -140,14 +156,19 @@ export function SettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const visibleModules = useMemo(
+    () => (profile?.role === 'super_admin' ? modules : modules.filter((moduleItem) => moduleItem.key !== 'region_permissions')),
+    [profile?.role],
+  );
   const activeModule = useMemo(
-    () => modules.find((moduleItem) => moduleItem.key === activeModuleKey) ?? modules[0],
-    [activeModuleKey],
+    () => visibleModules.find((moduleItem) => moduleItem.key === activeModuleKey) ?? visibleModules[0] ?? modules[0],
+    [activeModuleKey, visibleModules],
   );
   const isPermissionModule = activeModuleKey === 'permissions';
+  const isRegionPermissionsModule = activeModuleKey === 'region_permissions' && profile?.role === 'super_admin';
 
   useEffect(() => {
-    if (activeModuleKey !== 'permissions') {
+    if (isSettingsDataModule(activeModuleKey)) {
       void loadSettings(activeModuleKey);
     } else {
       setRecords([]);
@@ -167,7 +188,7 @@ export function SettingsPage() {
   usePullToRefresh(() => loadSettings(activeModuleKey), [activeModuleKey]);
 
   async function loadSettings(moduleKey = activeModuleKey) {
-    if (moduleKey === 'permissions') {
+    if (!isSettingsDataModule(moduleKey)) {
       return;
     }
 
@@ -187,7 +208,7 @@ export function SettingsPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (activeModuleKey === 'permissions') {
+    if (!isSettingsDataModule(activeModuleKey)) {
       return;
     }
 
@@ -214,7 +235,7 @@ export function SettingsPage() {
   }
 
   async function handleToggle(record: SettingsRecord) {
-    if (activeModuleKey === 'permissions') {
+    if (!isSettingsDataModule(activeModuleKey)) {
       return;
     }
 
@@ -273,7 +294,7 @@ export function SettingsPage() {
       {message ? <p className="form-success">{message}</p> : null}
 
       <div className="settings-tabs" role="tablist" aria-label="系统设置模块">
-        {modules.map((moduleItem) => (
+        {visibleModules.map((moduleItem) => (
           <button
             key={moduleItem.key}
             className={activeModuleKey === moduleItem.key ? 'settings-tab active' : 'settings-tab'}
@@ -289,6 +310,8 @@ export function SettingsPage() {
 
       {isPermissionModule ? (
         <PermissionManagementPanel />
+      ) : isRegionPermissionsModule ? (
+        <RegionFeaturePermissionPanel />
       ) : (
         <div className="staff-list-panel">
           <div className="list-header">
@@ -369,7 +392,7 @@ export function SettingsPage() {
         </div>
       )}
 
-      {formOpen && !isPermissionModule ? (
+      {formOpen && isSettingsDataModule(activeModuleKey) ? (
         <SettingsFormModal
           activeModule={activeModule}
           editingRecord={editingRecord}
@@ -499,6 +522,143 @@ function SettingsFormModal({
         </div>
       </form>
     </SystemModal>
+  );
+}
+
+function RegionFeaturePermissionPanel() {
+  const [rows, setRows] = useState<RegionPermissionMatrixRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    void loadRegionPermissions();
+  }, []);
+
+  usePullToRefresh(() => loadRegionPermissions(), []);
+
+  async function loadRegionPermissions() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const matrix = await regionPermissionSettingsService.listMatrix();
+      setRows(matrix);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '读取地区功能权限失败。');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleToggle(row: RegionPermissionMatrixRow, permissionKey: RegionFeaturePermissionKey, enabled: boolean) {
+    const setting = row.settings[permissionKey];
+    if (!setting || isRegionFeatureToggleDisabled(row, permissionKey)) {
+      return;
+    }
+
+    setSavingKey(setting.id);
+    setError('');
+    setMessage('');
+
+    try {
+      const updatedSetting = await regionPermissionSettingsService.updateSetting({
+        settingId: setting.id,
+        regionId: row.region.id,
+        permissionKey,
+        enabled,
+      });
+      setRows((currentRows) =>
+        currentRows.map((currentRow) => {
+          if (currentRow.region.id !== row.region.id) return currentRow;
+
+          return {
+            ...currentRow,
+            settings: {
+              ...currentRow.settings,
+              [permissionKey]: updatedSetting,
+            },
+          };
+        }),
+      );
+      setMessage(`${row.region.code} ${getRegionFeatureLabel(permissionKey)}已${enabled ? '开启' : '关闭'}。`);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '更新地区功能权限失败。');
+    } finally {
+      setSavingKey('');
+    }
+  }
+
+  return (
+    <div className="staff-list-panel">
+      <div className="list-header">
+        <div>
+          <span>地区功能权限</span>
+          <h3>{rows.length} 个地区</h3>
+        </div>
+        <div className="toolbar-actions">
+          <button className="secondary-action" type="button" onClick={() => void loadRegionPermissions()} disabled={loading}>
+            <RefreshCw size={17} />
+            <span>刷新</span>
+          </button>
+        </div>
+      </div>
+
+      {error ? <p className="form-alert">{error}</p> : null}
+      {message ? <p className="form-success">{message}</p> : null}
+
+      {loading ? (
+        <div className="table-state">正在读取地区功能权限...</div>
+      ) : rows.length === 0 ? (
+        <div className="table-state">暂无地区资料。</div>
+      ) : (
+        <div className="staff-table-wrap">
+          <table className="staff-table staff-simple-table">
+            <thead>
+              <tr>
+                <th>地区</th>
+                {managedRegionFeaturePermissions.map((feature) => (
+                  <th key={feature.key}>{feature.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.region.id}>
+                  <td>
+                    <strong>{row.region.code}</strong>
+                    <span className="muted-inline"> {row.region.name}</span>
+                  </td>
+                  {managedRegionFeaturePermissions.map((feature) => {
+                    const setting = row.settings[feature.key];
+                    const checked = Boolean(setting?.can_view && setting.can_use);
+                    const disabled = !setting || isRegionFeatureToggleDisabled(row, feature.key);
+                    const saving = savingKey === setting?.id;
+                    const title = getRegionFeatureToggleTitle(row, feature.key, Boolean(setting));
+
+                    return (
+                      <td key={feature.key}>
+                        <label className="toggle-field inline-toggle" title={title}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled || saving}
+                            onChange={(event) => void handleToggle(row, feature.key, event.target.checked)}
+                          />
+                          <span>{checked ? '开启' : '关闭'}</span>
+                        </label>
+                        {title ? <small className="field-hint">{title}</small> : null}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1366,6 +1526,34 @@ function getStaffStatus(status: string | null | undefined) {
   return status || 'active';
 }
 
+function isSettingsDataModule(moduleKey: SettingsModule['key']): moduleKey is SettingsModuleKey {
+  return moduleKey === 'regions' || moduleKey === 'job_titles' || moduleKey === 'employment_types';
+}
+
+function getRegionFeatureLabel(permissionKey: RegionFeaturePermissionKey) {
+  return managedRegionFeaturePermissions.find((feature) => feature.key === permissionKey)?.label ?? permissionKey;
+}
+
+function isRegionFeatureToggleDisabled(row: RegionPermissionMatrixRow, permissionKey: RegionFeaturePermissionKey) {
+  return row.region.code === 'KL' && permissionKey === 'work-time-adjustment-employee';
+}
+
+function getRegionFeatureToggleTitle(
+  row: RegionPermissionMatrixRow,
+  permissionKey: RegionFeaturePermissionKey,
+  hasExistingSetting: boolean,
+) {
+  if (isRegionFeatureToggleDisabled(row, permissionKey)) {
+    return '后台尚未支持 KL 工时调整';
+  }
+
+  if (!hasExistingSetting) {
+    return '尚未有现有设置记录';
+  }
+
+  return '';
+}
+
 function getSettingsTabFromParams(searchParams: URLSearchParams): SettingsModule['key'] {
   return settingsTabAliases[searchParams.get('tab') ?? ''] ?? 'regions';
 }
@@ -1378,6 +1566,7 @@ function getSettingName(moduleKey: SettingsModule['key']) {
   if (moduleKey === 'regions') return '区域';
   if (moduleKey === 'job_titles') return '职称';
   if (moduleKey === 'employment_types') return '雇佣类型';
+  if (moduleKey === 'region_permissions') return '地区功能权限';
   return '权限';
 }
 
@@ -1389,6 +1578,7 @@ function getMobileSettingsTitle(moduleKey: SettingsModule['key']) {
   if (moduleKey === 'regions') return '区域';
   if (moduleKey === 'job_titles') return '职称';
   if (moduleKey === 'employment_types') return '雇佣';
+  if (moduleKey === 'region_permissions') return '地区权限';
   return '权限';
 }
 
