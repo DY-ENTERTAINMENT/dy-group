@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { permissionRuntimeService, type PermissionAction, type RuntimePermissions } from '../services/permission-runtime.service';
+import {
+  permissionRuntimeService,
+  type PermissionAction,
+  type RegionFeaturePermissionKey,
+  type RuntimePermissions,
+} from '../services/permission-runtime.service';
 import type { PermissionState } from '../services/permission-management.service';
 import { useAuth } from '../hooks/useAuth';
 
@@ -11,12 +16,14 @@ type PermissionContextValue = {
   canView: (permissionKey: string) => boolean;
   canUse: (permissionKey: string) => boolean;
   hasPermission: (permissionKey: string, action: PermissionAction) => boolean;
+  hasRegionFeaturePermission: (permissionKey: RegionFeaturePermissionKey, action: PermissionAction) => boolean;
   reloadPermissions: () => Promise<void>;
 };
 
 const emptyRuntime: RuntimePermissions = {
   role: null,
   permissions: {} as PermissionState,
+  regionFeaturePermissions: {} as PermissionState,
 };
 
 const PermissionContext = createContext<PermissionContextValue | null>(null);
@@ -49,7 +56,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       } catch (loadError) {
         console.error('Failed to load runtime permissions', loadError);
         if (mounted) {
-          setRuntime({ role: profile?.role ?? null, permissions: {} });
+          setRuntime({ role: profile?.role ?? null, permissions: {}, regionFeaturePermissions: {} });
           setError(getErrorMessage(loadError));
         }
       } finally {
@@ -75,7 +82,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       setRuntime(nextRuntime);
     } catch (loadError) {
       console.error('Failed to reload runtime permissions', loadError);
-      setRuntime({ role: profile?.role ?? null, permissions: {} });
+      setRuntime({ role: profile?.role ?? null, permissions: {}, regionFeaturePermissions: {} });
       setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
@@ -94,6 +101,8 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       canUse: (permissionKey: string) => permissionRuntimeService.hasPermission(effectiveRuntime, permissionKey, 'use'),
       hasPermission: (permissionKey: string, action: PermissionAction) =>
         permissionRuntimeService.hasPermission(effectiveRuntime, permissionKey, action),
+      hasRegionFeaturePermission: (permissionKey: RegionFeaturePermissionKey, action: PermissionAction) =>
+        permissionRuntimeService.hasRegionFeaturePermission(effectiveRuntime, permissionKey, action),
       reloadPermissions,
     };
   }, [error, loading, profile?.role, runtime]);

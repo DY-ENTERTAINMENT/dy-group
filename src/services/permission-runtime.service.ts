@@ -7,9 +7,13 @@ export type PermissionAction = keyof PermissionAccess;
 export type RuntimePermissions = {
   role: AppRole | null;
   permissions: PermissionState;
+  regionFeaturePermissions: PermissionState;
 };
 
 const db = supabase as any;
+
+export const regionFeaturePermissionKeys = ['replacement-leave', 'work-time-adjustment-employee'] as const;
+export type RegionFeaturePermissionKey = (typeof regionFeaturePermissionKeys)[number];
 
 const parentPermissionKeys: Record<string, string> = {
   'agent-revenue-data': 'agent',
@@ -34,11 +38,11 @@ const parentPermissionKeys: Record<string, string> = {
 export const permissionRuntimeService = {
   async getRuntimePermissions(profile: Profile | null): Promise<RuntimePermissions> {
     if (!profile) {
-      return { role: null, permissions: {} };
+      return { role: null, permissions: {}, regionFeaturePermissions: {} };
     }
 
     if (profile.role === 'super_admin') {
-      return { role: profile.role, permissions: {} };
+      return { role: profile.role, permissions: {}, regionFeaturePermissions: await getRegionFeaturePermissions() };
     }
 
     const { data: employee, error: employeeError } = await db
@@ -50,7 +54,7 @@ export const permissionRuntimeService = {
 
     if (employeeError) throw employeeError;
     if (!employee?.id) {
-      return { role: profile.role, permissions: {} };
+      return { role: profile.role, permissions: {}, regionFeaturePermissions: {} };
     }
 
     const [jobTitleResult, specialAccessResult, overrideResult] = await Promise.all([
@@ -110,7 +114,7 @@ export const permissionRuntimeService = {
 
     mergePermissionRows(permissions, overrideResult.data ?? []);
 
-    return { role: profile.role, permissions };
+    return { role: profile.role, permissions, regionFeaturePermissions: await getRegionFeaturePermissions() };
   },
 
   hasPermission(runtime: RuntimePermissions | null, permissionKey: string, action: PermissionAction) {
@@ -126,7 +130,51 @@ export const permissionRuntimeService = {
 
     return Boolean(access?.view && access.use) || Boolean(parentAccess?.view && parentAccess.use);
   },
+
+  hasRegionFeaturePermission(runtime: RuntimePermissions | null, permissionKey: RegionFeaturePermissionKey, action: PermissionAction) {
+    if (!runtime) return false;
+
+    const access = runtime.regionFeaturePermissions[permissionKey];
+    if (action === 'view') {
+      return Boolean(access?.view);
+    }
+
+    return Boolean(access?.view && access.use);
+  },
+
+  async checkRegionFeaturePermission(permissionKey: RegionFeaturePermissionKey, action: PermissionAction) {
+    const { data, error } = await db.rpc('current_user_has_region_feature_permission', {
+      p_permission_key: permissionKey,
+      p_action: action,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return Boolean(data);
+  },
 };
+
+async function getRegionFeaturePermissions(): Promise<PermissionState> {
+  try {
+    const entries = await Promise.all(
+      regionFeaturePermissionKeys.map(async (permissionKey) => {
+        const [canView, canUse] = await Promise.all([
+          permissionRuntimeService.checkRegionFeaturePermission(permissionKey, 'view'),
+          permissionRuntimeService.checkRegionFeaturePermission(permissionKey, 'use'),
+        ]);
+
+        return [permissionKey, { view: canView, use: canView && canUse }] as const;
+      }),
+    );
+
+    return Object.fromEntries(entries);
+  } catch (error) {
+    console.error('Failed to load region feature permissions', error);
+    return {};
+  }
+}
 
 function mergePermissionRows(
   permissions: PermissionState,

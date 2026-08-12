@@ -5,6 +5,7 @@ import { MonthSelect } from '../components/MonthSelect';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
 import {
   type LeaveFormValues,
   type LeaveBalance,
@@ -37,6 +38,7 @@ const emptyForm: LeaveFormValues = {
 
 export function LeavePage() {
   const { profile } = useAuth();
+  const permissions = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeView] = useState<'leave' | 'rest'>('leave');
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
@@ -75,6 +77,7 @@ export function LeavePage() {
   const restLocked =
     !isCurrentRestCycle ||
     new Date(`${restCycleRange.startDate}T00:00:00`).getTime() <= new Date().setHours(0, 0, 0, 0);
+  const canViewReplacementLeave = permissions.hasRegionFeaturePermission('replacement-leave', 'view');
 
   useEffect(() => {
     if (profile?.id) {
@@ -93,6 +96,12 @@ export function LeavePage() {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!canViewReplacementLeave && formValues.leave_type === 'replacement') {
+      setFormValues((current) => ({ ...current, leave_type: 'annual', medical_attachment_url: '' }));
+    }
+  }, [canViewReplacementLeave, formValues.leave_type]);
 
   async function loadLeaveRequests(profileId = profile?.id) {
     if (!profileId) {
@@ -342,6 +351,7 @@ export function LeavePage() {
           onClose={() => setShowLeaveModal(false)}
           onSubmit={handleSubmit}
           uploadingAttachment={uploadingAttachment}
+          canViewReplacementLeave={canViewReplacementLeave}
         />
       ) : null}
     </section>
@@ -378,6 +388,7 @@ type LeaveRequestModalProps = {
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   uploadingAttachment: boolean;
+  canViewReplacementLeave: boolean;
 };
 
 function LeaveRequestModal({
@@ -390,6 +401,7 @@ function LeaveRequestModal({
   onClose,
   onSubmit,
   uploadingAttachment,
+  canViewReplacementLeave,
 }: LeaveRequestModalProps) {
   const isMedical = values.leave_type === 'medical';
   const isReplacement = values.leave_type === 'replacement';
@@ -430,7 +442,7 @@ function LeaveRequestModal({
                 <option value="annual">年假</option>
                 <option value="medical">病假</option>
                 <option value="unpaid">无薪假</option>
-                <option value="replacement">调休</option>
+                {canViewReplacementLeave ? <option value="replacement">调休</option> : null}
               </select>
             </label>
 

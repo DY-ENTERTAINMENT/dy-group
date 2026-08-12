@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Employee, LeaveRequest, LeaveRequestStatus, LeaveType, PublicHoliday } from '../types/database';
+import { permissionRuntimeService } from './permission-runtime.service';
 
 export type LeaveFormValues = {
   leave_type: LeaveType;
@@ -293,6 +294,11 @@ async function validateReplacementLeaveRequest(
     throw new Error('无法确认员工资料，请先在工作人员页面绑定员工资料。');
   }
 
+  const canUseReplacementLeave = await permissionRuntimeService.checkRegionFeaturePermission('replacement-leave', 'use');
+  if (!canUseReplacementLeave) {
+    throw new Error('当前地区暂未开放调休申请。');
+  }
+
   if (!values.reason.trim()) {
     throw new Error('请填写申请原因。');
   }
@@ -304,16 +310,16 @@ async function validateReplacementLeaveRequest(
     throw new Error('请选择有效的调休日日期。');
   }
 
+  if (makeUpDate === leaveDate) {
+    throw new Error('补班日期和调休日期不能是同一天。');
+  }
+
   if (!isSaturday(makeUpDate)) {
     throw new Error('Make-up Saturday 必须是星期六。');
   }
 
   if (isSunday(makeUpDate) || isSunday(leaveDate)) {
     throw new Error('调休日日期不能选择星期日。');
-  }
-
-  if (!isWeekday(leaveDate)) {
-    throw new Error('Leave Date 必须是星期一至星期五。');
   }
 
   const publicHolidays = await listPublicHolidaysForDates([makeUpDate, leaveDate], employee.region_id);
@@ -553,11 +559,6 @@ function isSaturday(date: string) {
 
 function isSunday(date: string) {
   return getDayOfWeek(date) === 0;
-}
-
-function isWeekday(date: string) {
-  const day = getDayOfWeek(date);
-  return day >= 1 && day <= 5;
 }
 
 function getDayOfWeek(date: string) {

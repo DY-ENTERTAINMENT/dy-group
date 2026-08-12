@@ -5,6 +5,7 @@ import type {
   WorkTimeAdjustmentRequest,
   WorkTimeAdjustmentRequestDate,
 } from '../types/database';
+import { permissionRuntimeService } from './permission-runtime.service';
 
 const ATTACHMENT_BUCKET = 'work-time-adjustment-attachments';
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
@@ -50,6 +51,8 @@ export type WorkTimeAdjustmentReviewDetail = WorkTimeAdjustmentRequestDate & {
 
 export const workTimeAdjustmentService = {
   async createRequest(values: WorkTimeAdjustmentFormValues) {
+    await ensureCanUseWorkTimeAdjustment();
+
     const { data, error } = await supabase.rpc('create_work_time_adjustment_request', {
       p_start_date: values.startDate,
       p_end_date: values.endDate,
@@ -172,6 +175,8 @@ export const workTimeAdjustmentService = {
   },
 
   async updatePendingDate(detailId: string, adjustedStartTime: string) {
+    await ensureCanUseWorkTimeAdjustment();
+
     const { error } = await supabase.rpc('update_pending_work_time_adjustment_date', {
       p_detail_id: detailId,
       p_adjusted_start_time: adjustedStartTime,
@@ -183,6 +188,8 @@ export const workTimeAdjustmentService = {
   },
 
   async cancelPendingDate(detailId: string, note = '') {
+    await ensureCanUseWorkTimeAdjustment();
+
     const { error } = await supabase.rpc('cancel_pending_work_time_adjustment_date', {
       p_detail_id: detailId,
       p_note: note.trim() || null,
@@ -194,6 +201,8 @@ export const workTimeAdjustmentService = {
   },
 
   async uploadAttachment(file: File): Promise<WorkTimeAdjustmentAttachment> {
+    await ensureCanUseWorkTimeAdjustment();
+
     validateAttachment(file);
 
     const profileId = await getCurrentProfileId();
@@ -229,6 +238,17 @@ export const workTimeAdjustmentService = {
     return data.signedUrl;
   },
 };
+
+async function ensureCanUseWorkTimeAdjustment() {
+  const canUseWorkTimeAdjustment = await permissionRuntimeService.checkRegionFeaturePermission(
+    'work-time-adjustment-employee',
+    'use',
+  );
+
+  if (!canUseWorkTimeAdjustment) {
+    throw new Error('当前地区暂未开放工时调整申请。');
+  }
+}
 
 function attachDatesToRequests(
   requests: WorkTimeAdjustmentRequest[],

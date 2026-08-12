@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { RegionFeaturePermissionKey } from '../services/permission-runtime.service';
 import {
   Brush,
   CalendarCheck2,
@@ -29,6 +30,7 @@ export type MenuItem = {
   section?: string;
   group?: string;
   disabled?: boolean;
+  regionFeaturePermissionKey?: RegionFeaturePermissionKey;
 };
 
 export const menuItems: MenuItem[] = [
@@ -61,6 +63,7 @@ export const menuItems: MenuItem[] = [
     label: '工时调整',
     path: '/work-time-adjustment',
     icon: Clock3,
+    regionFeaturePermissionKey: 'work-time-adjustment-employee',
   },
   {
     key: 'itinerary',

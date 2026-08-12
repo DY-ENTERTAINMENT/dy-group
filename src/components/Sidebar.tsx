@@ -42,6 +42,9 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
   const visibleMenuItems = useMemo(
     () =>
       menuItems.filter((item) => {
+        if (item.regionFeaturePermissionKey) {
+          return permissions.hasRegionFeaturePermission(item.regionFeaturePermissionKey, 'view');
+        }
         if (!item.section) return true;
         if (item.key === 'settings') return permissions.isSuperAdmin;
         return permissions.canView(item.key);

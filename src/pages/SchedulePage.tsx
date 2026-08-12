@@ -603,14 +603,10 @@ function addLeaveToDate(map: Map<string, LeaveCalendarItem[]>, date: string, lea
 
 function leaveDisplayLabel(leave: LeaveCalendarItem, date: string) {
   if (leave.leave_type === 'replacement') {
-    return isSaturday(date) ? '补休' : '调休';
+    return date === leave.start_date ? '补休' : '调休';
   }
 
   return leaveTypeLabels[leave.leave_type];
-}
-
-function isSaturday(date: string) {
-  return new Date(`${date}T00:00:00`).getDay() === 6;
 }
 
 function isWeekend(date: string) {

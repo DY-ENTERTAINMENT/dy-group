@@ -30,6 +30,7 @@ import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
 import { RequireRole } from '../components/RequireRole';
 import { RequirePermission } from '../components/RequirePermission';
+import { RequireRegionFeaturePermission } from '../components/RequireRegionFeaturePermission';
 
 export const router = createBrowserRouter([
   {
@@ -221,7 +222,11 @@ export const router = createBrowserRouter([
           },
           {
             path: 'work-time-adjustment',
-            element: <WorkTimeAdjustmentPage />,
+            element: (
+              <RequireRegionFeaturePermission permissionKey="work-time-adjustment-employee">
+                <WorkTimeAdjustmentPage />
+              </RequireRegionFeaturePermission>
+            ),
           },
           {
             path: 'itinerary',
