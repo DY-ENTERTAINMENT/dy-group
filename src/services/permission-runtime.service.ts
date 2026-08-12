@@ -25,6 +25,7 @@ const parentPermissionKeys: Record<string, string> = {
   staff: 'hr',
   'registration-review': 'hr',
   'leave-review': 'hr',
+  'work-time-adjustment': 'hr',
   'attendance-management': 'hr',
   'public-holidays': 'hr',
   'attendance-locations': 'hr',
