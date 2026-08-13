@@ -99,6 +99,7 @@ export type Employee = {
   job_title_id: string | null;
   status: EmployeeStatus;
   hire_date: string | null;
+  employment_end_date: string | null;
   probation_confirm_date: string | null;
   start_work_time: string | null;
   end_work_time: string | null;
@@ -392,7 +393,7 @@ export type Database = {
       };
       employees: {
         Row: Employee;
-        Insert: Partial<Pick<Employee, 'id' | 'employee_code' | 'nickname' | 'avatar_url' | 'email' | 'phone' | 'gender' | 'birthday' | 'identity_number' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'bank_name' | 'bank_account' | 'bank_account_name' | 'base_salary' | 'region_id' | 'employment_type_id' | 'job_title_id' | 'status' | 'hire_date' | 'reviewed_by' | 'reviewed_at' | 'deleted_at' | 'created_at' | 'updated_at'>> &
+        Insert: Partial<Pick<Employee, 'id' | 'employee_code' | 'nickname' | 'avatar_url' | 'email' | 'phone' | 'gender' | 'birthday' | 'identity_number' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'bank_name' | 'bank_account' | 'bank_account_name' | 'base_salary' | 'region_id' | 'employment_type_id' | 'job_title_id' | 'status' | 'hire_date' | 'employment_end_date' | 'reviewed_by' | 'reviewed_at' | 'deleted_at' | 'created_at' | 'updated_at'>> &
           Pick<Employee, 'full_name'> & {
             profile_id?: string | null;
             start_work_time?: string | null;

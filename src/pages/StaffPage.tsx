@@ -30,6 +30,7 @@ const emptyForm: EmployeeFormValues = {
   job_title_id: '',
   status: 'active',
   hire_date: '',
+  employment_end_date: '',
   start_work_time: '09:00',
   end_work_time: '18:00',
   require_attendance: true,
@@ -69,6 +70,8 @@ export function StaffPage() {
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<EmployeeStatus | 'all'>('active');
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -83,8 +86,10 @@ export function StaffPage() {
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(keyword));
       const matchesRegion = !regionFilter || employee.region_id === regionFilter;
+      const matchesStatus = statusFilter === 'all' || getEmployeeStatus(employee.status) === statusFilter;
+      const matchesEmploymentType = !employmentTypeFilter || employee.employment_type_id === employmentTypeFilter;
 
-      return matchesKeyword && matchesRegion;
+      return matchesKeyword && matchesRegion && matchesStatus && matchesEmploymentType;
     });
 
     return [...visibleEmployees].sort((first, second) => {
@@ -93,7 +98,7 @@ export function StaffPage() {
       if (firstStatus !== secondStatus) return firstStatus - secondStatus;
       return first.full_name.localeCompare(second.full_name, 'zh-Hans');
     });
-  }, [employees, regionFilter, searchTerm]);
+  }, [employees, employmentTypeFilter, regionFilter, searchTerm, statusFilter]);
 
   useEffect(() => {
     void loadStaffData();
@@ -129,6 +134,14 @@ export function StaffPage() {
         ...formValues,
         employee_code: formValues.employee_code.trim().toUpperCase(),
       };
+
+      if (nextValues.status === 'left' && !nextValues.employment_end_date) {
+        throw new Error('离职日期为必填');
+      }
+
+      if (nextValues.status !== 'left') {
+        nextValues.employment_end_date = '';
+      }
 
       if (editingEmployee && canEditEmployeeCode && !nextValues.employee_code) {
         throw new Error('员工编号不可为空');
@@ -223,6 +236,29 @@ export function StaffPage() {
             {options.regions.map((region) => (
               <option key={region.id} value={region.id}>
                 {region.code}
+              </option>
+            ))}
+          </select>
+          <select
+            className="staff-region-filter"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as EmployeeStatus | 'all')}
+          >
+            <option value="all">全部</option>
+            <option value="active">在职</option>
+            <option value="probation">试用期</option>
+            <option value="inactive">停职</option>
+            <option value="left">离职</option>
+          </select>
+          <select
+            className="staff-region-filter"
+            value={employmentTypeFilter}
+            onChange={(event) => setEmploymentTypeFilter(event.target.value)}
+          >
+            <option value="">全部类型</option>
+            {options.employmentTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
               </option>
             ))}
           </select>
@@ -322,6 +358,14 @@ function StaffListRow({
       <td>{employee.job_title?.name || '-'}</td>
       <td>
         <span className={`status-pill status-${status}`}>{statusLabels[status] ?? statusLabels.active}</span>
+        {status === 'left' ? (
+          <>
+            {' '}
+            <span className={`status-pill ${employee.employment_end_date ? 'status-left' : 'status-inactive'}`}>
+              {employee.employment_end_date ? `离职：${employee.employment_end_date}` : '缺少离职日期'}
+            </span>
+          </>
+        ) : null}
       </td>
     </tr>
   );
@@ -413,6 +457,7 @@ function EmployeeDetailModal({
             <Info label="雇佣类型" value={employee.employment_type?.name} />
             <Info label="状态" value={statusLabels[getEmployeeStatus(employee.status)] ?? statusLabels.active} />
             <Info label="入职日期" value={employee.hire_date} />
+            {employee.status === 'left' ? <Info label="离职日期" value={employee.employment_end_date} /> : null}
             <Info label="正式日期" value={employee.hire_date ? calculateConfirmDate(employee.hire_date) : employee.probation_confirm_date} />
             <Info label="上班时间" value={formatTime(employee.start_work_time)} />
             <Info label="下班时间" value={formatTime(employee.end_work_time)} />
@@ -569,13 +614,32 @@ function StaffFormModal({
 
             <label className="form-field">
               <span>状态</span>
-              <select value={values.status} onChange={(event) => onChange({ ...values, status: event.target.value as EmployeeStatus })}>
+              <select
+                value={values.status}
+                onChange={(event) => {
+                  const status = event.target.value as EmployeeStatus;
+                  onChange({
+                    ...values,
+                    status,
+                    employment_end_date: status === 'left' ? values.employment_end_date || getCurrentDateInputValue() : '',
+                  });
+                }}
+              >
                 <option value="probation">试用期</option>
                 <option value="active">在职</option>
                 <option value="inactive">停职</option>
                 <option value="left">离职</option>
               </select>
             </label>
+
+            {values.status === 'left' ? (
+              <TextField
+                label="离职日期"
+                type="date"
+                value={values.employment_end_date}
+                onChange={(value) => onChange({ ...values, employment_end_date: value })}
+              />
+            ) : null}
 
             <FormSectionTitle title="银行资料" />
             <TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} />
@@ -684,6 +748,7 @@ function toFormValues(employee: EmployeeListItem): EmployeeFormValues {
     job_title_id: employee.job_title_id ?? '',
     status: employee.status,
     hire_date: employee.hire_date ?? '',
+    employment_end_date: employee.employment_end_date ?? '',
     start_work_time: normalizeTime(employee.start_work_time),
     end_work_time: normalizeTime(employee.end_work_time),
     require_attendance: employee.require_attendance,
@@ -702,6 +767,10 @@ function toDateKey(date: Date) {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getCurrentDateInputValue() {
+  return toDateKey(new Date());
 }
 
 function formatTime(value: string | null | undefined) {
