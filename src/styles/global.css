@@ -4856,6 +4856,12 @@ button.leave-chip:disabled {
   grid-column: 1 / -1;
 }
 
+.quick-date-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .form-field textarea {
   min-height: 96px;
   resize: vertical;

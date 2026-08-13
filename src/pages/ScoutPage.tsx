@@ -25,6 +25,7 @@ import {
   type CreatorProfile,
   type CreatorStatusFilter,
   type CreatorType,
+  type FollowStatus,
   type OnboardingManagerOption,
   type ScoutOptions,
   type WorkloadGranularity,
@@ -38,6 +39,7 @@ type ScoutPageProps = {
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
+type CandidateFollowFilter = 'all' | 'today' | 'overdue';
 const workloadGranularities: WorkloadGranularity[] = ['daily', 'weekly', 'monthly'];
 const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
   daily: '每日',
@@ -46,6 +48,12 @@ const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
 };
 
 const emptyCandidateForm: CandidateFormValues = {
+  platform: '',
+  platform_user_id: '',
+  platform_account: '',
+  talent: '',
+  follow_status: 'pending',
+  next_follow_up_date: '',
   name: '',
   gender: '',
   age: '',
@@ -70,6 +78,7 @@ const emptyCreatorForm: CreatorFormValues = {
 };
 
 const creatorTypes: CreatorType[] = ['5+1', 'online', 'offline', 'company'];
+const followStatuses: FollowStatus[] = ['pending', 'following', 'interview', 'ready_onboarding'];
 
 export function ScoutPage({ mode }: ScoutPageProps) {
   const { profile } = useAuth();
@@ -91,6 +100,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [managerFilter, setManagerFilter] = useState('');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
+  const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
   const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('monthly');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
@@ -136,16 +146,25 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const managementTotal = useMemo(() => summarizeCreators(managementMonthCreators), [managementMonthCreators]);
   const scoutSummaries = useMemo(() => createScoutRecruitSummaries(managementMonthCreators), [managementMonthCreators]);
   const regionSummaries = useMemo(() => createRegionRecruitSummaries(managementMonthCreators), [managementMonthCreators]);
-  const sortedCandidates = useMemo(
-    () =>
-      [...candidates].sort((first, second) => {
+  const sortedCandidates = useMemo(() => {
+    const malaysiaToday = getMalaysiaDateString();
+    const filteredCandidates = candidates.filter((candidate) => {
+      if (candidateFollowFilter === 'all') return true;
+      if (candidate.follow_status === 'stopped' || !candidate.next_follow_up_date) return false;
+      if (candidateFollowFilter === 'today') return candidate.next_follow_up_date === malaysiaToday;
+      return candidate.next_follow_up_date < malaysiaToday;
+    });
+
+    return filteredCandidates.sort((first, second) => {
         const firstSettled = first.status === 'pending' ? 0 : 1;
         const secondSettled = second.status === 'pending' ? 0 : 1;
         if (firstSettled !== secondSettled) return firstSettled - secondSettled;
+        const firstFollowDate = first.next_follow_up_date ?? '9999-12-31';
+        const secondFollowDate = second.next_follow_up_date ?? '9999-12-31';
+        if (firstFollowDate !== secondFollowDate) return firstFollowDate.localeCompare(secondFollowDate);
         return new Date(second.updated_at).getTime() - new Date(first.updated_at).getTime();
-      }),
-    [candidates],
-  );
+      });
+  }, [candidateFollowFilter, candidates]);
 
   useEffect(() => {
     void loadData();
@@ -287,6 +306,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   function openCandidateEdit(candidate: Candidate) {
     setEditingCandidate(candidate);
     setCandidateForm({
+      platform: candidate.platform ?? '',
+      platform_user_id: candidate.platform_user_id ?? '',
+      platform_account: candidate.platform_account ?? '',
+      talent: candidate.talent ?? '',
+      follow_status: candidate.follow_status ?? 'pending',
+      next_follow_up_date: candidate.next_follow_up_date ?? '',
       name: candidate.name,
       gender: candidate.gender ?? '',
       age: candidate.age ? String(candidate.age) : '',
@@ -420,7 +445,14 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       ) : null}
 
       {mode === 'recruit-list' ? (
-        <CandidatePanel loading={loading} candidates={sortedCandidates} onEdit={openCandidateEdit} onStatus={setCandidateStatus} />
+        <CandidatePanel
+          loading={loading}
+          candidates={sortedCandidates}
+          followFilter={candidateFollowFilter}
+          onFollowFilter={setCandidateFollowFilter}
+          onEdit={openCandidateEdit}
+          onStatus={setCandidateStatus}
+        />
       ) : null}
 
       {mode === 'onboarding' ? (
@@ -710,16 +742,33 @@ function RecruitCard({ title, summary }: { title: string; summary: { total: numb
 function CandidatePanel({
   loading,
   candidates,
+  followFilter,
+  onFollowFilter,
   onEdit,
   onStatus,
 }: {
   loading: boolean;
   candidates: Candidate[];
+  followFilter: CandidateFollowFilter;
+  onFollowFilter: (filter: CandidateFollowFilter) => void;
   onEdit: (candidate: Candidate) => void;
   onStatus: (candidate: Candidate, status: 'accepted' | 'rejected') => void;
 }) {
   return (
     <div className="staff-list-panel">
+      <div className="list-header compact-list-header">
+        <div>
+          <span>跟进提醒</span>
+          <h3>{getCandidateFollowFilterLabel(followFilter)}</h3>
+        </div>
+        <div className="segmented-control" role="group" aria-label="名单跟进筛选">
+          {(['all', 'today', 'overdue'] as CandidateFollowFilter[]).map((filter) => (
+            <button key={filter} className={followFilter === filter ? 'active' : ''} type="button" onClick={() => onFollowFilter(filter)}>
+              {getCandidateFollowFilterLabel(filter)}
+            </button>
+          ))}
+        </div>
+      </div>
       {loading ? (
         <div className="table-state">正在读取名单...</div>
       ) : candidates.length === 0 ? (
@@ -730,6 +779,11 @@ function CandidatePanel({
             <thead>
               <tr>
                 <th>姓名</th>
+                <th>平台 / UID</th>
+                <th>主播账号</th>
+                <th>才艺</th>
+                <th>跟进状态</th>
+                <th>下次跟进</th>
                 <th>性别</th>
                 <th>年龄</th>
                 <th>来源</th>
@@ -744,6 +798,14 @@ function CandidatePanel({
               {candidates.map((candidate) => (
                 <tr key={candidate.id} className={candidate.status === 'accepted' ? 'candidate-accepted' : candidate.status === 'rejected' ? 'candidate-rejected' : ''}>
                   <td>{candidate.name}</td>
+                  <td>
+                    <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
+                    <span>{candidate.platform_user_id || '-'}</span>
+                  </td>
+                  <td>{candidate.platform_account || '-'}</td>
+                  <td>{candidate.talent || '-'}</td>
+                  <td>{getFollowStatusLabel(candidate.follow_status)}</td>
+                  <td>{candidate.next_follow_up_date || '-'}</td>
                   <td>{candidate.gender || '-'}</td>
                   <td>{candidate.age || '-'}</td>
                   <td>{candidate.source || '-'}</td>
@@ -1260,6 +1322,39 @@ function CandidateModal(props: {
     >
       <form id="candidate-form" onSubmit={props.onSubmit}>
         <div className="form-grid">
+          <SelectField label="平台" value={props.values.platform} onChange={(value) => props.onChange({ ...props.values, platform: value as CandidateFormValues['platform'] })}>
+            <option value="">未填写</option>
+            <option value="tiktok">TikTok</option>
+            <option value="douyin">抖音</option>
+          </SelectField>
+          <TextField label="主播 UID" value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} />
+          <TextField label="主播账号" value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} />
+          <TextField label="才艺" value={props.values.talent} onChange={(value) => props.onChange({ ...props.values, talent: value })} />
+          <SelectField label="跟进状态" value={props.values.follow_status} onChange={(value) => props.onChange({ ...props.values, follow_status: value as FollowStatus })}>
+            {followStatuses.map((status) => (
+              <option key={status} value={status}>
+                {getFollowStatusLabel(status)}
+              </option>
+            ))}
+          </SelectField>
+          <label className="form-field">
+            <span>下次跟进日期</span>
+            <input type="date" value={props.values.next_follow_up_date} onChange={(event) => props.onChange({ ...props.values, next_follow_up_date: event.target.value })} />
+          </label>
+          <div className="form-field form-field-wide">
+            <span>快捷跟进日期</span>
+            <div className="quick-date-actions">
+              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(1) })}>
+                明天
+              </button>
+              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(3) })}>
+                3天后
+              </button>
+              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(7) })}>
+                7天后
+              </button>
+            </div>
+          </div>
           <TextField label="姓名" value={props.values.name} onChange={(value) => props.onChange({ ...props.values, name: value })} required />
           <TextField label="性别" value={props.values.gender} onChange={(value) => props.onChange({ ...props.values, gender: value })} />
           <TextField label="年龄" type="number" value={props.values.age} onChange={(value) => props.onChange({ ...props.values, age: value })} />
@@ -1483,6 +1578,34 @@ function getLocalDateString(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getMalaysiaDateString(offsetDays = 0) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  const date = new Date(Date.UTC(year, month - 1, day + offsetDays));
+  return date.toISOString().slice(0, 10);
+}
+
+function getFollowStatusLabel(status: FollowStatus | null | undefined) {
+  if (status === 'following') return '跟进中';
+  if (status === 'interview') return '已约面试';
+  if (status === 'ready_onboarding') return '准备入公会';
+  if (status === 'stopped') return '停止跟进';
+  return '待跟进';
+}
+
+function getCandidateFollowFilterLabel(filter: CandidateFollowFilter) {
+  if (filter === 'today') return '今日待跟进';
+  if (filter === 'overdue') return '已逾期';
+  return '全部';
 }
 
 function getCandidateStatusLabel(status: Candidate['status']) {

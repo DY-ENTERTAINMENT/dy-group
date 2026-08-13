@@ -13,6 +13,7 @@ export type RecurringTodoFrequency = 'daily' | 'weekly' | 'monthly' | 'month_end
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
+export type CandidateFollowStatus = 'pending' | 'following' | 'interview' | 'ready_onboarding' | 'stopped';
 export type WorkTimeAdjustmentDetailStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'revoked';
 export type WorkTimeAdjustmentAuditAction =
   | 'request_created'
@@ -326,6 +327,15 @@ export type RecurringTodoItem = {
 export type ScoutCandidate = {
   id: string;
   scout_profile_id: string;
+  region_id: string | null;
+  platform: CreatorPlatform | null;
+  platform_user_id: string | null;
+  platform_account: string | null;
+  talent: string | null;
+  follow_status: CandidateFollowStatus | null;
+  next_follow_up_date: string | null;
+  stopped_reason: string | null;
+  stopped_at: string | null;
   name: string;
   gender: string | null;
   age: number | null;
@@ -869,7 +879,30 @@ export type Database = {
       scout_candidates: {
         Row: ScoutCandidate;
         Insert: Pick<ScoutCandidate, 'scout_profile_id' | 'name'> &
-          Partial<Pick<ScoutCandidate, 'id' | 'gender' | 'age' | 'source' | 'contact' | 'current_job' | 'remark' | 'status' | 'created_at' | 'updated_at'>>;
+          Partial<
+            Pick<
+              ScoutCandidate,
+              | 'id'
+              | 'region_id'
+              | 'platform'
+              | 'platform_user_id'
+              | 'platform_account'
+              | 'talent'
+              | 'follow_status'
+              | 'next_follow_up_date'
+              | 'stopped_reason'
+              | 'stopped_at'
+              | 'gender'
+              | 'age'
+              | 'source'
+              | 'contact'
+              | 'current_job'
+              | 'remark'
+              | 'status'
+              | 'created_at'
+              | 'updated_at'
+            >
+          >;
         Update: Partial<Omit<ScoutCandidate, 'id' | 'scout_profile_id' | 'created_at' | 'updated_at'>>;
         Relationships: [
           {
@@ -877,6 +910,13 @@ export type Database = {
             columns: ['scout_profile_id'];
             isOneToOne: false;
             referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'scout_candidates_region_id_fkey';
+            columns: ['region_id'];
+            isOneToOne: false;
+            referencedRelation: 'regions';
             referencedColumns: ['id'];
           },
         ];

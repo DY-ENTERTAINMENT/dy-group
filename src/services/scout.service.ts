@@ -1,7 +1,8 @@
 ﻿import { supabase } from '../lib/supabase';
-import type { Employee, ManagementScoutWorkloadStat, Region, ScoutDailyWorkLog } from '../types/database';
+import type { CandidateFollowStatus, Employee, ManagementScoutWorkloadStat, Region, ScoutDailyWorkLog } from '../types/database';
 
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
+export type FollowStatus = CandidateFollowStatus;
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
 export type CreatorStatus = 'active' | 'invalid';
@@ -18,6 +19,12 @@ export type WorkloadGranularity = 'daily' | 'weekly' | 'monthly';
 export type ManagementWorkloadStat = ManagementScoutWorkloadStat;
 
 export type CandidateFormValues = {
+  platform: CreatorPlatform | '';
+  platform_user_id: string;
+  platform_account: string;
+  talent: string;
+  follow_status: FollowStatus;
+  next_follow_up_date: string;
   name: string;
   gender: string;
   age: string;
@@ -27,11 +34,26 @@ export type CandidateFormValues = {
   remark: string;
 };
 
-export type Candidate = Omit<CandidateFormValues, 'age'> & {
+export type Candidate = {
   id: string;
-  age: number | null;
-  status: CandidateStatus;
   scout_profile_id: string;
+  region_id: string | null;
+  platform: CreatorPlatform | null;
+  platform_user_id: string | null;
+  platform_account: string | null;
+  talent: string | null;
+  follow_status: FollowStatus | null;
+  next_follow_up_date: string | null;
+  stopped_reason: string | null;
+  stopped_at: string | null;
+  name: string;
+  gender: string | null;
+  age: number | null;
+  source: string | null;
+  contact: string | null;
+  current_job: string | null;
+  remark: string | null;
+  status: CandidateStatus;
   created_at: string;
   updated_at: string;
 };
@@ -384,6 +406,12 @@ async function getEmployeeProfileId(employeeId: string) {
 
 function normalizeCandidate(values: CandidateFormValues) {
   return {
+    platform: values.platform || null,
+    platform_user_id: values.platform_user_id.trim() || null,
+    platform_account: values.platform_account.trim() || null,
+    talent: values.talent.trim() || null,
+    follow_status: values.follow_status || 'pending',
+    next_follow_up_date: values.next_follow_up_date || null,
     name: values.name.trim(),
     gender: values.gender.trim() || null,
     age: values.age.trim() ? Number(values.age) : null,
