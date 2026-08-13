@@ -1,11 +1,18 @@
 ﻿import { supabase } from '../lib/supabase';
-import type { Employee, Region } from '../types/database';
+import type { Employee, Region, ScoutDailyWorkLog } from '../types/database';
 
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
 export type CreatorStatus = 'active' | 'invalid';
 export type CreatorStatusFilter = CreatorStatus | 'all';
+
+export type DailyWorkLog = ScoutDailyWorkLog;
+
+export type DailyWorkLogFormValues = {
+  contacted_count: string;
+  replied_count: string;
+};
 
 export type CandidateFormValues = {
   name: string;
@@ -190,6 +197,32 @@ export const scoutService = {
     return data ?? [];
   },
 
+  async listDailyWorkLogs(month: string): Promise<DailyWorkLog[]> {
+    const { startDate, endDate } = getMonthDateRange(month);
+    const { data, error } = await db
+      .from('scout_daily_work_logs')
+      .select('*')
+      .gte('work_date', startDate)
+      .lte('work_date', endDate)
+      .order('work_date', { ascending: false });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async saveDailyWorkLog(workDate: string, values: DailyWorkLogFormValues): Promise<DailyWorkLog> {
+    const contactedCount = parseCount(values.contacted_count);
+    const repliedCount = parseCount(values.replied_count);
+    const { data, error } = await db.rpc('upsert_scout_daily_work_log', {
+      p_work_date: workDate,
+      p_contacted_count: contactedCount,
+      p_replied_count: repliedCount,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
   async createCandidate(profileId: string, values: CandidateFormValues) {
     const { error } = await db.from('scout_candidates').insert({
       ...normalizeCandidate(values),
@@ -345,6 +378,32 @@ function normalizeCandidate(values: CandidateFormValues) {
     current_job: values.current_job.trim() || null,
     remark: values.remark.trim() || null,
   };
+}
+
+function parseCount(value: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('人数必须是 0 或正整数。');
+  }
+  return parsed;
+}
+
+function getMonthDateRange(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error('月份格式无效。');
+  }
+
+  const [year, monthNumber] = month.split('-').map(Number);
+  const startDate = `${month}-01`;
+  const endDate = formatLocalDate(new Date(year, monthNumber, 0));
+  return { startDate, endDate };
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function mapCreatorRow(row: any): CreatorProfile {

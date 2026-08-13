@@ -9,6 +9,8 @@ import {
   createRegionRecruitSummaries,
   createScoutRecruitSummaries,
   creatorTypeLabels,
+  type DailyWorkLog,
+  type DailyWorkLogFormValues,
   filterCreatorsByMonth,
   getEmployeeName,
   platformLabels,
@@ -72,6 +74,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorManagerNames, setCreatorManagerNames] = useState<CreatorManagerDisplayName[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [dailyWorkLogs, setDailyWorkLogs] = useState<DailyWorkLog[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [platformFilter, setPlatformFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
@@ -88,6 +91,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dailyWorkSavingDate, setDailyWorkSavingDate] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -135,7 +139,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
   useEffect(() => {
     void loadData();
-  }, [creatorStatusFilter, mode, profile?.id]);
+  }, [creatorStatusFilter, mode, month, profile?.id]);
 
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
@@ -143,15 +147,17 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setError('');
 
     try {
-      const [nextOptions, nextCreators, nextCandidates] = await Promise.all([
+      const [nextOptions, nextCreators, nextCandidates, nextDailyWorkLogs] = await Promise.all([
         scoutService.getOptions(),
         scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
+        mode === 'personal-recruiting' ? scoutService.listDailyWorkLogs(month) : Promise.resolve([]),
       ]);
 
       setOptions(nextOptions);
       setCreators(nextCreators);
       setCandidates(nextCandidates);
+      setDailyWorkLogs(nextDailyWorkLogs);
 
       if (!creatorForm.scout_employee_id && profile?.id) {
         const currentEmployee = nextOptions.employees.find((employee) => employee.profile_id === profile.id);
@@ -241,6 +247,22 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       await loadData();
     } catch (statusError) {
       setError(`更新名单状态失败：${getErrorMessage(statusError)}`);
+    }
+  }
+
+  async function submitDailyWorkLog(workDate: string, values: DailyWorkLogFormValues) {
+    setDailyWorkSavingDate(workDate);
+    setError('');
+    setMessage('');
+
+    try {
+      await scoutService.saveDailyWorkLog(workDate, values);
+      setMessage('每日工作记录已保存。');
+      await loadData();
+    } catch (saveError) {
+      setError(`保存每日工作记录失败：${getErrorMessage(saveError)}`);
+    } finally {
+      setDailyWorkSavingDate('');
     }
   }
 
@@ -373,7 +395,16 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       {message ? <p className="form-success">{message}</p> : null}
 
       {mode === 'personal-recruiting' ? (
-        <PersonalRecruitingPanel month={month} onMonthChange={setMonth} breakdown={personalBreakdown} loading={loading} />
+        <PersonalRecruitingPanel
+          month={month}
+          onMonthChange={setMonth}
+          breakdown={personalBreakdown}
+          dailyWorkLogs={dailyWorkLogs}
+          dailyWorkSavingDate={dailyWorkSavingDate}
+          canEditDailyWork={permissions.canUse('scout-recruiting-data')}
+          loading={loading}
+          onSaveDailyWorkLog={submitDailyWorkLog}
+        />
       ) : null}
 
       {mode === 'recruit-list' ? (
@@ -457,12 +488,20 @@ function PersonalRecruitingPanel({
   month,
   onMonthChange,
   breakdown,
+  dailyWorkLogs,
+  dailyWorkSavingDate,
+  canEditDailyWork,
   loading,
+  onSaveDailyWorkLog,
 }: {
   month: string;
   onMonthChange: (value: string) => void;
   breakdown: ReturnType<typeof createRecruitBreakdown>;
+  dailyWorkLogs: DailyWorkLog[];
+  dailyWorkSavingDate: string;
+  canEditDailyWork: boolean;
   loading: boolean;
+  onSaveDailyWorkLog: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
 }) {
   return (
     <div className="staff-list-panel">
@@ -477,7 +516,152 @@ function PersonalRecruitingPanel({
         </label>
       </div>
       {loading ? <div className="table-state">正在统计招募数据...</div> : <RecruitBreakdownCards breakdown={breakdown} />}
+      <DailyWorkLogPanel
+        month={month}
+        logs={dailyWorkLogs}
+        savingDate={dailyWorkSavingDate}
+        canEdit={canEditDailyWork}
+        loading={loading}
+        onSave={onSaveDailyWorkLog}
+      />
     </div>
+  );
+}
+
+function DailyWorkLogPanel({
+  month,
+  logs,
+  savingDate,
+  canEdit,
+  loading,
+  onSave,
+}: {
+  month: string;
+  logs: DailyWorkLog[];
+  savingDate: string;
+  canEdit: boolean;
+  loading: boolean;
+  onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
+}) {
+  const rows = useMemo(() => createDailyWorkRows(logs, month), [logs, month]);
+
+  return (
+    <section className="scout-summary-section">
+      <h4>每日工作记录</h4>
+      {loading ? (
+        <div className="table-state">正在读取每日工作记录...</div>
+      ) : rows.length === 0 ? (
+        <div className="table-state">本月暂无每日工作记录。</div>
+      ) : (
+        <div className="staff-table-wrap">
+          <table className="staff-table scout-summary-table">
+            <thead>
+              <tr>
+                <th>工作日期</th>
+                <th>联系人数</th>
+                <th>回复人数</th>
+                <th>回复率</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <DailyWorkLogRow
+                  key={row.workDate}
+                  workDate={row.workDate}
+                  log={row.log}
+                  editable={canEdit && isRecentDailyWorkDate(row.workDate)}
+                  saving={savingDate === row.workDate}
+                  onSave={onSave}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DailyWorkLogRow({
+  workDate,
+  log,
+  editable,
+  saving,
+  onSave,
+}: {
+  workDate: string;
+  log: DailyWorkLog | null;
+  editable: boolean;
+  saving: boolean;
+  onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
+}) {
+  const [values, setValues] = useState<DailyWorkLogFormValues>({
+    contacted_count: String(log?.contacted_count ?? 0),
+    replied_count: String(log?.replied_count ?? 0),
+  });
+  const [rowError, setRowError] = useState('');
+
+  useEffect(() => {
+    setValues({
+      contacted_count: String(log?.contacted_count ?? 0),
+      replied_count: String(log?.replied_count ?? 0),
+    });
+    setRowError('');
+  }, [log?.contacted_count, log?.replied_count, workDate]);
+
+  const contactedCount = Number(values.contacted_count) || 0;
+  const repliedCount = Number(values.replied_count) || 0;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editable) return;
+
+    if (!Number.isInteger(contactedCount) || contactedCount < 0 || !Number.isInteger(repliedCount) || repliedCount < 0) {
+      setRowError('人数必须是 0 或正整数。');
+      return;
+    }
+
+    if (repliedCount > contactedCount) {
+      setRowError('回复人数不可大于联系人数。');
+      return;
+    }
+
+    setRowError('');
+    await onSave(workDate, values);
+  }
+
+  return (
+    <tr>
+      <td>{workDate}</td>
+      <td>
+        {editable ? (
+          <input className="daily-work-input" type="number" min="0" step="1" value={values.contacted_count} onChange={(event) => setValues({ ...values, contacted_count: event.target.value })} form={`daily-work-${workDate}`} />
+        ) : (
+          log?.contacted_count ?? 0
+        )}
+      </td>
+      <td>
+        {editable ? (
+          <input className="daily-work-input" type="number" min="0" step="1" value={values.replied_count} onChange={(event) => setValues({ ...values, replied_count: event.target.value })} form={`daily-work-${workDate}`} />
+        ) : (
+          log?.replied_count ?? 0
+        )}
+      </td>
+      <td>{formatReplyRate(contactedCount, repliedCount)}</td>
+      <td>
+        {editable ? (
+          <form id={`daily-work-${workDate}`} onSubmit={submit}>
+            <button className="primary-button compact-button" type="submit" disabled={saving}>
+              {saving ? '保存中...' : log ? '修改' : '填写'}
+            </button>
+            {rowError ? <small className="form-error">{rowError}</small> : null}
+          </form>
+        ) : (
+          <span>只读</span>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -1177,6 +1361,48 @@ function OnboardingManagerSelect({
       ))}
     </SelectField>
   );
+}
+
+function createDailyWorkRows(logs: DailyWorkLog[], month: string) {
+  const rows = new Map<string, DailyWorkLog | null>();
+
+  logs.forEach((log) => {
+    rows.set(log.work_date, log);
+  });
+
+  [getLocalDateString(new Date()), getLocalDateString(addLocalDays(new Date(), -1))]
+    .filter((workDate) => workDate.startsWith(month))
+    .forEach((workDate) => {
+      if (!rows.has(workDate)) rows.set(workDate, null);
+    });
+
+  return Array.from(rows.entries())
+    .map(([workDate, log]) => ({ workDate, log }))
+    .sort((first, second) => second.workDate.localeCompare(first.workDate));
+}
+
+function isRecentDailyWorkDate(workDate: string) {
+  const today = getLocalDateString(new Date());
+  const yesterday = getLocalDateString(addLocalDays(new Date(), -1));
+  return workDate === today || workDate === yesterday;
+}
+
+function formatReplyRate(contactedCount: number, repliedCount: number) {
+  if (contactedCount <= 0) return '0%';
+  return `${((repliedCount / contactedCount) * 100).toFixed(2)}%`;
+}
+
+function addLocalDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function getLocalDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function getCandidateStatusLabel(status: Candidate['status']) {

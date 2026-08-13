@@ -4826,6 +4826,16 @@ button.leave-chip:disabled {
   min-width: 1040px;
 }
 
+.daily-work-input {
+  width: 96px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--panel);
+}
+
 .candidate-accepted td {
   background: #dff7f3;
 }
