@@ -6,6 +6,7 @@ export type AppRole = 'super_admin' | 'admin' | 'hr' | 'manager' | 'staff';
 export type LeaveType = 'annual' | 'medical' | 'unpaid' | 'replacement';
 export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected';
 export type AttendancePunchType = 'clock_in' | 'break_start' | 'break_end' | 'clock_out';
+export type AttendanceAbnormalReviewStatus = 'normal' | 'pending' | 'abnormal';
 export type ScheduleEventType = 'meeting' | 'training' | 'shooting' | 'live' | 'visit' | 'other';
 export type ScheduleEventStatus = 'active' | 'cancelled';
 export type RecurringTodoFrequency = 'daily' | 'weekly' | 'monthly' | 'month_end' | 'custom';
@@ -148,6 +149,17 @@ export type AttendanceRecord = {
   distance_meters: number | null;
   location_check_result: string | null;
   created_at: string;
+};
+
+export type AttendanceAbnormalReviewHistory = {
+  id: string;
+  attendance_record_id: string;
+  review_status: AttendanceAbnormalReviewStatus;
+  reason: string | null;
+  source_abnormal_types: string[];
+  reviewed_by: string | null;
+  reviewed_by_name: string;
+  reviewed_at: string;
 };
 
 export type AttendanceLocation = {
@@ -472,6 +484,28 @@ export type Database = {
             columns: ['attendance_location_id'];
             isOneToOne: false;
             referencedRelation: 'attendance_locations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      attendance_abnormal_review_history: {
+        Row: AttendanceAbnormalReviewHistory;
+        Insert: Pick<AttendanceAbnormalReviewHistory, 'attendance_record_id' | 'review_status' | 'source_abnormal_types' | 'reviewed_by_name'> &
+          Partial<Pick<AttendanceAbnormalReviewHistory, 'id' | 'reason' | 'reviewed_by' | 'reviewed_at'>>;
+        Update: Partial<Omit<AttendanceAbnormalReviewHistory, 'id'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_abnormal_review_history_attendance_record_id_fkey';
+            columns: ['attendance_record_id'];
+            isOneToOne: false;
+            referencedRelation: 'attendance_records';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'attendance_abnormal_review_history_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
             referencedColumns: ['id'];
           },
         ];
@@ -1003,6 +1037,23 @@ export type Database = {
           p_device_info: string;
         };
         Returns: string;
+      };
+      review_attendance_abnormal_record: {
+        Args: {
+          p_attendance_record_id: string;
+          p_review_status: AttendanceAbnormalReviewStatus;
+          p_source_abnormal_types: string[];
+          p_reason?: string | null;
+        };
+        Returns: string;
+      };
+      get_attendance_abnormal_review_history: {
+        Args: {
+          p_start_at: string;
+          p_end_at: string;
+          p_region_id?: string | null;
+        };
+        Returns: AttendanceAbnormalReviewHistory[];
       };
       get_attendance_effective_work_times: {
         Args: {

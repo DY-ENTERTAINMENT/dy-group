@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Eye, RefreshCw } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
@@ -11,7 +11,15 @@ import {
   attendanceManagementService,
   getAttendancePeriodRange,
 } from '../services/attendanceManagement.service';
-import type { AttendanceRecord, LeaveRequest, LeaveType, PublicHoliday, Region } from '../types/database';
+import type {
+  AttendanceAbnormalReviewHistory,
+  AttendanceAbnormalReviewStatus,
+  AttendanceRecord,
+  LeaveRequest,
+  LeaveType,
+  PublicHoliday,
+  Region,
+} from '../types/database';
 
 type DailyRecord = {
   date: string;
@@ -38,14 +46,30 @@ type EmployeeAttendanceSummary = {
 
 type AbnormalRecord = {
   id: string;
+  attendanceRecordId: string;
   employee: AttendanceEmployee;
   type: string;
+  punchType: AttendanceRecord['punch_type'];
+  sourceAbnormalTypes: string[];
+  reviewStatus: AttendanceAbnormalReviewStatus;
+  reviewReason: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
   punchedAt: string;
   gps: string;
   ip: string;
   deviceInfo: string;
   photoPath: string;
 };
+
+type AbnormalReviewSnapshot = {
+  reviewStatus: AttendanceAbnormalReviewStatus;
+  reason: string | null;
+  reviewedByName: string;
+  reviewedAt: string;
+};
+
+type AbnormalCenterTab = 'pending' | 'abnormal';
 
 const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
@@ -71,7 +95,8 @@ export function AttendanceManagementPage() {
   const range = useMemo(() => getAttendancePeriodRange(month), [month]);
   const selectedSummary = summaries.find((summary) => summary.employee.id === selectedEmployeeId) ?? null;
   const abnormalRecords = summaries.flatMap((summary) => summary.abnormalRecords);
-  const abnormalEmployeeCount = summaries.filter((summary) => summary.abnormalPunchCount > 0).length;
+  const pendingAbnormalRecords = abnormalRecords.filter((record) => record.reviewStatus === 'pending');
+  const abnormalEmployeeCount = new Set(pendingAbnormalRecords.map((record) => record.employee.id)).size;
 
   useEffect(() => {
     loadAttendanceData();
@@ -79,7 +104,8 @@ export function AttendanceManagementPage() {
 
   usePullToRefresh(loadAttendanceData, [month, regionId]);
 
-  async function loadAttendanceData() {
+  async function loadAttendanceData(options: { resetView?: boolean } = {}) {
+    const { resetView = true } = options;
     setLoading(true);
     setError('');
 
@@ -90,6 +116,7 @@ export function AttendanceManagementPage() {
         buildSummaries(
           data.employees,
           data.attendanceRecords,
+          data.abnormalReviewHistory,
           data.leaveRequests,
           data.restDays,
           data.publicHolidays,
@@ -97,8 +124,10 @@ export function AttendanceManagementPage() {
           data.range.endDate,
         ),
       );
-      setSelectedEmployeeId('');
-      setShowAbnormalCenter(false);
+      if (resetView) {
+        setSelectedEmployeeId('');
+        setShowAbnormalCenter(false);
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '读取考勤数据失败。');
     } finally {
@@ -115,7 +144,7 @@ export function AttendanceManagementPage() {
           <p>{range.startDate} 至 {range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。</p>
         </div>
 
-        <button className="secondary-action" type="button" onClick={loadAttendanceData} disabled={loading}>
+        <button className="secondary-action" type="button" onClick={() => loadAttendanceData()} disabled={loading}>
           <RefreshCw size={17} />
           <span>刷新</span>
         </button>
@@ -129,7 +158,7 @@ export function AttendanceManagementPage() {
         </button>
       ) : null}
 
-      <p className="abnormal-cycle-count">本周期异常次数：{abnormalRecords.length}</p>
+      <p className="abnormal-cycle-count">本周期异常次数：{pendingAbnormalRecords.length}</p>
 
       <div className="attendance-filters">
         <label className="form-field">
@@ -229,7 +258,13 @@ export function AttendanceManagementPage() {
         )}
       </div>
 
-      {showAbnormalCenter && canUseAttendance ? <AbnormalEmployeeCenter records={abnormalRecords} onClose={() => setShowAbnormalCenter(false)} /> : null}
+      {showAbnormalCenter && canUseAttendance ? (
+        <AbnormalEmployeeCenterV2
+          records={abnormalRecords}
+          onClose={() => setShowAbnormalCenter(false)}
+          onReviewed={() => loadAttendanceData({ resetView: false })}
+        />
+      ) : null}
       {selectedSummary && canUseAttendance ? <EmployeeDetail summary={selectedSummary} onClose={() => setSelectedEmployeeId('')} /> : null}
     </section>
   );
@@ -310,6 +345,342 @@ function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSumma
               </tbody>
             </table>
           </div>
+        </section>
+      </div>
+    </SystemModal>
+  );
+}
+
+function AbnormalEmployeeCenterV2({
+  records,
+  onClose,
+  onReviewed,
+}: {
+  records: AbnormalRecord[];
+  onClose: () => void;
+  onReviewed: () => Promise<void>;
+}) {
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [activeTab, setActiveTab] = useState<AbnormalCenterTab>('pending');
+  const [openingPhotoId, setOpeningPhotoId] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [photoError, setPhotoError] = useState('');
+  const [reviewingId, setReviewingId] = useState('');
+  const [reviewError, setReviewError] = useState('');
+  const [abnormalReasonRecordId, setAbnormalReasonRecordId] = useState('');
+  const [abnormalReason, setAbnormalReason] = useState('');
+  const pendingCount = records.filter((record) => record.reviewStatus === 'pending').length;
+  const abnormalCount = records.filter((record) => record.reviewStatus === 'abnormal').length;
+  const tabRecords = useMemo(
+    () => records.filter((record) => record.reviewStatus === activeTab),
+    [activeTab, records],
+  );
+  const groupedEmployees = useMemo(() => {
+    const map = new Map<string, { employee: AttendanceEmployee; records: AbnormalRecord[] }>();
+
+    tabRecords.forEach((record) => {
+      const current = map.get(record.employee.id) ?? { employee: record.employee, records: [] };
+      current.records.push(record);
+      map.set(record.employee.id, current);
+    });
+
+    return [...map.values()].sort((a, b) => b.records.length - a.records.length);
+  }, [tabRecords]);
+  const selected = groupedEmployees.find((item) => item.employee.id === selectedEmployeeId) ?? null;
+
+  useEffect(() => {
+    setSelectedEmployeeId('');
+    setReviewError('');
+    setPhotoError('');
+    setAbnormalReasonRecordId('');
+    setAbnormalReason('');
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!selected) {
+      return;
+    }
+
+    selected.records.forEach((record) => {
+      if (!record.photoPath || photoUrls[record.photoPath]) {
+        return;
+      }
+
+      attendanceManagementService
+        .getAttendancePhotoSignedUrl(record.photoPath)
+        .then((signedUrl) => {
+          setPhotoUrls((current) => ({ ...current, [record.photoPath]: signedUrl }));
+        })
+        .catch(() => {
+          setPhotoError('读取打卡照片失败，请稍后重试或联系管理员。');
+        });
+    });
+  }, [photoUrls, selected]);
+
+  async function handleOpenPhoto(record: AbnormalRecord) {
+    if (!record.photoPath) return;
+
+    setPhotoError('');
+    setOpeningPhotoId(record.id);
+    const photoWindow = window.open('', '_blank');
+
+    if (!photoWindow) {
+      setPhotoError('浏览器阻止了新窗口，请允许弹出窗口后重试。');
+      setOpeningPhotoId('');
+      return;
+    }
+
+    photoWindow.opener = null;
+
+    try {
+      const signedUrl = photoUrls[record.photoPath] ?? await attendanceManagementService.getAttendancePhotoSignedUrl(record.photoPath);
+      setPhotoUrls((current) => ({ ...current, [record.photoPath]: signedUrl }));
+      setPhotoError('');
+      photoWindow.location.href = signedUrl;
+    } catch {
+      const message = '读取打卡照片失败，请稍后重试或联系管理员。';
+      setPhotoError(message);
+      photoWindow.document.body.textContent = message;
+    } finally {
+      setOpeningPhotoId('');
+    }
+  }
+
+  async function handleReview(record: AbnormalRecord, reviewStatus: Extract<AttendanceAbnormalReviewStatus, 'normal' | 'abnormal'>) {
+    const reason = abnormalReason.trim();
+
+    if (reviewStatus === 'abnormal' && !reason) {
+      setReviewError('请填写异常原因。');
+      setAbnormalReasonRecordId(record.id);
+      return;
+    }
+
+    setReviewingId(record.id);
+    setReviewError('');
+
+    try {
+      await attendanceManagementService.reviewAbnormalRecord({
+        attendanceRecordId: record.attendanceRecordId,
+        reviewStatus,
+        sourceAbnormalTypes: record.sourceAbnormalTypes,
+        reason: reviewStatus === 'abnormal' ? reason : null,
+      });
+      setAbnormalReasonRecordId('');
+      setAbnormalReason('');
+      await onReviewed();
+    } catch (errorValue) {
+      setReviewError(errorValue instanceof Error ? errorValue.message : '审核异常打卡失败，请稍后重试。');
+    } finally {
+      setReviewingId('');
+    }
+  }
+
+  function renderPhoto(record: AbnormalRecord) {
+    if (!record.photoPath) {
+      return '-';
+    }
+
+    const signedUrl = photoUrls[record.photoPath];
+
+    if (signedUrl) {
+      return (
+        <button className="text-link-button" type="button" onClick={() => handleOpenPhoto(record)}>
+          <img
+            src={signedUrl}
+            alt="打卡照片"
+            loading="lazy"
+            style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6 }}
+          />
+        </button>
+      );
+    }
+
+    return (
+      <button
+        className="secondary-button compact-button"
+        type="button"
+        onClick={() => handleOpenPhoto(record)}
+        disabled={openingPhotoId === record.id}
+      >
+        <Eye size={16} />
+        <span>{openingPhotoId === record.id ? '读取中' : '查看照片'}</span>
+      </button>
+    );
+  }
+
+  return (
+    <SystemModal
+      title={selected ? `${getEmployeeDisplayName(selected.employee)} 的异常记录` : `${tabRecords.length} 次异常`}
+      subtitle="异常打卡中心"
+      ariaLabel="异常打卡中心"
+      className="abnormal-center-modal"
+      onClose={onClose}
+      footer={
+        <>
+          {selected ? (
+            <button className="secondary-button compact-button" type="button" onClick={() => setSelectedEmployeeId('')}>
+              返回员工列表
+            </button>
+          ) : null}
+          <button className="primary-button compact-button" type="button" onClick={onClose}>
+            关闭
+          </button>
+        </>
+      }
+    >
+      <div className="employee-detail-sections">
+        <section className="employee-detail-section">
+          <h4>基础资料</h4>
+          <div className="attendance-filters">
+            <button
+              className={activeTab === 'pending' ? 'primary-button compact-button' : 'secondary-button compact-button'}
+              type="button"
+              onClick={() => setActiveTab('pending')}
+            >
+              待处理 {pendingCount}
+            </button>
+            <button
+              className={activeTab === 'abnormal' ? 'primary-button compact-button' : 'secondary-button compact-button'}
+              type="button"
+              onClick={() => setActiveTab('abnormal')}
+            >
+              异常记录 {abnormalCount}
+            </button>
+          </div>
+          <div className="detail-list">
+            <div>
+              <span>异常员工</span>
+              <strong>{selected ? selected.employee.full_name : `${groupedEmployees.length} 位员工`}</strong>
+            </div>
+            <div>
+              <span>异常次数</span>
+              <strong>{selected ? selected.records.length : tabRecords.length}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="employee-detail-section">
+          <h4>工作资料</h4>
+          {photoError ? <p className="form-alert table-alert">{photoError}</p> : null}
+          {reviewError ? <p className="form-alert table-alert">{reviewError}</p> : null}
+          {tabRecords.length === 0 ? (
+            <div className="table-state">当前周期暂无异常打卡。</div>
+          ) : selected ? (
+            <div className="staff-table-wrap">
+              <table className="staff-table abnormal-center-table">
+                <thead>
+                  <tr>
+                    <th>照片</th>
+                    <th>日期</th>
+                    <th>打卡类型</th>
+                    <th>异常类型</th>
+                    <th>打卡时间</th>
+                    {activeTab === 'pending' ? <th>审核</th> : null}
+                    {activeTab === 'abnormal' ? <th>审核结果</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selected.records.map((record) => (
+                    <Fragment key={record.id}>
+                    <tr>
+                      <td>{renderPhoto(record)}</td>
+                      <td>{toDateKey(new Date(record.punchedAt))}</td>
+                      <td>{formatPunchType(record.punchType)}</td>
+                      <td>{record.sourceAbnormalTypes.join(' + ')}</td>
+                      <td>{new Date(record.punchedAt).toLocaleString('zh-CN')}</td>
+                      {activeTab === 'pending' ? (
+                        <td className="abnormal-review-cell">
+                          {abnormalReasonRecordId === record.id ? (
+                            <label className="form-field">
+                              <span>异常原因</span>
+                              <textarea
+                                value={abnormalReason}
+                                onChange={(event) => setAbnormalReason(event.target.value)}
+                                placeholder="请填写异常原因"
+                              />
+                            </label>
+                          ) : null}
+                          <div className="abnormal-review-actions">
+                            <button
+                              className="secondary-button compact-button"
+                              type="button"
+                              onClick={() => handleReview(record, 'normal')}
+                              disabled={Boolean(reviewingId)}
+                            >
+                              {reviewingId === record.id ? '提交中' : '正常'}
+                            </button>
+                            {abnormalReasonRecordId === record.id ? (
+                              <button
+                                className="primary-button compact-button"
+                                type="button"
+                                onClick={() => handleReview(record, 'abnormal')}
+                                disabled={Boolean(reviewingId)}
+                              >
+                                {reviewingId === record.id ? '提交中' : '确认异常'}
+                              </button>
+                            ) : (
+                              <button
+                                className="primary-button compact-button"
+                                type="button"
+                                onClick={() => {
+                                  setReviewError('');
+                                  setAbnormalReason('');
+                                  setAbnormalReasonRecordId(record.id);
+                                }}
+                                disabled={Boolean(reviewingId)}
+                              >
+                                异常
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      ) : null}
+                      {activeTab === 'abnormal' ? (
+                        <td className="device-cell">
+                          员工：{getEmployeeDisplayName(record.employee)} / 原因：{record.reviewReason ?? '-'} / 审核人：
+                          {record.reviewedByName ?? '-'} / 审核时间：
+                          {record.reviewedAt ? new Date(record.reviewedAt).toLocaleString('zh-CN') : '-'}
+                        </td>
+                      ) : null}
+                    </tr>
+                    <tr className="abnormal-technical-row">
+                      <td colSpan={activeTab === 'pending' ? 6 : 6}>
+                        <span>技术详情</span>
+                        <strong>GPS：{record.gps} / IP：{record.ip} / 设备：{record.deviceInfo}</strong>
+                      </td>
+                    </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="staff-table-wrap">
+              <table className="staff-table">
+                <thead>
+                  <tr>
+                    <th>员工姓名</th>
+                    <th>异常次数</th>
+                    <th>查看</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedEmployees.map((item) => (
+                    <tr key={item.employee.id}>
+                      <td><strong>{getEmployeeDisplayName(item.employee)}</strong></td>
+                      <td>异常 {item.records.length} 次</td>
+                      <td>
+                        <button className="secondary-button compact-button" type="button" onClick={() => setSelectedEmployeeId(item.employee.id)}>
+                          <Eye size={16} />
+                          <span>查看详情</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </SystemModal>
@@ -513,6 +884,7 @@ function getEmployeeDisplayName(employee: Pick<AttendanceEmployee, 'full_name' |
 function buildSummaries(
   employees: AttendanceEmployee[],
   attendanceRecords: AttendanceRecord[],
+  abnormalReviewHistory: AttendanceAbnormalReviewHistory[],
   leaveRequests: LeaveRequest[],
   restDays: AttendanceRestDay[],
   publicHolidays: PublicHoliday[],
@@ -522,6 +894,7 @@ function buildSummaries(
   const dates = getDateRange(startDate, endDate);
   const today = toDateKey(new Date());
   const recordsByEmployeeDate = groupAttendanceRecords(attendanceRecords);
+  const latestReviewByRecordId = getLatestReviewByRecordId(abnormalReviewHistory);
   const leavesByEmployeeDate = groupLeaveRequests(leaveRequests, dates);
   const replacementMakeUpDatesByEmployeeDate = groupApprovedReplacementMakeUpDates(leaveRequests, dates);
   const restDaysByEmployeeDate = groupRestDays(restDays);
@@ -602,32 +975,37 @@ function buildSummaries(
       if (employee.require_attendance && !nonWorkingDay && !restDay && clockIn && employee.start_work_time && isAfterWorkTime(clockIn.punched_at, employee.start_work_time)) {
         statuses.push('迟到');
         lateCount += 1;
-        abnormalPunchCount += 1;
-        abnormalRecords.push(toAbnormal(clockIn, employee, '异常时间打卡'));
       }
 
       if (employee.require_attendance && !nonWorkingDay && !restDay && clockOut && employee.end_work_time && isBeforeWorkTime(clockOut.punched_at, employee.end_work_time)) {
         statuses.push('早退');
         earlyLeaveCount += 1;
-        abnormalPunchCount += 1;
-        abnormalRecords.push(toAbnormal(clockOut, employee, '异常时间打卡'));
       }
 
       if (employee.require_attendance && !nonWorkingDay && breakMinutes > 60 && breakEnd) {
         statuses.push('超时休息');
         overtimeBreakCount += 1;
-        abnormalPunchCount += 1;
-        abnormalRecords.push(toAbnormal(breakEnd, employee, '超时休息'));
       }
 
       if (!nonWorkingDay) {
         records.forEach((record) => {
           const abnormalTypes = getDeviceAbnormalTypes(record, expectedIp, expectedGps, expectedDevice);
 
-          abnormalTypes.forEach((type) => {
+          if (abnormalTypes.length === 0) {
+            return;
+          }
+
+          const reviewSnapshot = latestReviewByRecordId.get(record.id);
+          const reviewStatus = reviewSnapshot?.reviewStatus ?? 'pending';
+
+          if (reviewStatus === 'abnormal') {
             abnormalPunchCount += 1;
-            abnormalRecords.push(toAbnormal(record, employee, type));
-          });
+            abnormalRecords.push(toAbnormal(record, employee, abnormalTypes, reviewStatus, reviewSnapshot));
+          }
+
+          if (reviewStatus === 'pending') {
+            abnormalRecords.push(toAbnormal(record, employee, abnormalTypes, reviewStatus, reviewSnapshot));
+          }
         });
       }
 
@@ -659,6 +1037,28 @@ function buildSummaries(
       abnormalRecords,
     };
   });
+}
+
+function getLatestReviewByRecordId(history: AttendanceAbnormalReviewHistory[]) {
+  const map = new Map<string, AbnormalReviewSnapshot>();
+  const latestReviewedAtByRecordId = new Map<string, number>();
+
+  history.forEach((item) => {
+    const reviewedAt = new Date(item.reviewed_at).getTime();
+    const currentReviewedAt = latestReviewedAtByRecordId.get(item.attendance_record_id) ?? -Infinity;
+
+    if (reviewedAt >= currentReviewedAt) {
+      latestReviewedAtByRecordId.set(item.attendance_record_id, reviewedAt);
+      map.set(item.attendance_record_id, {
+        reviewStatus: item.review_status,
+        reason: item.reason,
+        reviewedByName: item.reviewed_by_name,
+        reviewedAt: item.reviewed_at,
+      });
+    }
+  });
+
+  return map;
 }
 
 function groupRestDays(restDays: AttendanceRestDay[]) {
@@ -843,11 +1243,24 @@ function getDeviceAbnormalTypes(record: AttendanceRecord, expectedIp: string, ex
   return types;
 }
 
-function toAbnormal(record: AttendanceRecord, employee: AttendanceEmployee, type: string): AbnormalRecord {
+function toAbnormal(
+  record: AttendanceRecord,
+  employee: AttendanceEmployee,
+  sourceAbnormalTypes: string[],
+  reviewStatus: AttendanceAbnormalReviewStatus,
+  reviewSnapshot: AbnormalReviewSnapshot | undefined,
+): AbnormalRecord {
   return {
-    id: `${record.id}:${type}`,
+    id: record.id,
+    attendanceRecordId: record.id,
     employee,
-    type,
+    type: sourceAbnormalTypes.join(' + '),
+    punchType: record.punch_type,
+    sourceAbnormalTypes,
+    reviewStatus,
+    reviewReason: reviewSnapshot?.reason ?? null,
+    reviewedByName: reviewSnapshot?.reviewedByName ?? null,
+    reviewedAt: reviewSnapshot?.reviewedAt ?? null,
     punchedAt: record.punched_at,
     gps: `${Number(record.latitude).toFixed(5)}, ${Number(record.longitude).toFixed(5)}`,
     ip: record.ip_address ?? '-',
@@ -865,4 +1278,15 @@ function formatRecordTime(record: AttendanceRecord | null) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(record.punched_at));
+}
+
+function formatPunchType(punchType: AttendanceRecord['punch_type']) {
+  const labels: Record<AttendanceRecord['punch_type'], string> = {
+    clock_in: '上班',
+    break_start: '开始休息',
+    break_end: '结束休息',
+    clock_out: '下班',
+  };
+
+  return labels[punchType];
 }
