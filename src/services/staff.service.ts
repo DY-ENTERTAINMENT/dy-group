@@ -24,6 +24,7 @@ export type EmployeeFormValues = {
   job_title_id: string;
   status: EmployeeStatus;
   hire_date: string;
+  employment_end_date: string;
   start_work_time: string;
   end_work_time: string;
   require_attendance: boolean;
@@ -53,6 +54,7 @@ export type EmployeeListItem = {
   job_title_id: string | null;
   status: EmployeeStatus;
   hire_date: string | null;
+  employment_end_date: string | null;
   probation_confirm_date: string | null;
   start_work_time: string | null;
   end_work_time: string | null;
@@ -104,6 +106,7 @@ const employeeSelect = `
   job_title_id,
   status,
   hire_date,
+  employment_end_date,
   probation_confirm_date,
   start_work_time,
   end_work_time,
@@ -320,6 +323,7 @@ function mapEmployeeRow(row: EmployeeRowWithRelations, reviewerMap: Map<string, 
     job_title_id: row.job_title_id,
     status: row.status,
     hire_date: row.hire_date,
+    employment_end_date: row.employment_end_date,
     probation_confirm_date: row.probation_confirm_date,
     start_work_time: row.start_work_time,
     end_work_time: row.end_work_time,
@@ -359,6 +363,7 @@ function normalizeEmployeePayload(values: EmployeeFormValues) {
     job_title_id: values.job_title_id || null,
     status: values.status,
     hire_date: values.hire_date || null,
+    employment_end_date: values.status === 'left' ? values.employment_end_date || null : null,
     start_work_time: values.start_work_time || null,
     end_work_time: values.end_work_time || null,
     require_attendance: values.require_attendance,

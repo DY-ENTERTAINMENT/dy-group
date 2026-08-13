@@ -541,7 +541,9 @@ function buildSummaries(
     let overtimeBreakCount = 0;
     let abnormalPunchCount = 0;
 
-    const employeeRecords = attendanceRecords.filter((record) => record.employee_id === employee.id);
+    const employeeRecords = attendanceRecords.filter(
+      (record) => record.employee_id === employee.id && shouldCountAttendanceDate(employee, toDateKey(new Date(record.punched_at))),
+    );
     const expectedIp = mostFrequent(employeeRecords.map((record) => record.ip_address).filter(Boolean) as string[]);
     const expectedDevice = mostFrequent(employeeRecords.map((record) => record.device_info).filter(Boolean));
     const expectedGps = mostFrequent(employeeRecords.map((record) => gpsKey(record)).filter(Boolean));
@@ -559,9 +561,23 @@ function buildSummaries(
       const breakMinutes = breakStart && breakEnd ? minutesBetween(breakStart.punched_at, breakEnd.punched_at) : 0;
       const workHours = clockIn && clockOut ? minutesBetween(clockIn.punched_at, clockOut.punched_at) / 60 : null;
       const statuses: string[] = [];
+      const shouldCountAttendance = shouldCountAttendanceDate(employee, date);
       const isPastOrToday = date <= today;
       const weekend = isWeekend(date);
       const nonWorkingDay = Boolean(publicHoliday) || (weekend && !replacementMakeUpDate);
+
+      if (!shouldCountAttendance) {
+        return {
+          date,
+          clockIn,
+          breakStart,
+          breakEnd,
+          clockOut,
+          workHours: null,
+          breakMinutes: 0,
+          status: '-',
+        };
+      }
 
       if (publicHoliday) {
         statuses.push('公共假期');
@@ -653,6 +669,10 @@ function groupRestDays(restDays: AttendanceRestDay[]) {
   });
 
   return map;
+}
+
+function shouldCountAttendanceDate(employee: AttendanceEmployee, date: string) {
+  return employee.status !== 'left' || !employee.employment_end_date || date < employee.employment_end_date;
 }
 
 function groupAttendanceRecords(records: AttendanceRecord[]) {

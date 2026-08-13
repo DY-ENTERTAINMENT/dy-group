@@ -17,6 +17,8 @@ export type AttendanceEmployee = Pick<
   | 'employee_code'
   | 'region_id'
   | 'profile_id'
+  | 'status'
+  | 'employment_end_date'
   | 'start_work_time'
   | 'end_work_time'
   | 'require_attendance'
@@ -64,6 +66,8 @@ type EmployeeRowWithRelations = Pick<
   | 'employee_code'
   | 'region_id'
   | 'profile_id'
+  | 'status'
+  | 'employment_end_date'
   | 'start_work_time'
   | 'end_work_time'
   | 'require_attendance'
@@ -96,6 +100,8 @@ export const attendanceManagementService = {
         employee_code,
         profile_id,
         region_id,
+        status,
+        employment_end_date,
         start_work_time,
         end_work_time,
         require_attendance,
@@ -190,7 +196,9 @@ export const attendanceManagementService = {
     }
 
     return {
-      employees: ((employeesResult.data ?? []) as unknown as EmployeeRowWithRelations[]).map(mapEmployeeRow),
+      employees: ((employeesResult.data ?? []) as unknown as EmployeeRowWithRelations[])
+        .map(mapEmployeeRow)
+        .filter((employee) => shouldShowEmployeeForPeriod(employee, range.startDate)),
       attendanceRecords: attendanceResult.data ?? [],
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
@@ -225,6 +233,8 @@ function mapEmployeeRow(row: EmployeeRowWithRelations): AttendanceEmployee {
     employee_code: row.employee_code,
     profile_id: row.profile_id,
     region_id: row.region_id,
+    status: row.status,
+    employment_end_date: row.employment_end_date,
     start_work_time: row.start_work_time,
     end_work_time: row.end_work_time,
     require_attendance: row.require_attendance,
@@ -232,6 +242,18 @@ function mapEmployeeRow(row: EmployeeRowWithRelations): AttendanceEmployee {
     employment_type: row.employment_types,
     job_title: row.job_titles,
   };
+}
+
+function shouldShowEmployeeForPeriod(employee: AttendanceEmployee, startDate: string) {
+  if (employee.status === 'active' || employee.status === 'probation') {
+    return true;
+  }
+
+  if (employee.status === 'left') {
+    return Boolean(employee.employment_end_date && employee.employment_end_date > startDate);
+  }
+
+  return false;
 }
 
 function mergeLeaveRequests(primary: LeaveRequest[], secondary: LeaveRequest[]) {
