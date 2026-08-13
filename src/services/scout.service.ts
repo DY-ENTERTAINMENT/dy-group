@@ -1,5 +1,5 @@
 ﻿import { supabase } from '../lib/supabase';
-import type { Employee, Region, ScoutDailyWorkLog } from '../types/database';
+import type { Employee, ManagementScoutWorkloadStat, Region, ScoutDailyWorkLog } from '../types/database';
 
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
@@ -13,6 +13,9 @@ export type DailyWorkLogFormValues = {
   contacted_count: string;
   replied_count: string;
 };
+
+export type WorkloadGranularity = 'daily' | 'weekly' | 'monthly';
+export type ManagementWorkloadStat = ManagementScoutWorkloadStat;
 
 export type CandidateFormValues = {
   name: string;
@@ -221,6 +224,17 @@ export const scoutService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async listManagementWorkloadStats(input: { month: string; regionId?: string; granularity: WorkloadGranularity }): Promise<ManagementWorkloadStat[]> {
+    const { data, error } = await db.rpc('get_management_scout_workload_stats', {
+      p_month: input.month,
+      p_region_id: input.regionId || null,
+      p_granularity: input.granularity,
+    });
+
+    if (error) throw error;
+    return data ?? [];
   },
 
   async createCandidate(profileId: string, values: CandidateFormValues) {

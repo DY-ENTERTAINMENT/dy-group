@@ -4873,6 +4873,37 @@ button.leave-chip:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+.compact-list-header {
+  align-items: center;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.segmented-control {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.segmented-control button {
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
 .scout-summary-table {
   min-width: 720px;
 }

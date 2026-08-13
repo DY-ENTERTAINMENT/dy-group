@@ -13,6 +13,7 @@ import {
   type DailyWorkLogFormValues,
   filterCreatorsByMonth,
   getEmployeeName,
+  type ManagementWorkloadStat,
   platformLabels,
   scoutService,
   summarizeCreators,
@@ -26,6 +27,7 @@ import {
   type CreatorType,
   type OnboardingManagerOption,
   type ScoutOptions,
+  type WorkloadGranularity,
 } from '../services/scout.service';
 
 type ScoutPageMode = 'personal-recruiting' | 'recruit-list' | 'onboarding' | 'personal-streamers' | 'management-recruiting' | 'management-streamers';
@@ -36,6 +38,12 @@ type ScoutPageProps = {
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
+const workloadGranularities: WorkloadGranularity[] = ['daily', 'weekly', 'monthly'];
+const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
+  daily: '每日',
+  weekly: '每周',
+  monthly: '每月',
+};
 
 const emptyCandidateForm: CandidateFormValues = {
   name: '',
@@ -75,6 +83,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [dailyWorkLogs, setDailyWorkLogs] = useState<DailyWorkLog[]>([]);
+  const [managementWorkloadStats, setManagementWorkloadStats] = useState<ManagementWorkloadStat[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [platformFilter, setPlatformFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
@@ -82,6 +91,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [managerFilter, setManagerFilter] = useState('');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
+  const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('monthly');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [creatorForm, setCreatorForm] = useState<CreatorFormValues>(emptyCreatorForm);
@@ -139,7 +149,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
   useEffect(() => {
     void loadData();
-  }, [creatorStatusFilter, mode, month, profile?.id]);
+  }, [creatorStatusFilter, mode, month, profile?.id, regionFilter, workloadGranularity]);
 
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
@@ -147,17 +157,19 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setError('');
 
     try {
-      const [nextOptions, nextCreators, nextCandidates, nextDailyWorkLogs] = await Promise.all([
+      const [nextOptions, nextCreators, nextCandidates, nextDailyWorkLogs, nextManagementWorkloadStats] = await Promise.all([
         scoutService.getOptions(),
         scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
         mode === 'personal-recruiting' ? scoutService.listDailyWorkLogs(month) : Promise.resolve([]),
+        mode === 'management-recruiting' ? scoutService.listManagementWorkloadStats({ month, regionId: regionFilter, granularity: workloadGranularity }) : Promise.resolve([]),
       ]);
 
       setOptions(nextOptions);
       setCreators(nextCreators);
       setCandidates(nextCandidates);
       setDailyWorkLogs(nextDailyWorkLogs);
+      setManagementWorkloadStats(nextManagementWorkloadStats);
 
       if (!creatorForm.scout_employee_id && profile?.id) {
         const currentEmployee = nextOptions.employees.find((employee) => employee.profile_id === profile.id);
@@ -452,6 +464,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           scoutSummaries={scoutSummaries}
           regionSummaries={regionSummaries}
           total={managementTotal}
+          workloadStats={managementWorkloadStats}
+          workloadGranularity={workloadGranularity}
+          onWorkloadGranularity={setWorkloadGranularity}
         />
       ) : null}
 
@@ -1065,6 +1080,9 @@ function ManagementRecruitingPanel({
   scoutSummaries,
   regionSummaries,
   total,
+  workloadStats,
+  workloadGranularity,
+  onWorkloadGranularity,
 }: {
   loading: boolean;
   month: string;
@@ -1075,6 +1093,9 @@ function ManagementRecruitingPanel({
   scoutSummaries: ReturnType<typeof createScoutRecruitSummaries>;
   regionSummaries: ReturnType<typeof createRegionRecruitSummaries>;
   total: ReturnType<typeof summarizeCreators>;
+  workloadStats: ManagementWorkloadStat[];
+  workloadGranularity: WorkloadGranularity;
+  onWorkloadGranularity: (value: WorkloadGranularity) => void;
 }) {
   return (
     <div className="staff-list-panel">
@@ -1102,9 +1123,68 @@ function ManagementRecruitingPanel({
             <h4>DY Group 总计</h4>
             <RecruitMetricRow summary={total} />
           </div>
+          <ManagementWorkloadPanel stats={workloadStats} granularity={workloadGranularity} onGranularity={onWorkloadGranularity} />
         </>
       )}
     </div>
+  );
+}
+
+function ManagementWorkloadPanel({
+  stats,
+  granularity,
+  onGranularity,
+}: {
+  stats: ManagementWorkloadStat[];
+  granularity: WorkloadGranularity;
+  onGranularity: (value: WorkloadGranularity) => void;
+}) {
+  return (
+    <section className="scout-summary-section">
+      <div className="list-header compact-list-header">
+        <div>
+          <span>星探工作量统计</span>
+          <h3>{workloadGranularityLabels[granularity]}</h3>
+        </div>
+        <div className="segmented-control" role="group" aria-label="星探工作量统计粒度">
+          {workloadGranularities.map((item) => (
+            <button key={item} className={granularity === item ? 'active' : ''} type="button" onClick={() => onGranularity(item)}>
+              {workloadGranularityLabels[item]}
+            </button>
+          ))}
+        </div>
+      </div>
+      {stats.length === 0 ? (
+        <div className="table-state">暂无星探工作量记录。</div>
+      ) : (
+        <div className="staff-table-wrap">
+          <table className="staff-table scout-summary-table">
+            <thead>
+              <tr>
+                <th>周期</th>
+                <th>星探</th>
+                <th>区域</th>
+                <th>联系人数</th>
+                <th>回复人数</th>
+                <th>回复率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.map((row) => (
+                <tr key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+                  <td>{row.period_label}</td>
+                  <td>{row.scout_name}</td>
+                  <td>{row.region_code ?? '-'}</td>
+                  <td>{row.contacted_count}</td>
+                  <td>{row.replied_count}</td>
+                  <td>{formatReplyRate(row.contacted_count, row.replied_count)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

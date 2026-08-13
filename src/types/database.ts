@@ -350,6 +350,19 @@ export type ScoutDailyWorkLog = {
   updated_at: string;
 };
 
+export type ManagementScoutWorkloadStat = {
+  period_start: string;
+  period_end: string;
+  period_label: string;
+  scout_employee_id: string | null;
+  scout_profile_id: string | null;
+  scout_name: string;
+  region_id: string | null;
+  region_code: string | null;
+  contacted_count: number;
+  replied_count: number;
+};
+
 export type CreatorProfile = {
   id: string;
   joined_date: string;
@@ -1210,6 +1223,14 @@ export type Database = {
           p_replied_count: number;
         };
         Returns: ScoutDailyWorkLog;
+      };
+      get_management_scout_workload_stats: {
+        Args: {
+          p_month: string;
+          p_region_id?: string | null;
+          p_granularity?: string;
+        };
+        Returns: ManagementScoutWorkloadStat[];
       };
     };
     Enums: {
