@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
+  AttendanceAbnormalReviewHistory,
+  AttendanceAbnormalReviewStatus,
   AttendanceRecord,
   Employee,
   EmploymentType,
@@ -31,6 +33,7 @@ export type AttendanceEmployee = Pick<
 export type AttendancePeriodData = {
   employees: AttendanceEmployee[];
   attendanceRecords: AttendanceRecord[];
+  abnormalReviewHistory: AttendanceAbnormalReviewHistory[];
   leaveRequests: LeaveRequest[];
   restDays: AttendanceRestDay[];
   publicHolidays: PublicHoliday[];
@@ -88,6 +91,26 @@ export const attendanceManagementService = {
     return data.signedUrl;
   },
 
+  async reviewAbnormalRecord(payload: {
+    attendanceRecordId: string;
+    reviewStatus: AttendanceAbnormalReviewStatus;
+    sourceAbnormalTypes: string[];
+    reason?: string | null;
+  }): Promise<string> {
+    const { data, error } = await supabase.rpc('review_attendance_abnormal_record', {
+      p_attendance_record_id: payload.attendanceRecordId,
+      p_review_status: payload.reviewStatus,
+      p_source_abnormal_types: payload.sourceAbnormalTypes,
+      p_reason: payload.reason ?? null,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  },
+
   async getPeriodData(month: string, regionId: string): Promise<AttendancePeriodData> {
     const range = getAttendancePeriodRange(month);
     const employeesQuery = supabase
@@ -133,6 +156,7 @@ export const attendanceManagementService = {
       leaveResult,
       replacementLeaveResult,
       restResult,
+      abnormalReviewHistoryResult,
       publicHolidaysResult,
       regionsResult,
     ] = await Promise.all([
@@ -163,6 +187,11 @@ export const attendanceManagementService = {
         cycle_month: Number(monthText),
         region_filter: regionId || null,
       }),
+      supabase.rpc('get_attendance_abnormal_review_history', {
+        p_start_at: range.startIso,
+        p_end_at: range.endIso,
+        p_region_id: regionId || null,
+      }),
       publicHolidaysQuery,
       supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
     ]);
@@ -187,6 +216,10 @@ export const attendanceManagementService = {
       throw restResult.error;
     }
 
+    if (abnormalReviewHistoryResult.error) {
+      throw abnormalReviewHistoryResult.error;
+    }
+
     if (publicHolidaysResult.error) {
       throw publicHolidaysResult.error;
     }
@@ -200,6 +233,7 @@ export const attendanceManagementService = {
         .map(mapEmployeeRow)
         .filter((employee) => shouldShowEmployeeForPeriod(employee, range.startDate)),
       attendanceRecords: attendanceResult.data ?? [],
+      abnormalReviewHistory: abnormalReviewHistoryResult.data ?? [],
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
