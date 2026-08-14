@@ -3,6 +3,7 @@ import type {
   AttendanceAbnormalReviewHistory,
   AttendanceAbnormalReviewStatus,
   AttendanceRecord,
+  Database,
   Employee,
   EmploymentType,
   JobTitle,
@@ -10,6 +11,9 @@ import type {
   PublicHoliday,
   Region,
 } from '../types/database';
+
+export type AttendanceEffectiveWorkTime =
+  Database['public']['Functions']['get_attendance_effective_work_times']['Returns'][number];
 
 export type AttendanceEmployee = Pick<
   Employee,
@@ -37,6 +41,7 @@ export type AttendancePeriodData = {
   leaveRequests: LeaveRequest[];
   restDays: AttendanceRestDay[];
   publicHolidays: PublicHoliday[];
+  effectiveWorkTimes: AttendanceEffectiveWorkTime[];
   regions: Region[];
   range: AttendancePeriodRange;
 };
@@ -158,6 +163,7 @@ export const attendanceManagementService = {
       restResult,
       abnormalReviewHistoryResult,
       publicHolidaysResult,
+      effectiveWorkTimesResult,
       regionsResult,
     ] = await Promise.all([
       scopedEmployeesQuery,
@@ -193,6 +199,11 @@ export const attendanceManagementService = {
         p_region_id: regionId || null,
       }),
       publicHolidaysQuery,
+      supabase.rpc('get_attendance_effective_work_times', {
+        p_start_date: range.startDate,
+        p_end_date: range.endDate,
+        p_region_id: regionId || null,
+      }),
       supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
     ]);
 
@@ -224,6 +235,10 @@ export const attendanceManagementService = {
       throw publicHolidaysResult.error;
     }
 
+    if (effectiveWorkTimesResult.error) {
+      throw effectiveWorkTimesResult.error;
+    }
+
     if (regionsResult.error) {
       throw regionsResult.error;
     }
@@ -237,6 +252,7 @@ export const attendanceManagementService = {
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
+      effectiveWorkTimes: effectiveWorkTimesResult.data ?? [],
       regions: regionsResult.data ?? [],
       range,
     };

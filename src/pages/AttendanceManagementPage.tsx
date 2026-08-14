@@ -6,8 +6,9 @@ import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import {
-  AttendanceEmployee,
-  AttendanceRestDay,
+  type AttendanceEffectiveWorkTime,
+  type AttendanceEmployee,
+  type AttendanceRestDay,
   attendanceManagementService,
   getAttendancePeriodRange,
 } from '../services/attendanceManagement.service';
@@ -120,6 +121,7 @@ export function AttendanceManagementPage() {
           data.leaveRequests,
           data.restDays,
           data.publicHolidays,
+          data.effectiveWorkTimes,
           data.range.startDate,
           data.range.endDate,
         ),
@@ -888,6 +890,7 @@ function buildSummaries(
   leaveRequests: LeaveRequest[],
   restDays: AttendanceRestDay[],
   publicHolidays: PublicHoliday[],
+  effectiveWorkTimes: AttendanceEffectiveWorkTime[],
   startDate: string,
   endDate: string,
 ) {
@@ -899,6 +902,7 @@ function buildSummaries(
   const replacementMakeUpDatesByEmployeeDate = groupApprovedReplacementMakeUpDates(leaveRequests, dates);
   const restDaysByEmployeeDate = groupRestDays(restDays);
   const publicHolidaysByRegionDate = groupPublicHolidays(publicHolidays);
+  const effectiveWorkTimesByEmployeeDate = groupEffectiveWorkTimes(effectiveWorkTimes);
 
   return employees.map((employee) => {
     const leaveCounts: Record<LeaveType, number> = {
@@ -931,6 +935,9 @@ function buildSummaries(
       const replacementMakeUpDate = replacementMakeUpDatesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const restDay = restDaysByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const publicHoliday = getPublicHolidayForDate(publicHolidaysByRegionDate, employee.region_id, date);
+      const effectiveWorkTime = effectiveWorkTimesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
+      const effectiveStartTime = effectiveWorkTime?.effective_start_time ?? employee.start_work_time;
+      const effectiveEndTime = effectiveWorkTime?.effective_end_time ?? employee.end_work_time;
       const breakMinutes = breakStart && breakEnd ? minutesBetween(breakStart.punched_at, breakEnd.punched_at) : 0;
       const workHours = clockIn && clockOut ? minutesBetween(clockIn.punched_at, clockOut.punched_at) / 60 : null;
       const statuses: string[] = [];
@@ -972,12 +979,12 @@ function buildSummaries(
         absentCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !restDay && clockIn && employee.start_work_time && isAfterWorkTime(clockIn.punched_at, employee.start_work_time)) {
+      if (employee.require_attendance && !nonWorkingDay && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
         statuses.push('迟到');
         lateCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !restDay && clockOut && employee.end_work_time && isBeforeWorkTime(clockOut.punched_at, employee.end_work_time)) {
+      if (employee.require_attendance && !nonWorkingDay && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
         statuses.push('早退');
         earlyLeaveCount += 1;
       }
@@ -1066,6 +1073,16 @@ function groupRestDays(restDays: AttendanceRestDay[]) {
 
   restDays.forEach((restDay) => {
     map.set(`${restDay.employee_id}:${restDay.rest_date}`, restDay);
+  });
+
+  return map;
+}
+
+function groupEffectiveWorkTimes(effectiveWorkTimes: AttendanceEffectiveWorkTime[]) {
+  const map = new Map<string, AttendanceEffectiveWorkTime>();
+
+  effectiveWorkTimes.forEach((workTime) => {
+    map.set(`${workTime.employee_id}:${workTime.work_date}`, workTime);
   });
 
   return map;
