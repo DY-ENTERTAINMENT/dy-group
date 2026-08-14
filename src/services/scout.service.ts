@@ -13,6 +13,7 @@ export type DailyWorkLog = ScoutDailyWorkLog;
 export type DailyWorkLogFormValues = {
   contacted_count: string;
   replied_count: string;
+  note: string;
 };
 
 export type WorkloadGranularity = 'daily' | 'weekly' | 'monthly';
@@ -264,6 +265,7 @@ export const scoutService = {
       p_work_date: workDate,
       p_contacted_count: contactedCount,
       p_replied_count: repliedCount,
+      p_note: values.note,
     });
 
     if (error) throw error;

@@ -372,6 +372,7 @@ export type ScoutDailyWorkLog = {
   region_id: string | null;
   contacted_count: number;
   replied_count: number;
+  note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -387,6 +388,7 @@ export type ManagementScoutWorkloadStat = {
   region_code: string | null;
   contacted_count: number;
   replied_count: number;
+  note: string | null;
 };
 
 export type CreatorProfile = {
@@ -980,7 +982,7 @@ export type Database = {
       scout_daily_work_logs: {
         Row: ScoutDailyWorkLog;
         Insert: Pick<ScoutDailyWorkLog, 'work_date' | 'scout_profile_id'> &
-          Partial<Pick<ScoutDailyWorkLog, 'id' | 'scout_employee_id' | 'region_id' | 'contacted_count' | 'replied_count' | 'created_at' | 'updated_at'>>;
+          Partial<Pick<ScoutDailyWorkLog, 'id' | 'scout_employee_id' | 'region_id' | 'contacted_count' | 'replied_count' | 'note' | 'created_at' | 'updated_at'>>;
         Update: Partial<Omit<ScoutDailyWorkLog, 'id' | 'scout_profile_id' | 'created_at' | 'updated_at'>>;
         Relationships: [
           {
@@ -1317,6 +1319,7 @@ export type Database = {
           p_work_date: string;
           p_contacted_count: number;
           p_replied_count: number;
+          p_note?: string | null;
         };
         Returns: ScoutDailyWorkLog;
       };

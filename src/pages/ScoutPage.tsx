@@ -43,10 +43,21 @@ const currentMonth = new Date().toISOString().slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
 type CandidateFollowFilter = 'all' | 'today' | 'overdue';
 const workloadGranularities: WorkloadGranularity[] = ['daily', 'weekly', 'monthly'];
+type WorkloadView = WorkloadGranularity | 'scout-records';
+type ScoutRecordView = Extract<WorkloadGranularity, 'daily' | 'monthly'>;
 const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
   daily: '每日',
   weekly: '每周',
   monthly: '每月',
+};
+const scoutRecordViewLabels: Record<ScoutRecordView, string> = {
+  daily: '每日记录',
+  monthly: '月汇总',
+};
+const teamWorkloadViewLabels: Record<WorkloadGranularity, string> = {
+  daily: '今日',
+  weekly: '本周',
+  monthly: '本月',
 };
 
 const emptyCandidateForm: CandidateFormValues = {
@@ -108,7 +119,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
-  const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('monthly');
+  const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('daily');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [followUpCandidate, setFollowUpCandidate] = useState<Candidate | null>(null);
@@ -676,6 +687,7 @@ function DailyWorkLogPanel({
                 <th>工作日期</th>
                 <th>联系人数</th>
                 <th>回复人数</th>
+                <th>备注 / 今日进度</th>
                 <th>回复率</th>
                 <th>操作</th>
               </tr>
@@ -715,6 +727,7 @@ function DailyWorkLogRow({
   const [values, setValues] = useState<DailyWorkLogFormValues>({
     contacted_count: String(log?.contacted_count ?? 0),
     replied_count: String(log?.replied_count ?? 0),
+    note: log?.note ?? '',
   });
   const [rowError, setRowError] = useState('');
 
@@ -722,9 +735,10 @@ function DailyWorkLogRow({
     setValues({
       contacted_count: String(log?.contacted_count ?? 0),
       replied_count: String(log?.replied_count ?? 0),
+      note: log?.note ?? '',
     });
     setRowError('');
-  }, [log?.contacted_count, log?.replied_count, workDate]);
+  }, [log?.contacted_count, log?.note, log?.replied_count, workDate]);
 
   const contactedCount = Number(values.contacted_count) || 0;
   const repliedCount = Number(values.replied_count) || 0;
@@ -762,6 +776,23 @@ function DailyWorkLogRow({
           <input className="daily-work-input" type="number" min="0" step="1" value={values.replied_count} onChange={(event) => setValues({ ...values, replied_count: event.target.value })} form={`daily-work-${workDate}`} />
         ) : (
           log?.replied_count ?? 0
+        )}
+      </td>
+      <td>
+        {editable ? (
+          <textarea
+            className="daily-work-input"
+            rows={2}
+            value={values.note}
+            onChange={(event) => setValues({ ...values, note: event.target.value })}
+            placeholder="例如：今天主要联系 TikTok，有 3 位主播有兴趣，明天继续跟进"
+            form={`daily-work-${workDate}`}
+            style={{ minWidth: 240, maxWidth: 360, resize: 'vertical' }}
+          />
+        ) : (
+          <span title={log?.note ?? undefined} style={{ display: 'block', maxWidth: 360, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+            {log?.note || '-'}
+          </span>
         )}
       </td>
       <td>{formatReplyRate(contactedCount, repliedCount)}</td>
@@ -1233,6 +1264,10 @@ function ManagementRecruitingPanel({
   workloadGranularity: WorkloadGranularity;
   onWorkloadGranularity: (value: WorkloadGranularity) => void;
 }) {
+  const [workloadView, setWorkloadView] = useState<WorkloadView>(workloadGranularity);
+  const [selectedWorkloadScout, setSelectedWorkloadScout] = useState<ManagementWorkloadStat | null>(null);
+  const [recordGranularity, setRecordGranularity] = useState<ScoutRecordView>('daily');
+
   return (
     <div className="staff-list-panel">
       <div className="scout-filters">
@@ -1259,7 +1294,17 @@ function ManagementRecruitingPanel({
             <h4>DY Group 总计</h4>
             <RecruitMetricRow summary={total} />
           </div>
-          <ManagementWorkloadPanel stats={workloadStats} granularity={workloadGranularity} onGranularity={onWorkloadGranularity} />
+          <ManagementWorkloadPanel
+            stats={workloadStats}
+            granularity={workloadGranularity}
+            onGranularity={onWorkloadGranularity}
+            view={workloadView}
+            onView={setWorkloadView}
+            selectedScout={selectedWorkloadScout}
+            onSelectedScout={setSelectedWorkloadScout}
+            recordGranularity={recordGranularity}
+            onRecordGranularity={setRecordGranularity}
+          />
         </>
       )}
     </div>
@@ -1270,58 +1315,268 @@ function ManagementWorkloadPanel({
   stats,
   granularity,
   onGranularity,
+  view,
+  onView,
+  selectedScout,
+  onSelectedScout,
+  recordGranularity,
+  onRecordGranularity,
 }: {
   stats: ManagementWorkloadStat[];
   granularity: WorkloadGranularity;
   onGranularity: (value: WorkloadGranularity) => void;
+  view: WorkloadView;
+  onView: (value: WorkloadView) => void;
+  selectedScout: ManagementWorkloadStat | null;
+  onSelectedScout: (value: ManagementWorkloadStat | null) => void;
+  recordGranularity: ScoutRecordView;
+  onRecordGranularity: (value: ScoutRecordView) => void;
 }) {
+  const malaysiaToday = getMalaysiaDateString();
+  const teamRows = getTeamWorkloadRows(stats, granularity, malaysiaToday);
+  const teamTotal = summarizeWorkloadStats(teamRows);
+  const scoutRows = getUniqueWorkloadScouts(stats);
+  const selectedScoutRows = selectedScout
+    ? stats
+        .filter((row) => isSameWorkloadScout(row, selectedScout))
+        .sort((first, second) => second.period_start.localeCompare(first.period_start))
+    : [];
+  const selectedScoutTotal = summarizeWorkloadStats(selectedScoutRows);
+  const isScoutRecords = view === 'scout-records';
+  const activeLabel = isScoutRecords ? '星探记录' : teamWorkloadViewLabels[granularity];
+
+  function openTeamView(nextGranularity: WorkloadGranularity) {
+    onView(nextGranularity);
+    onSelectedScout(null);
+    onGranularity(nextGranularity);
+  }
+
+  function openScoutRecords() {
+    onView('scout-records');
+    onSelectedScout(null);
+  }
+
+  function openScoutRecord(scout: ManagementWorkloadStat) {
+    onSelectedScout(scout);
+    onRecordGranularity('daily');
+    onGranularity('daily');
+  }
+
+  function changeRecordGranularity(nextGranularity: ScoutRecordView) {
+    onRecordGranularity(nextGranularity);
+    onGranularity(nextGranularity);
+  }
+
   return (
     <section className="scout-summary-section">
       <div className="list-header compact-list-header">
         <div>
           <span>星探工作量统计</span>
-          <h3>{workloadGranularityLabels[granularity]}</h3>
+          <h3>{activeLabel}</h3>
         </div>
-        <div className="segmented-control" role="group" aria-label="星探工作量统计粒度">
+        <div className="segmented-control" role="group" aria-label="星探工作量统计视图">
           {workloadGranularities.map((item) => (
-            <button key={item} className={granularity === item ? 'active' : ''} type="button" onClick={() => onGranularity(item)}>
-              {workloadGranularityLabels[item]}
+            <button key={item} className={!isScoutRecords && granularity === item ? 'active' : ''} type="button" onClick={() => openTeamView(item)}>
+              {teamWorkloadViewLabels[item]}
             </button>
           ))}
+          <button className={isScoutRecords ? 'active' : ''} type="button" onClick={openScoutRecords}>
+            星探记录
+          </button>
         </div>
       </div>
-      {stats.length === 0 ? (
-        <div className="table-state">暂无星探工作量记录。</div>
-      ) : (
-        <div className="staff-table-wrap">
-          <table className="staff-table scout-summary-table">
-            <thead>
-              <tr>
-                <th>周期</th>
-                <th>星探</th>
-                <th>区域</th>
-                <th>联系人数</th>
-                <th>回复人数</th>
-                <th>回复率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.map((row) => (
-                <tr key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
-                  <td>{row.period_label}</td>
-                  <td>{row.scout_name}</td>
-                  <td>{row.region_code ?? '-'}</td>
-                  <td>{row.contacted_count}</td>
-                  <td>{row.replied_count}</td>
-                  <td>{formatReplyRate(row.contacted_count, row.replied_count)}</td>
-                </tr>
+
+      {isScoutRecords ? (
+        selectedScout ? (
+          <div>
+            <div className="list-header compact-list-header">
+              <div style={{ display: 'grid', gap: 8 }}>
+                <button className="secondary-button compact-button" type="button" onClick={() => onSelectedScout(null)} style={{ width: 'fit-content' }}>
+                  ← 返回星探名单
+                </button>
+                <span>星探记录</span>
+                <h3>{selectedScout.scout_name} · 工作记录</h3>
+              </div>
+            </div>
+            <div className="segmented-control" role="group" aria-label="星探个人工作记录粒度">
+              {(['daily', 'monthly'] as ScoutRecordView[]).map((item) => (
+                <button key={item} className={recordGranularity === item ? 'active' : ''} type="button" onClick={() => changeRecordGranularity(item)}>
+                  {scoutRecordViewLabels[item]}
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            {recordGranularity === 'daily' ? (
+              <WorkloadStatsTable rows={selectedScoutRows} granularity={recordGranularity} personal />
+            ) : (
+              <ScoutMonthlySummary total={selectedScoutTotal} />
+            )}
+          </div>
+        ) : (
+          <ScoutRecordList rows={scoutRows} onOpen={openScoutRecord} />
+        )
+      ) : (
+        <>
+          <WorkloadTotalCards granularity={granularity} total={teamTotal} />
+          <WorkloadStatsTable rows={teamRows} granularity={granularity} />
+        </>
       )}
     </section>
   );
+}
+
+function WorkloadTotalCards({ granularity, total }: { granularity: WorkloadGranularity; total: { contacted_count: number; replied_count: number } }) {
+  const prefix = granularity === 'daily' ? '今日' : granularity === 'weekly' ? '本周' : '本月';
+
+  return (
+    <div className="scout-total-panel">
+      <h4>{prefix}团队总计</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
+        <WorkloadTotalCard title={`${prefix}联系人数`} value={total.contacted_count} />
+        <WorkloadTotalCard title={`${prefix}回复人数`} value={total.replied_count} />
+        <WorkloadTotalCard title={`${prefix}回复率`} value={formatReplyRate(total.contacted_count, total.replied_count)} />
+      </div>
+    </div>
+  );
+}
+
+function WorkloadTotalCard({ title, value }: { title: string; value: number | string }) {
+  return (
+    <section className="scout-stat-card" style={{ gap: 8, minHeight: 0, padding: '12px 14px' }}>
+      <h4 style={{ fontSize: 14 }}>{title}</h4>
+      <strong style={{ fontSize: 24 }}>{value}</strong>
+    </section>
+  );
+}
+
+function ScoutMonthlySummary({ total }: { total: { contacted_count: number; replied_count: number } }) {
+  return (
+    <div className="scout-total-panel">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
+        <WorkloadTotalCard title="本月联系人数" value={total.contacted_count} />
+        <WorkloadTotalCard title="本月回复人数" value={total.replied_count} />
+        <WorkloadTotalCard title="本月回复率" value={formatReplyRate(total.contacted_count, total.replied_count)} />
+      </div>
+    </div>
+  );
+}
+
+function ScoutRecordList({ rows, onOpen }: { rows: ManagementWorkloadStat[]; onOpen: (row: ManagementWorkloadStat) => void }) {
+  if (rows.length === 0) {
+    return <div className="table-state">暂无星探工作量记录。</div>;
+  }
+
+  return (
+    <div className="staff-table-wrap">
+      <table className="staff-table scout-summary-table">
+        <thead>
+          <tr>
+            <th>星探姓名</th>
+            <th>区域</th>
+            <th>记录</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+              <td>{row.scout_name}</td>
+              <td>{row.region_code ?? '-'}</td>
+              <td>
+                <button className="secondary-button compact-button" type="button" onClick={() => onOpen(row)}>
+                  查看记录
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity; personal?: boolean }) {
+  if (rows.length === 0) {
+    return <div className="table-state">暂无星探工作量记录。</div>;
+  }
+
+  return (
+    <div className="staff-table-wrap">
+      <table className="staff-table scout-summary-table">
+        <thead>
+          <tr>
+            <th>{granularity === 'daily' && personal ? '日期' : granularity === 'monthly' && personal ? '月份' : '周期'}</th>
+            {!personal ? <th>星探</th> : null}
+            {!personal ? <th>区域</th> : null}
+            <th>联系人数</th>
+            <th>回复人数</th>
+            <th>回复率</th>
+            {granularity === 'daily' ? <th>备注 / 今日进度</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+              <td>{row.period_label}</td>
+              {!personal ? <td>{row.scout_name}</td> : null}
+              {!personal ? <td>{row.region_code ?? '-'}</td> : null}
+              <td>{row.contacted_count}</td>
+              <td>{row.replied_count}</td>
+              <td>{formatReplyRate(row.contacted_count, row.replied_count)}</td>
+              {granularity === 'daily' ? (
+                <td>
+                  <span title={row.note ?? undefined} style={{ display: 'block', maxWidth: 420, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+                    {row.note || '-'}
+                  </span>
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function getTeamWorkloadRows(stats: ManagementWorkloadStat[], granularity: WorkloadGranularity, malaysiaToday: string) {
+  if (granularity === 'daily') {
+    return stats.filter((row) => row.period_start === malaysiaToday);
+  }
+
+  if (granularity === 'weekly') {
+    return stats.filter((row) => row.period_start <= malaysiaToday && malaysiaToday <= row.period_end);
+  }
+
+  return stats;
+}
+
+function summarizeWorkloadStats(rows: ManagementWorkloadStat[]) {
+  return rows.reduce(
+    (summary, row) => ({
+      contacted_count: summary.contacted_count + row.contacted_count,
+      replied_count: summary.replied_count + row.replied_count,
+    }),
+    { contacted_count: 0, replied_count: 0 },
+  );
+}
+
+function getUniqueWorkloadScouts(rows: ManagementWorkloadStat[]) {
+  const scouts = new Map<string, ManagementWorkloadStat>();
+
+  rows.forEach((row) => {
+    const key = getWorkloadScoutKey(row);
+    if (!scouts.has(key)) scouts.set(key, row);
+  });
+
+  return Array.from(scouts.values()).sort((first, second) => first.scout_name.localeCompare(second.scout_name));
+}
+
+function isSameWorkloadScout(first: ManagementWorkloadStat, second: ManagementWorkloadStat) {
+  if (first.scout_profile_id && second.scout_profile_id) return first.scout_profile_id === second.scout_profile_id;
+  if (first.scout_employee_id && second.scout_employee_id) return first.scout_employee_id === second.scout_employee_id;
+  return first.scout_name === second.scout_name;
+}
+
+function getWorkloadScoutKey(row: ManagementWorkloadStat) {
+  return row.scout_profile_id ?? row.scout_employee_id ?? `${row.scout_name}-${row.region_id ?? 'none'}`;
 }
 
 function SummaryTable({ title, label, rows }: { title: string; label: string; rows: Array<{ label: string; summary: ReturnType<typeof summarizeCreators> }> }) {
