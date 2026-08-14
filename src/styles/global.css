@@ -4826,6 +4826,58 @@ button.leave-chip:disabled {
   min-width: 1040px;
 }
 
+.candidate-table {
+  min-width: 920px;
+}
+
+.candidate-table th,
+.candidate-table td {
+  padding: 10px 12px;
+}
+
+.candidate-table td {
+  max-width: 220px;
+}
+
+.candidate-table td strong,
+.candidate-table td span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-primary-cell {
+  min-width: 120px;
+}
+
+.candidate-identity-cell {
+  min-width: 170px;
+}
+
+.candidate-follow-cell {
+  min-width: 130px;
+}
+
+.candidate-detail-cell,
+.candidate-note-cell {
+  min-width: 150px;
+}
+
+.follow-status-badge {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(31, 122, 140, 0.22);
+  border-radius: 999px;
+  color: #0f5f6d;
+  background: rgba(31, 122, 140, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .daily-work-input {
   width: 96px;
   max-width: 100%;
@@ -4856,6 +4908,22 @@ button.leave-chip:disabled {
   grid-column: 1 / -1;
 }
 
+.form-section-title {
+  grid-column: 1 / -1;
+  margin: 4px 0 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.form-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .quick-date-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4883,6 +4951,25 @@ button.leave-chip:disabled {
   align-items: center;
   padding: 0;
   border-bottom: 0;
+}
+
+.candidate-follow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px 16px;
+}
+
+.candidate-follow-header-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.candidate-follow-header-title span,
+.candidate-follow-header-title h3 {
+  margin: 0;
 }
 
 .segmented-control {

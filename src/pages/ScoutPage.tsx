@@ -756,8 +756,8 @@ function CandidatePanel({
 }) {
   return (
     <div className="staff-list-panel">
-      <div className="list-header compact-list-header">
-        <div>
+      <div className="list-header compact-list-header candidate-follow-header">
+        <div className="candidate-follow-header-title">
           <span>跟进提醒</span>
           <h3>{getCandidateFollowFilterLabel(followFilter)}</h3>
         </div>
@@ -775,43 +775,43 @@ function CandidatePanel({
         <div className="table-state">暂无名单。</div>
       ) : (
         <div className="staff-table-wrap">
-          <table className="staff-table scout-table">
+          <table className="staff-table scout-table candidate-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>平台 / UID</th>
-                <th>主播账号</th>
-                <th>才艺</th>
-                <th>跟进状态</th>
-                <th>下次跟进</th>
-                <th>性别</th>
-                <th>年龄</th>
-                <th>来源</th>
-                <th>联系方式</th>
-                <th>目前就职</th>
+                <th>主播</th>
+                <th>平台身份</th>
+                <th>跟进</th>
+                <th>资料</th>
                 <th>备注</th>
-                <th>状态</th>
+                <th>名单状态</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {candidates.map((candidate) => (
                 <tr key={candidate.id} className={candidate.status === 'accepted' ? 'candidate-accepted' : candidate.status === 'rejected' ? 'candidate-rejected' : ''}>
-                  <td>{candidate.name}</td>
-                  <td>
-                    <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
-                    <span>{candidate.platform_user_id || '-'}</span>
+                  <td className="candidate-primary-cell">
+                    <strong>{candidate.name}</strong>
+                    <span>{[candidate.gender, candidate.age ? `${candidate.age}岁` : ''].filter(Boolean).join(' / ') || '-'}</span>
                   </td>
-                  <td>{candidate.platform_account || '-'}</td>
-                  <td>{candidate.talent || '-'}</td>
-                  <td>{getFollowStatusLabel(candidate.follow_status)}</td>
-                  <td>{candidate.next_follow_up_date || '-'}</td>
-                  <td>{candidate.gender || '-'}</td>
-                  <td>{candidate.age || '-'}</td>
-                  <td>{candidate.source || '-'}</td>
-                  <td>{candidate.contact || '-'}</td>
-                  <td>{candidate.current_job || '-'}</td>
-                  <td>{candidate.remark || '-'}</td>
+                  <td className="candidate-identity-cell">
+                    <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
+                    <span>UID：{candidate.platform_user_id || '-'}</span>
+                    <span>账号：{candidate.platform_account || '-'}</span>
+                  </td>
+                  <td className="candidate-follow-cell">
+                    <span className="follow-status-badge">{getFollowStatusLabel(candidate.follow_status)}</span>
+                    <span>{candidate.next_follow_up_date || '-'}</span>
+                  </td>
+                  <td className="candidate-detail-cell">
+                    <strong>{candidate.talent || '-'}</strong>
+                    <span>来源：{candidate.source || '-'}</span>
+                    <span>联系：{candidate.contact || '-'}</span>
+                  </td>
+                  <td className="candidate-note-cell">
+                    <strong>{candidate.current_job || '-'}</strong>
+                    <span>{candidate.remark || '-'}</span>
+                  </td>
                   <td>{getCandidateStatusLabel(candidate.status)}</td>
                   <td>
                     <div className="row-actions">
@@ -1322,6 +1322,19 @@ function CandidateModal(props: {
     >
       <form id="candidate-form" onSubmit={props.onSubmit}>
         <div className="form-grid">
+          <div className="form-section-title">基本资料</div>
+          <TextField label="姓名" value={props.values.name} onChange={(value) => props.onChange({ ...props.values, name: value })} required />
+          <TextField label="性别" value={props.values.gender} onChange={(value) => props.onChange({ ...props.values, gender: value })} />
+          <TextField label="年龄" type="number" value={props.values.age} onChange={(value) => props.onChange({ ...props.values, age: value })} />
+          <TextField label="来源" value={props.values.source} onChange={(value) => props.onChange({ ...props.values, source: value })} />
+          <TextField label="联系方式" value={props.values.contact} onChange={(value) => props.onChange({ ...props.values, contact: value })} />
+          <TextField label="目前就职" value={props.values.current_job} onChange={(value) => props.onChange({ ...props.values, current_job: value })} />
+          <label className="form-field form-field-wide">
+            <span>备注</span>
+            <textarea value={props.values.remark} onChange={(event) => props.onChange({ ...props.values, remark: event.target.value })} />
+          </label>
+
+          <div className="form-section-title">主播资料</div>
           <SelectField label="平台" value={props.values.platform} onChange={(value) => props.onChange({ ...props.values, platform: value as CandidateFormValues['platform'] })}>
             <option value="">未填写</option>
             <option value="tiktok">TikTok</option>
@@ -1330,6 +1343,8 @@ function CandidateModal(props: {
           <TextField label="主播 UID" value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} />
           <TextField label="主播账号" value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} />
           <TextField label="才艺" value={props.values.talent} onChange={(value) => props.onChange({ ...props.values, talent: value })} />
+
+          <div className="form-section-title">跟进资料</div>
           <SelectField label="跟进状态" value={props.values.follow_status} onChange={(value) => props.onChange({ ...props.values, follow_status: value as FollowStatus })}>
             {followStatuses.map((status) => (
               <option key={status} value={status}>
@@ -1355,16 +1370,6 @@ function CandidateModal(props: {
               </button>
             </div>
           </div>
-          <TextField label="姓名" value={props.values.name} onChange={(value) => props.onChange({ ...props.values, name: value })} required />
-          <TextField label="性别" value={props.values.gender} onChange={(value) => props.onChange({ ...props.values, gender: value })} />
-          <TextField label="年龄" type="number" value={props.values.age} onChange={(value) => props.onChange({ ...props.values, age: value })} />
-          <TextField label="来源" value={props.values.source} onChange={(value) => props.onChange({ ...props.values, source: value })} />
-          <TextField label="联系方式" value={props.values.contact} onChange={(value) => props.onChange({ ...props.values, contact: value })} />
-          <TextField label="目前就职" value={props.values.current_job} onChange={(value) => props.onChange({ ...props.values, current_job: value })} />
-          <label className="form-field form-field-wide">
-            <span>备注</span>
-            <textarea value={props.values.remark} onChange={(event) => props.onChange({ ...props.values, remark: event.target.value })} />
-          </label>
         </div>
       </form>
     </SystemModal>
