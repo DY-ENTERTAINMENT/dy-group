@@ -23,8 +23,6 @@ export type CandidateFormValues = {
   platform_user_id: string;
   platform_account: string;
   talent: string;
-  follow_status: FollowStatus;
-  next_follow_up_date: string;
   name: string;
   gender: string;
   age: string;
@@ -56,6 +54,30 @@ export type Candidate = {
   status: CandidateStatus;
   created_at: string;
   updated_at: string;
+};
+
+export type FollowUpActionType = 'follow_up' | 'stopped' | 'reopened';
+
+export type CandidateFollowUpHistory = {
+  id: string;
+  candidate_id: string;
+  scout_profile_id: string;
+  action_type: FollowUpActionType;
+  from_follow_status: FollowStatus | null;
+  to_follow_status: FollowStatus;
+  previous_next_follow_up_date: string | null;
+  next_follow_up_date: string | null;
+  note: string | null;
+  stopped_reason: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type CandidateFollowUpFormValues = {
+  to_follow_status: FollowStatus;
+  note: string;
+  next_follow_up_date: string;
+  stopped_reason: string;
 };
 
 export type CreatorFormValues = {
@@ -273,6 +295,30 @@ export const scoutService = {
     if (error) throw error;
   },
 
+  async listCandidateFollowUpHistory(candidateId: string): Promise<CandidateFollowUpHistory[]> {
+    const { data, error } = await db
+      .from('scout_candidate_follow_up_history')
+      .select('*')
+      .eq('candidate_id', candidateId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async addCandidateFollowUp(candidateId: string, values: CandidateFollowUpFormValues): Promise<Candidate> {
+    const { data, error } = await db.rpc('add_scout_candidate_follow_up', {
+      p_candidate_id: candidateId,
+      p_to_follow_status: values.to_follow_status,
+      p_note: values.note.trim() || null,
+      p_next_follow_up_date: values.to_follow_status === 'stopped' ? null : values.next_follow_up_date || null,
+      p_stopped_reason: values.to_follow_status === 'stopped' ? values.stopped_reason.trim() : null,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
   async setCandidateStatus(candidateId: string, status: CandidateStatus) {
     const { error } = await db.from('scout_candidates').update({ status }).eq('id', candidateId);
     if (error) throw error;
@@ -410,8 +456,6 @@ function normalizeCandidate(values: CandidateFormValues) {
     platform_user_id: values.platform_user_id.trim() || null,
     platform_account: values.platform_account.trim() || null,
     talent: values.talent.trim() || null,
-    follow_status: values.follow_status || 'pending',
-    next_follow_up_date: values.next_follow_up_date || null,
     name: values.name.trim(),
     gender: values.gender.trim() || null,
     age: values.age.trim() ? Number(values.age) : null,

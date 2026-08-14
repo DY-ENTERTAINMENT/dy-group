@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, Edit3, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, Edit3, MessageSquarePlus, Plus, RefreshCw, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -18,6 +18,8 @@ import {
   scoutService,
   summarizeCreators,
   type Candidate,
+  type CandidateFollowUpFormValues,
+  type CandidateFollowUpHistory,
   type CandidateFormValues,
   type CreatorManagerDisplayName,
   type CreatorFormValues,
@@ -52,8 +54,6 @@ const emptyCandidateForm: CandidateFormValues = {
   platform_user_id: '',
   platform_account: '',
   talent: '',
-  follow_status: 'pending',
-  next_follow_up_date: '',
   name: '',
   gender: '',
   age: '',
@@ -61,6 +61,13 @@ const emptyCandidateForm: CandidateFormValues = {
   contact: '',
   current_job: '',
   remark: '',
+};
+
+const emptyFollowUpForm: CandidateFollowUpFormValues = {
+  to_follow_status: 'following',
+  note: '',
+  next_follow_up_date: '',
+  stopped_reason: '',
 };
 
 const emptyCreatorForm: CreatorFormValues = {
@@ -104,6 +111,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('monthly');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+  const [followUpCandidate, setFollowUpCandidate] = useState<Candidate | null>(null);
+  const [followUpForm, setFollowUpForm] = useState<CandidateFollowUpFormValues>(emptyFollowUpForm);
+  const [followUpHistory, setFollowUpHistory] = useState<CandidateFollowUpHistory[]>([]);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
   const [creatorForm, setCreatorForm] = useState<CreatorFormValues>(emptyCreatorForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
   const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
@@ -281,6 +292,25 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     }
   }
 
+  async function submitFollowUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!followUpCandidate) return;
+    setSaving(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await scoutService.addCandidateFollowUp(followUpCandidate.id, followUpForm);
+      setMessage(followUpForm.to_follow_status === 'stopped' ? '已停止跟进。' : followUpCandidate.follow_status === 'stopped' ? '名单已重新启用。' : '跟进记录已保存。');
+      closeFollowUpModal();
+      await loadData();
+    } catch (followUpError) {
+      setError(`保存跟进记录失败：${getErrorMessage(followUpError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submitDailyWorkLog(workDate: string, values: DailyWorkLogFormValues) {
     setDailyWorkSavingDate(workDate);
     setError('');
@@ -310,8 +340,6 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       platform_user_id: candidate.platform_user_id ?? '',
       platform_account: candidate.platform_account ?? '',
       talent: candidate.talent ?? '',
-      follow_status: candidate.follow_status ?? 'pending',
-      next_follow_up_date: candidate.next_follow_up_date ?? '',
       name: candidate.name,
       gender: candidate.gender ?? '',
       age: candidate.age ? String(candidate.age) : '',
@@ -321,6 +349,33 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       remark: candidate.remark ?? '',
     });
     setCandidateModalOpen(true);
+  }
+
+  async function openFollowUp(candidate: Candidate) {
+    setFollowUpCandidate(candidate);
+    setFollowUpForm({
+      ...emptyFollowUpForm,
+      to_follow_status: candidate.follow_status === 'stopped' ? 'following' : candidate.follow_status ?? 'following',
+      next_follow_up_date: candidate.next_follow_up_date ?? '',
+    });
+    setFollowUpHistory([]);
+    setFollowUpLoading(true);
+    setError('');
+
+    try {
+      setFollowUpHistory(await scoutService.listCandidateFollowUpHistory(candidate.id));
+    } catch (historyError) {
+      setError(`读取跟进历史失败：${getErrorMessage(historyError)}`);
+    } finally {
+      setFollowUpLoading(false);
+    }
+  }
+
+  function closeFollowUpModal() {
+    setFollowUpCandidate(null);
+    setFollowUpForm(emptyFollowUpForm);
+    setFollowUpHistory([]);
+    setFollowUpLoading(false);
   }
 
   function closeCandidateModal() {
@@ -451,6 +506,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           followFilter={candidateFollowFilter}
           onFollowFilter={setCandidateFollowFilter}
           onEdit={openCandidateEdit}
+          onFollowUp={openFollowUp}
           onStatus={setCandidateStatus}
         />
       ) : null}
@@ -510,6 +566,19 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onChange={setCandidateForm}
           onClose={closeCandidateModal}
           onSubmit={submitCandidate}
+        />
+      ) : null}
+
+      {followUpCandidate ? (
+        <FollowUpModal
+          candidate={followUpCandidate}
+          values={followUpForm}
+          history={followUpHistory}
+          loading={followUpLoading}
+          saving={saving}
+          onChange={setFollowUpForm}
+          onClose={closeFollowUpModal}
+          onSubmit={submitFollowUp}
         />
       ) : null}
 
@@ -745,6 +814,7 @@ function CandidatePanel({
   followFilter,
   onFollowFilter,
   onEdit,
+  onFollowUp,
   onStatus,
 }: {
   loading: boolean;
@@ -752,6 +822,7 @@ function CandidatePanel({
   followFilter: CandidateFollowFilter;
   onFollowFilter: (filter: CandidateFollowFilter) => void;
   onEdit: (candidate: Candidate) => void;
+  onFollowUp: (candidate: Candidate) => void;
   onStatus: (candidate: Candidate, status: 'accepted' | 'rejected') => void;
 }) {
   return (
@@ -815,6 +886,9 @@ function CandidatePanel({
                   <td>{getCandidateStatusLabel(candidate.status)}</td>
                   <td>
                     <div className="row-actions">
+                      <button className="icon-button" type="button" onClick={() => onFollowUp(candidate)} aria-label="跟进">
+                        <MessageSquarePlus size={16} />
+                      </button>
                       <button className="icon-button" type="button" onClick={() => onEdit(candidate)} aria-label="编辑">
                         <Edit3 size={16} />
                       </button>
@@ -1343,35 +1417,146 @@ function CandidateModal(props: {
           <TextField label="主播 UID" value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} />
           <TextField label="主播账号" value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} />
           <TextField label="才艺" value={props.values.talent} onChange={(value) => props.onChange({ ...props.values, talent: value })} />
-
-          <div className="form-section-title">跟进资料</div>
-          <SelectField label="跟进状态" value={props.values.follow_status} onChange={(value) => props.onChange({ ...props.values, follow_status: value as FollowStatus })}>
-            {followStatuses.map((status) => (
-              <option key={status} value={status}>
-                {getFollowStatusLabel(status)}
-              </option>
-            ))}
-          </SelectField>
-          <label className="form-field">
-            <span>下次跟进日期</span>
-            <input type="date" value={props.values.next_follow_up_date} onChange={(event) => props.onChange({ ...props.values, next_follow_up_date: event.target.value })} />
-          </label>
-          <div className="form-field form-field-wide">
-            <span>快捷跟进日期</span>
-            <div className="quick-date-actions">
-              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(1) })}>
-                明天
-              </button>
-              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(3) })}>
-                3天后
-              </button>
-              <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(7) })}>
-                7天后
-              </button>
-            </div>
-          </div>
         </div>
       </form>
+    </SystemModal>
+  );
+}
+
+function FollowUpModal(props: {
+  candidate: Candidate;
+  values: CandidateFollowUpFormValues;
+  history: CandidateFollowUpHistory[];
+  loading: boolean;
+  saving: boolean;
+  onChange: (values: CandidateFollowUpFormValues) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const isCurrentStopped = props.candidate.follow_status === 'stopped';
+  const isStopping = props.values.to_follow_status === 'stopped';
+  const statusOptions: FollowStatus[] = isCurrentStopped ? ['pending', 'following'] : [...followStatuses, 'stopped'];
+
+  function updateStatus(status: FollowStatus) {
+    props.onChange({
+      ...props.values,
+      to_follow_status: status,
+      next_follow_up_date: status === 'stopped' ? '' : props.values.next_follow_up_date,
+      stopped_reason: status === 'stopped' ? props.values.stopped_reason : '',
+    });
+  }
+
+  return (
+    <SystemModal
+      title={isCurrentStopped ? '重新启用跟进' : '新增跟进记录'}
+      subtitle={props.candidate.name}
+      ariaLabel="跟进记录"
+      onClose={props.onClose}
+      footer={
+        <>
+          <button className="secondary-button compact-button" type="button" onClick={props.onClose}>
+            取消
+          </button>
+          <button className="primary-button compact-button" type="submit" form="candidate-follow-up-form" disabled={props.saving}>
+            {props.saving ? '保存中...' : '保存跟进'}
+          </button>
+        </>
+      }
+    >
+      <div className="follow-up-modal">
+        <section className="follow-up-summary">
+          <div>
+            <span>平台</span>
+            <strong>{props.candidate.platform ? platformLabels[props.candidate.platform] : '-'}</strong>
+          </div>
+          <div>
+            <span>UID</span>
+            <strong>{props.candidate.platform_user_id || '-'}</strong>
+          </div>
+          <div>
+            <span>账号</span>
+            <strong>{props.candidate.platform_account || '-'}</strong>
+          </div>
+          <div>
+            <span>当前跟进</span>
+            <strong>{getFollowStatusLabel(props.candidate.follow_status)}</strong>
+          </div>
+          <div>
+            <span>下次跟进</span>
+            <strong>{props.candidate.next_follow_up_date || '-'}</strong>
+          </div>
+        </section>
+
+        <section className="follow-up-history">
+          <div className="form-section-title">跟进历史</div>
+          {props.loading ? (
+            <div className="table-state">正在读取跟进历史...</div>
+          ) : props.history.length === 0 ? (
+            <div className="table-state">暂无跟进历史。</div>
+          ) : (
+            <div className="follow-up-history-list">
+              {props.history.map((item) => (
+                <article key={item.id} className="follow-up-history-item">
+                  <div className="follow-up-history-topline">
+                    <strong>{getFollowUpActionLabel(item.action_type)}</strong>
+                    <span>{formatDateTime(item.created_at)}</span>
+                  </div>
+                  <div className="follow-up-history-status">
+                    {getFollowStatusLabel(item.from_follow_status)} → {getFollowStatusLabel(item.to_follow_status)}
+                  </div>
+                  {item.note ? <p>{item.note}</p> : null}
+                  {item.stopped_reason ? <p>停止原因：{item.stopped_reason}</p> : null}
+                  <small>下次跟进：{item.next_follow_up_date || '-'}</small>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <form id="candidate-follow-up-form" onSubmit={props.onSubmit}>
+          <div className="form-grid">
+            <div className="form-section-title">{isCurrentStopped ? '重新启用' : '新增记录'}</div>
+            <SelectField label="新状态" value={props.values.to_follow_status} onChange={(value) => updateStatus(value as FollowStatus)}>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {getFollowStatusLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+            {!isStopping ? (
+              <label className="form-field">
+                <span>下次跟进日期</span>
+                <input type="date" value={props.values.next_follow_up_date} onChange={(event) => props.onChange({ ...props.values, next_follow_up_date: event.target.value })} />
+              </label>
+            ) : null}
+            <label className="form-field form-field-wide">
+              <span>备注</span>
+              <textarea value={props.values.note} onChange={(event) => props.onChange({ ...props.values, note: event.target.value })} />
+            </label>
+            {isStopping ? (
+              <label className="form-field form-field-wide">
+                <span>停止原因</span>
+                <textarea required value={props.values.stopped_reason} onChange={(event) => props.onChange({ ...props.values, stopped_reason: event.target.value })} />
+              </label>
+            ) : (
+              <div className="form-field form-field-wide">
+                <span>快捷跟进日期</span>
+                <div className="quick-date-actions">
+                  <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(1) })}>
+                    明天
+                  </button>
+                  <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(3) })}>
+                    3天后
+                  </button>
+                  <button type="button" className="secondary-button compact-button" onClick={() => props.onChange({ ...props.values, next_follow_up_date: getMalaysiaDateString(7) })}>
+                    7天后
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
     </SystemModal>
   );
 }
@@ -1617,6 +1802,23 @@ function getCandidateStatusLabel(status: Candidate['status']) {
   if (status === 'accepted') return '已接受';
   if (status === 'rejected') return '已拒绝';
   return '待处理';
+}
+
+function getFollowUpActionLabel(action: CandidateFollowUpHistory['action_type']) {
+  if (action === 'stopped') return '停止跟进';
+  if (action === 'reopened') return '重新启用';
+  return '跟进记录';
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function getErrorMessage(error: unknown) {

@@ -14,6 +14,7 @@ export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
 export type CandidateFollowStatus = 'pending' | 'following' | 'interview' | 'ready_onboarding' | 'stopped';
+export type CandidateFollowUpActionType = 'follow_up' | 'stopped' | 'reopened';
 export type WorkTimeAdjustmentDetailStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'revoked';
 export type WorkTimeAdjustmentAuditAction =
   | 'request_created'
@@ -346,6 +347,21 @@ export type ScoutCandidate = {
   status: CandidateStatus;
   created_at: string;
   updated_at: string;
+};
+
+export type ScoutCandidateFollowUpHistory = {
+  id: string;
+  candidate_id: string;
+  scout_profile_id: string;
+  action_type: CandidateFollowUpActionType;
+  from_follow_status: CandidateFollowStatus | null;
+  to_follow_status: CandidateFollowStatus;
+  previous_next_follow_up_date: string | null;
+  next_follow_up_date: string | null;
+  note: string | null;
+  stopped_reason: string | null;
+  created_by: string;
+  created_at: string;
 };
 
 export type ScoutDailyWorkLog = {
@@ -921,6 +937,46 @@ export type Database = {
           },
         ];
       };
+      scout_candidate_follow_up_history: {
+        Row: ScoutCandidateFollowUpHistory;
+        Insert: Pick<ScoutCandidateFollowUpHistory, 'candidate_id' | 'scout_profile_id' | 'action_type' | 'to_follow_status' | 'created_by'> &
+          Partial<
+            Pick<
+              ScoutCandidateFollowUpHistory,
+              | 'id'
+              | 'from_follow_status'
+              | 'previous_next_follow_up_date'
+              | 'next_follow_up_date'
+              | 'note'
+              | 'stopped_reason'
+              | 'created_at'
+            >
+          >;
+        Update: Partial<Omit<ScoutCandidateFollowUpHistory, 'id' | 'candidate_id' | 'scout_profile_id' | 'created_by' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'scout_candidate_follow_up_history_candidate_id_fkey';
+            columns: ['candidate_id'];
+            isOneToOne: false;
+            referencedRelation: 'scout_candidates';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'scout_candidate_follow_up_history_scout_profile_id_fkey';
+            columns: ['scout_profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'scout_candidate_follow_up_history_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       scout_daily_work_logs: {
         Row: ScoutDailyWorkLog;
         Insert: Pick<ScoutDailyWorkLog, 'work_date' | 'scout_profile_id'> &
@@ -1271,6 +1327,16 @@ export type Database = {
           p_granularity?: string;
         };
         Returns: ManagementScoutWorkloadStat[];
+      };
+      add_scout_candidate_follow_up: {
+        Args: {
+          p_candidate_id: string;
+          p_to_follow_status: string;
+          p_note?: string | null;
+          p_next_follow_up_date?: string | null;
+          p_stopped_reason?: string | null;
+        };
+        Returns: ScoutCandidate;
       };
     };
     Enums: {
