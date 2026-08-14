@@ -979,12 +979,12 @@ function buildSummaries(
         absentCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
+      if (employee.require_attendance && !nonWorkingDay && !leave && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
         statuses.push('迟到');
         lateCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
+      if (employee.require_attendance && !nonWorkingDay && !leave && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
         statuses.push('早退');
         earlyLeaveCount += 1;
       }
@@ -1115,7 +1115,7 @@ function groupLeaveRequests(requests: LeaveRequest[], dates: string[]) {
   const dateSet = new Set(dates);
 
   requests.forEach((request) => {
-    if (!request.employee_id || request.status === 'rejected') {
+    if (!request.employee_id || request.status !== 'approved') {
       return;
     }
 
