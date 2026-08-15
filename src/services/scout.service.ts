@@ -95,6 +95,24 @@ export type CreatorFormValues = {
   bank_account: string;
 };
 
+export type CreatorPlatformFormValues = {
+  enabled: boolean;
+  joined_date: string;
+  platform_user_id: string;
+  platform_account: string;
+  creator_type: CreatorType;
+  bank_name: string;
+  bank_account: string;
+};
+
+export type CreatorEntityFormValues = {
+  display_name: string;
+  region_id: string;
+  scout_employee_id: string;
+  manager_employee_id: string;
+  platforms: Record<CreatorPlatform, CreatorPlatformFormValues>;
+};
+
 export type CreatorProfile = {
   id: string;
   joined_date: string;
@@ -348,6 +366,21 @@ export const scoutService = {
     if (error) throw error;
   },
 
+  async createCreatorEntityWithPlatforms(values: CreatorEntityFormValues) {
+    const platforms = normalizeCreatorEntityPlatforms(values);
+    if (platforms.length === 0) throw new Error('请至少选择一个平台。');
+
+    const { error } = await db.rpc('create_creator_entity_with_platforms', {
+      p_display_name: values.display_name.trim(),
+      p_region_id: values.region_id || null,
+      p_scout_employee_id: values.scout_employee_id || null,
+      p_manager_employee_id: values.manager_employee_id || null,
+      p_platforms: platforms,
+    });
+
+    if (error) throw error;
+  },
+
   async updateCreator(creatorId: string, values: CreatorFormValues) {
     const { error } = await db.from('creator_profiles').update(await normalizeCreator(values)).eq('id', creatorId);
     if (error) throw error;
@@ -450,6 +483,24 @@ async function getEmployeeProfileId(employeeId: string) {
   const { data, error } = await supabase.from('employees').select('profile_id').eq('id', employeeId).maybeSingle();
   if (error) throw error;
   return data?.profile_id ?? null;
+}
+
+function normalizeCreatorEntityPlatforms(values: CreatorEntityFormValues) {
+  return (Object.entries(values.platforms) as Array<[CreatorPlatform, CreatorPlatformFormValues]>)
+    .filter(([, platformValues]) => platformValues.enabled)
+    .map(([platform, platformValues]) => {
+      const requiresBank = platformValues.creator_type === '5+1' || platformValues.creator_type === 'company';
+      return {
+        platform,
+        joined_date: platformValues.joined_date,
+        platform_user_id: platformValues.platform_user_id.trim(),
+        platform_account: platformValues.platform_account.trim(),
+        creator_name: values.display_name.trim(),
+        creator_type: platformValues.creator_type,
+        bank_name: requiresBank ? platformValues.bank_name.trim() || null : null,
+        bank_account: requiresBank ? platformValues.bank_account.trim() || null : null,
+      };
+    });
 }
 
 function normalizeCandidate(values: CandidateFormValues) {
