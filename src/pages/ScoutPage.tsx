@@ -4,10 +4,10 @@ import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
+import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
+import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
   createRecruitBreakdown,
-  createRegionRecruitSummaries,
-  createScoutRecruitSummaries,
   creatorTypeLabels,
   type DailyWorkLog,
   type DailyWorkLogFormValues,
@@ -16,7 +16,6 @@ import {
   type ManagementWorkloadStat,
   platformLabels,
   scoutService,
-  summarizeCreators,
   type Candidate,
   type CandidateFollowUpFormValues,
   type CandidateFollowUpHistory,
@@ -165,9 +164,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     [filteredCreators, month],
   );
   const personalBreakdown = useMemo(() => createRecruitBreakdown(monthCreators), [monthCreators]);
-  const managementTotal = useMemo(() => summarizeCreators(managementMonthCreators), [managementMonthCreators]);
-  const scoutSummaries = useMemo(() => createScoutRecruitSummaries(managementMonthCreators), [managementMonthCreators]);
-  const regionSummaries = useMemo(() => createRegionRecruitSummaries(managementMonthCreators), [managementMonthCreators]);
+  const managementBreakdown = useMemo(() => createRecruitBreakdown(managementMonthCreators), [managementMonthCreators]);
+  const scoutRecruitRows = useMemo(() => createScoutRecruitRows(managementMonthCreators), [managementMonthCreators]);
+  const regionRecruitRows = useMemo(() => createRegionRecruitRows(managementMonthCreators), [managementMonthCreators]);
   const sortedCandidates = useMemo(() => {
     const malaysiaToday = getMalaysiaDateString();
     const filteredCandidates = candidates.filter((candidate) => {
@@ -560,9 +559,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           regionFilter={regionFilter}
           onRegionFilter={setRegionFilter}
           options={options}
-          scoutSummaries={scoutSummaries}
-          regionSummaries={regionSummaries}
-          total={managementTotal}
+          scoutRecruitRows={scoutRecruitRows}
+          regionRecruitRows={regionRecruitRows}
+          breakdown={managementBreakdown}
           workloadStats={managementWorkloadStats}
           workloadGranularity={workloadGranularity}
           onWorkloadGranularity={setWorkloadGranularity}
@@ -1244,9 +1243,9 @@ function ManagementRecruitingPanel({
   regionFilter,
   onRegionFilter,
   options,
-  scoutSummaries,
-  regionSummaries,
-  total,
+  scoutRecruitRows,
+  regionRecruitRows,
+  breakdown,
   workloadStats,
   workloadGranularity,
   onWorkloadGranularity,
@@ -1257,9 +1256,9 @@ function ManagementRecruitingPanel({
   regionFilter: string;
   onRegionFilter: (value: string) => void;
   options: ScoutOptions;
-  scoutSummaries: ReturnType<typeof createScoutRecruitSummaries>;
-  regionSummaries: ReturnType<typeof createRegionRecruitSummaries>;
-  total: ReturnType<typeof summarizeCreators>;
+  scoutRecruitRows: RecruitBreakdownRow[];
+  regionRecruitRows: RecruitBreakdownRow[];
+  breakdown: ReturnType<typeof createRecruitBreakdown>;
   workloadStats: ManagementWorkloadStat[];
   workloadGranularity: WorkloadGranularity;
   onWorkloadGranularity: (value: WorkloadGranularity) => void;
@@ -1288,12 +1287,9 @@ function ManagementRecruitingPanel({
         <div className="table-state">正在统计总招募数据...</div>
       ) : (
         <>
-          <SummaryTable title="每位星探统计" label="星探" rows={scoutSummaries.map((row) => ({ label: row.scoutName, summary: row }))} />
-          <SummaryTable title="区域总计" label="区域" rows={regionSummaries.map((row) => ({ label: `${row.regionName} 总计`, summary: row }))} />
-          <div className="scout-total-panel">
-            <h4>DY Group 总计</h4>
-            <RecruitMetricRow summary={total} />
-          </div>
+          <ManagementRecruitBreakdownPanel breakdown={breakdown} />
+          <SummaryTable title="区域总计" label="区域" rows={regionRecruitRows} />
+          <SummaryTable title="每位星探统计" label="星探" rows={scoutRecruitRows} />
           <ManagementWorkloadPanel
             stats={workloadStats}
             granularity={workloadGranularity}
@@ -1579,31 +1575,102 @@ function getWorkloadScoutKey(row: ManagementWorkloadStat) {
   return row.scout_profile_id ?? row.scout_employee_id ?? `${row.scout_name}-${row.region_id ?? 'none'}`;
 }
 
-function SummaryTable({ title, label, rows }: { title: string; label: string; rows: Array<{ label: string; summary: ReturnType<typeof summarizeCreators> }> }) {
+type RecruitBreakdownRow = {
+  key: string;
+  label: string;
+  breakdown: ReturnType<typeof createRecruitBreakdown>;
+};
+
+function createRegionRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow[] {
+  const groups = new Map<string, { label: string; creators: CreatorProfile[] }>();
+
+  creators.forEach((creator) => {
+    const key = creator.region_id ?? 'none';
+    const label = `${creator.region?.code ?? '未分区'} 总计`;
+    const group = groups.get(key);
+
+    if (group) {
+      group.creators.push(creator);
+      return;
+    }
+
+    groups.set(key, { label, creators: [creator] });
+  });
+
+  return Array.from(groups.entries())
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      breakdown: createRecruitBreakdown(group.creators),
+    }))
+    .sort((first, second) => first.label.localeCompare(second.label));
+}
+
+function createScoutRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow[] {
+  const groups = new Map<string, { label: string; creators: CreatorProfile[] }>();
+
+  creators.forEach((creator) => {
+    const key = creator.scout_employee_id ?? creator.scout_profile_id ?? 'none';
+    const label = getEmployeeName(creator.scout) || '未分配星探';
+    const group = groups.get(key);
+
+    if (group) {
+      group.creators.push(creator);
+      return;
+    }
+
+    groups.set(key, { label, creators: [creator] });
+  });
+
+  return Array.from(groups.entries())
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      breakdown: createRecruitBreakdown(group.creators),
+    }))
+    .sort((first, second) => first.label.localeCompare(second.label));
+}
+
+function SummaryTable({ title, label, rows }: { title: string; label: string; rows: RecruitBreakdownRow[] }) {
   return (
     <section className="scout-summary-section">
-      <h4>{title}</h4>
+      <h4 style={summarySectionTitleStyle}>{title}</h4>
       <div className="staff-table-wrap">
-        <table className="staff-table scout-summary-table">
+        <table className="staff-table scout-summary-table" style={summaryTableStyle}>
+          <colgroup>
+            <col style={{ width: '22%' }} />
+            <col span={3} style={{ width: '13%' }} />
+            <col span={3} style={{ width: '13%' }} />
+          </colgroup>
           <thead>
             <tr>
-              <th>{label}</th>
-              <th>招募总数</th>
-              <th>TikTok</th>
-              <th>抖音</th>
-              <th>5+1</th>
-              <th>非5+1</th>
+              <th rowSpan={2} style={summaryHeaderCellStyle}>{label}</th>
+              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...tiktokHeaderCellStyle }}>
+                <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={30} fontSize={17} />
+              </th>
+              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...douyinHeaderCellStyle }}>
+                <PlatformLogoTitle logoUrl={douyinLogoUrl} title="抖音" logoSize={30} fontSize={17} />
+              </th>
+            </tr>
+            <tr>
+              {summaryMetricLabels.map((metric) => (
+                <th key={`tiktok-${metric}`} style={{ ...summarySubHeaderCellStyle, ...tiktokSubHeaderCellStyle }}>{metric}</th>
+              ))}
+              {summaryMetricLabels.map((metric) => (
+                <th key={`douyin-${metric}`} style={{ ...summarySubHeaderCellStyle, ...douyinSubHeaderCellStyle }}>{metric}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                <td>{row.summary.total}</td>
-                <td>{row.summary.tiktok}</td>
-                <td>{row.summary.douyin}</td>
-                <td>{row.summary.plusFiveOne}</td>
-                <td>{row.summary.nonFiveOne}</td>
+              <tr key={row.key}>
+                <td style={summaryLabelCellStyle}>{row.label}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.total}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.plusFiveOne}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.nonFiveOne}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.total}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.plusFiveOne}</td>
+                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.nonFiveOne}</td>
               </tr>
             ))}
           </tbody>
@@ -1613,17 +1680,145 @@ function SummaryTable({ title, label, rows }: { title: string; label: string; ro
   );
 }
 
-function RecruitMetricRow({ summary }: { summary: ReturnType<typeof summarizeCreators> }) {
+const summaryMetricLabels = ['招募总数', '5+1', '非5+1'];
+
+const summarySectionTitleStyle = {
+  fontSize: 18,
+  fontWeight: 600,
+} as const;
+
+const summaryTableStyle = {
+  tableLayout: 'fixed',
+  minWidth: 0,
+  width: '100%',
+  borderCollapse: 'collapse',
+} as const;
+
+const summaryHeaderCellStyle = {
+  border: '1px solid #d8dee8',
+  textAlign: 'center',
+  verticalAlign: 'middle',
+  whiteSpace: 'normal',
+  padding: '13px 12px',
+  fontSize: 15,
+  fontWeight: 600,
+  lineHeight: 1.35,
+} as const;
+
+const summarySubHeaderCellStyle = {
+  ...summaryHeaderCellStyle,
+  padding: '12px 12px',
+  fontSize: 15,
+  fontWeight: 600,
+} as const;
+
+const tiktokHeaderCellStyle = {
+  background: '#eaf4ff',
+  color: '#24628f',
+} as const;
+
+const douyinHeaderCellStyle = {
+  background: '#fff0f5',
+  color: '#9a3f64',
+} as const;
+
+const tiktokSubHeaderCellStyle = {
+  background: '#f5faff',
+} as const;
+
+const douyinSubHeaderCellStyle = {
+  background: '#fff7fa',
+} as const;
+
+const summaryLabelCellStyle = {
+  border: '1px solid #d8dee8',
+  textAlign: 'left',
+  fontWeight: 600,
+  fontSize: 16,
+  padding: '13px 12px',
+  lineHeight: 1.35,
+} as const;
+
+const summaryNumberCellStyle = {
+  border: '1px solid #d8dee8',
+  textAlign: 'center',
+  fontVariantNumeric: 'tabular-nums',
+  fontSize: 18,
+  fontWeight: 600,
+  padding: '13px 12px',
+  lineHeight: 1.35,
+} as const;
+
+function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<typeof createRecruitBreakdown> }) {
   return (
-    <div className="scout-total-grid">
-      <span>招募总数 <b>{summary.total}</b></span>
-      <span>TikTok <b>{summary.tiktok}</b></span>
-      <span>抖音 <b>{summary.douyin}</b></span>
-      <span>5+1 <b>{summary.plusFiveOne}</b></span>
-      <span>非5+1 <b>{summary.nonFiveOne}</b></span>
+    <div className="scout-total-panel">
+      <h4 style={summarySectionTitleStyle}>DY Group 总计</h4>
+      <div className="staff-table-wrap">
+        <table className="staff-table scout-summary-table" style={summaryTableStyle}>
+          <colgroup>
+            <col span={3} style={{ width: '16.66%' }} />
+            <col span={3} style={{ width: '16.66%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...tiktokHeaderCellStyle }}>
+                <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={36} fontSize={18} />
+              </th>
+              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...douyinHeaderCellStyle }}>
+                <PlatformLogoTitle logoUrl={douyinLogoUrl} title="抖音" logoSize={36} fontSize={18} />
+              </th>
+            </tr>
+            <tr>
+              {summaryMetricLabels.map((metric) => (
+                <th key={`group-tiktok-${metric}`} style={{ ...summarySubHeaderCellStyle, ...tiktokSubHeaderCellStyle }}>{metric}</th>
+              ))}
+              {summaryMetricLabels.map((metric) => (
+                <th key={`group-douyin-${metric}`} style={{ ...summarySubHeaderCellStyle, ...douyinSubHeaderCellStyle }}>{metric}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={summaryNumberCellStyle}>{breakdown.tiktok.total}</td>
+              <td style={summaryNumberCellStyle}>{breakdown.tiktok.plusFiveOne}</td>
+              <td style={summaryNumberCellStyle}>{breakdown.tiktok.nonFiveOne}</td>
+              <td style={summaryNumberCellStyle}>{breakdown.douyin.total}</td>
+              <td style={summaryNumberCellStyle}>{breakdown.douyin.plusFiveOne}</td>
+              <td style={summaryNumberCellStyle}>{breakdown.douyin.nonFiveOne}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+function PlatformLogoTitle({ logoUrl, title, logoSize, fontSize }: { logoUrl: string; title: string; logoSize: number; fontSize: number }) {
+  return (
+    <span style={{ ...platformLogoTitleStyle, fontSize }}>
+      <img src={logoUrl} alt="" aria-hidden="true" style={{ ...platformLogoStyle, width: logoSize, height: logoSize }} />
+      <span>{title}</span>
+    </span>
+  );
+}
+
+const platformLogoTitleStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  maxWidth: '100%',
+  whiteSpace: 'nowrap',
+  verticalAlign: 'middle',
+  fontWeight: 600,
+  lineHeight: 1.2,
+} as const;
+
+const platformLogoStyle = {
+  display: 'block',
+  flex: '0 0 auto',
+  objectFit: 'contain',
+} as const;
 
 function CandidateModal(props: {
   values: CandidateFormValues;
