@@ -1307,7 +1307,7 @@ function ManagementRecruitingPanel({
   const [recordGranularity, setRecordGranularity] = useState<ScoutRecordView>('daily');
 
   return (
-    <div className="staff-list-panel">
+    <div className="staff-list-panel management-recruiting-panel">
       <div className="scout-filters">
         <label className="form-field">
           <span>年月份</span>
@@ -1465,7 +1465,7 @@ function WorkloadTotalCards({ granularity, total }: { granularity: WorkloadGranu
   return (
     <div className="scout-total-panel">
       <h4>{prefix}团队总计</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
+      <div className="workload-total-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
         <WorkloadTotalCard title={`${prefix}联系人数`} value={total.contacted_count} />
         <WorkloadTotalCard title={`${prefix}回复人数`} value={total.replied_count} />
         <WorkloadTotalCard title={`${prefix}回复率`} value={formatReplyRate(total.contacted_count, total.replied_count)} />
@@ -1486,7 +1486,7 @@ function WorkloadTotalCard({ title, value }: { title: string; value: number | st
 function ScoutMonthlySummary({ total }: { total: { contacted_count: number; replied_count: number } }) {
   return (
     <div className="scout-total-panel">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
+      <div className="workload-total-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
         <WorkloadTotalCard title="本月联系人数" value={total.contacted_count} />
         <WorkloadTotalCard title="本月回复人数" value={total.replied_count} />
         <WorkloadTotalCard title="本月回复率" value={formatReplyRate(total.contacted_count, total.replied_count)} />
@@ -1534,7 +1534,8 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
   }
 
   return (
-    <div className="staff-table-wrap">
+    <>
+    <div className={granularity !== 'daily' && !personal ? 'staff-table-wrap workload-detail-desktop-table' : 'staff-table-wrap'}>
       <table className="staff-table scout-summary-table">
         <thead>
           <tr>
@@ -1567,6 +1568,43 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
           ))}
         </tbody>
       </table>
+    </div>
+    {granularity !== 'daily' && !personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} /> : null}
+    </>
+  );
+}
+
+function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity }) {
+  return (
+    <div className="workload-mobile-card-list" hidden>
+      {rows.map((row) => (
+        <article className="workload-mobile-detail-card" key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+          <div className="workload-mobile-detail-head">
+            <h5>{row.scout_name}</h5>
+            <span>{row.region_code ?? '-'}</span>
+          </div>
+          {granularity === 'weekly' ? (
+            <p>
+              <span>周期</span>
+              <b>{row.period_start} - {row.period_end}</b>
+            </p>
+          ) : null}
+          <div className="workload-mobile-metrics">
+            <span>
+              <small>联系人数</small>
+              <b>{row.contacted_count}</b>
+            </span>
+            <span>
+              <small>回复人数</small>
+              <b>{row.replied_count}</b>
+            </span>
+            <span>
+              <small>回复率</small>
+              <b>{formatReplyRate(row.contacted_count, row.replied_count)}</b>
+            </span>
+          </div>
+        </article>
+      ))}
     </div>
   );
 }
@@ -1672,7 +1710,7 @@ function createScoutRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow
 
 function SummaryTable({ title, label, rows }: { title: string; label: string; rows: RecruitBreakdownRow[] }) {
   return (
-    <section className="scout-summary-section">
+    <section className="scout-summary-section scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>{title}</h4>
       <div className="staff-table-wrap">
         <table className="staff-table scout-summary-table" style={summaryTableStyle}>
@@ -1715,6 +1753,7 @@ function SummaryTable({ title, label, rows }: { title: string; label: string; ro
           </tbody>
         </table>
       </div>
+      <MobileRecruitSummaryCards rows={rows} />
     </section>
   );
 }
@@ -1790,7 +1829,7 @@ const summaryNumberCellStyle = {
 
 function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<typeof createRecruitBreakdown> }) {
   return (
-    <div className="scout-total-panel">
+    <div className="scout-total-panel scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>DY Group 总计</h4>
       <div className="staff-table-wrap">
         <table className="staff-table scout-summary-table" style={summaryTableStyle}>
@@ -1828,7 +1867,53 @@ function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<
           </tbody>
         </table>
       </div>
+      <div className="recruit-mobile-card-list recruit-mobile-platform-list" hidden>
+        <RecruitMobilePlatformCard title="TikTok" breakdown={breakdown.tiktok} />
+        <RecruitMobilePlatformCard title="抖音" breakdown={breakdown.douyin} />
+      </div>
     </div>
+  );
+}
+
+function MobileRecruitSummaryCards({ rows }: { rows: RecruitBreakdownRow[] }) {
+  if (rows.length === 0) {
+    return <div className="recruit-mobile-card-list" hidden><div className="table-state">暂无统计数据。</div></div>;
+  }
+
+  return (
+    <div className="recruit-mobile-card-list" hidden>
+      {rows.map((row) => (
+        <article className="recruit-mobile-row-card" key={row.key}>
+          <h5>{row.label}</h5>
+          <div className="recruit-mobile-platform-grid">
+            <RecruitMobilePlatformCard title="TikTok" breakdown={row.breakdown.tiktok} />
+            <RecruitMobilePlatformCard title="抖音" breakdown={row.breakdown.douyin} />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function RecruitMobilePlatformCard({ title, breakdown }: { title: string; breakdown: ReturnType<typeof createRecruitBreakdown>['tiktok'] }) {
+  return (
+    <section className="recruit-mobile-platform-card">
+      <h5>{title}</h5>
+      <div className="recruit-mobile-metrics">
+        <span>
+          <small>招募总数</small>
+          <b>{breakdown.total}</b>
+        </span>
+        <span>
+          <small>5+1</small>
+          <b>{breakdown.plusFiveOne}</b>
+        </span>
+        <span>
+          <small>非5+1</small>
+          <b>{breakdown.nonFiveOne}</b>
+        </span>
+      </div>
+    </section>
   );
 }
 
