@@ -1476,7 +1476,7 @@ function WorkloadTotalCards({ granularity, total }: { granularity: WorkloadGranu
 
 function WorkloadTotalCard({ title, value }: { title: string; value: number | string }) {
   return (
-    <section className="scout-stat-card" style={{ gap: 8, minHeight: 0, padding: '12px 14px' }}>
+    <section className="scout-stat-card workload-total-card" style={{ gap: 8, minHeight: 0, padding: '12px 14px' }}>
       <h4 style={{ fontSize: 14 }}>{title}</h4>
       <strong style={{ fontSize: 24 }}>{value}</strong>
     </section>
@@ -1501,7 +1501,8 @@ function ScoutRecordList({ rows, onOpen }: { rows: ManagementWorkloadStat[]; onO
   }
 
   return (
-    <div className="staff-table-wrap">
+    <>
+    <div className="staff-table-wrap scout-record-desktop-table">
       <table className="staff-table scout-summary-table">
         <thead>
           <tr>
@@ -1525,6 +1526,18 @@ function ScoutRecordList({ rows, onOpen }: { rows: ManagementWorkloadStat[]; onO
         </tbody>
       </table>
     </div>
+    <div className="scout-record-mobile-card-list" hidden>
+      {rows.map((row) => (
+        <article className="scout-record-mobile-card" key={`${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+          <h5>{row.scout_name}</h5>
+          <span>{row.region_code ?? '-'}</span>
+          <button className="secondary-button compact-button" type="button" onClick={() => onOpen(row)}>
+            查看记录
+          </button>
+        </article>
+      ))}
+    </div>
+    </>
   );
 }
 
@@ -1535,7 +1548,7 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
 
   return (
     <>
-    <div className={granularity !== 'daily' && !personal ? 'staff-table-wrap workload-detail-desktop-table' : 'staff-table-wrap'}>
+    <div className={!personal ? 'staff-table-wrap workload-detail-desktop-table' : granularity === 'daily' ? 'staff-table-wrap workload-daily-desktop-table' : 'staff-table-wrap'}>
       <table className="staff-table scout-summary-table">
         <thead>
           <tr>
@@ -1569,26 +1582,18 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
         </tbody>
       </table>
     </div>
-    {granularity !== 'daily' && !personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} /> : null}
+    {!personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} /> : null}
+    {granularity === 'daily' && personal ? <MobileDailyWorkloadCards rows={rows} /> : null}
     </>
   );
 }
 
-function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity }) {
+function MobileDailyWorkloadCards({ rows }: { rows: ManagementWorkloadStat[] }) {
   return (
-    <div className="workload-mobile-card-list" hidden>
+    <div className="workload-daily-mobile-card-list" hidden>
       {rows.map((row) => (
-        <article className="workload-mobile-detail-card" key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
-          <div className="workload-mobile-detail-head">
-            <h5>{row.scout_name}</h5>
-            <span>{row.region_code ?? '-'}</span>
-          </div>
-          {granularity === 'weekly' ? (
-            <p>
-              <span>周期</span>
-              <b>{row.period_start} - {row.period_end}</b>
-            </p>
-          ) : null}
+        <article className="workload-mobile-detail-card workload-daily-mobile-card" key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+          <h5>{row.period_label}</h5>
           <div className="workload-mobile-metrics">
             <span>
               <small>联系人数</small>
@@ -1603,6 +1608,49 @@ function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWork
               <b>{formatReplyRate(row.contacted_count, row.replied_count)}</b>
             </span>
           </div>
+          <div className="workload-daily-note">
+            <span>备注 / 今日进度</span>
+            <p>{row.note || '-'}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity }) {
+  return (
+    <div className="workload-mobile-card-list" hidden>
+      {rows.map((row) => (
+        <article className="workload-mobile-detail-card" key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+          <div className="workload-mobile-detail-head">
+            <h5>{row.scout_name}</h5>
+            <span>{row.region_code ?? '-'}</span>
+          </div>
+          <p>
+            <span>{granularity === 'daily' ? '日期' : '周期'}</span>
+            <b>{granularity === 'weekly' ? `${row.period_start} - ${row.period_end}` : row.period_label}</b>
+          </p>
+          <div className="workload-mobile-metrics">
+            <span>
+              <small>联系人数</small>
+              <b>{row.contacted_count}</b>
+            </span>
+            <span>
+              <small>回复人数</small>
+              <b>{row.replied_count}</b>
+            </span>
+            <span>
+              <small>回复率</small>
+              <b>{formatReplyRate(row.contacted_count, row.replied_count)}</b>
+            </span>
+          </div>
+          {granularity === 'daily' ? (
+            <div className="workload-daily-note">
+              <span>备注 / 今日进度</span>
+              <p>{row.note || '-'}</p>
+            </div>
+          ) : null}
         </article>
       ))}
     </div>
@@ -1868,8 +1916,8 @@ function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<
         </table>
       </div>
       <div className="recruit-mobile-card-list recruit-mobile-platform-list" hidden>
-        <RecruitMobilePlatformCard title="TikTok" breakdown={breakdown.tiktok} />
-        <RecruitMobilePlatformCard title="抖音" breakdown={breakdown.douyin} />
+        <RecruitMobilePlatformCard title="TikTok" breakdown={breakdown.tiktok} platform="tiktok" />
+        <RecruitMobilePlatformCard title="抖音" breakdown={breakdown.douyin} platform="douyin" />
       </div>
     </div>
   );
@@ -1886,8 +1934,8 @@ function MobileRecruitSummaryCards({ rows }: { rows: RecruitBreakdownRow[] }) {
         <article className="recruit-mobile-row-card" key={row.key}>
           <h5>{row.label}</h5>
           <div className="recruit-mobile-platform-grid">
-            <RecruitMobilePlatformCard title="TikTok" breakdown={row.breakdown.tiktok} />
-            <RecruitMobilePlatformCard title="抖音" breakdown={row.breakdown.douyin} />
+            <RecruitMobilePlatformCard title="TikTok" breakdown={row.breakdown.tiktok} platform="tiktok" />
+            <RecruitMobilePlatformCard title="抖音" breakdown={row.breakdown.douyin} platform="douyin" />
           </div>
         </article>
       ))}
@@ -1895,9 +1943,9 @@ function MobileRecruitSummaryCards({ rows }: { rows: RecruitBreakdownRow[] }) {
   );
 }
 
-function RecruitMobilePlatformCard({ title, breakdown }: { title: string; breakdown: ReturnType<typeof createRecruitBreakdown>['tiktok'] }) {
+function RecruitMobilePlatformCard({ title, breakdown, platform }: { title: string; breakdown: ReturnType<typeof createRecruitBreakdown>['tiktok']; platform: 'tiktok' | 'douyin' }) {
   return (
-    <section className="recruit-mobile-platform-card">
+    <section className={`recruit-mobile-platform-card ${platform}`}>
       <h5>{title}</h5>
       <div className="recruit-mobile-metrics">
         <span>

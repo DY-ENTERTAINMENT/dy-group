@@ -4775,6 +4775,23 @@ button.leave-chip:disabled {
   color: var(--text);
 }
 
+.workload-total-card {
+  justify-items: center;
+  text-align: center;
+}
+
+.workload-total-card h4 {
+  width: 100%;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.workload-total-card > strong {
+  width: 100%;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .scout-platform-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5412,6 +5429,30 @@ button.leave-chip:disabled {
     color: #5b2a7a;
   }
 
+  .management-recruiting-panel .recruit-mobile-platform-card.tiktok {
+    background: #eaf4ff;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card.tiktok > h5 {
+    color: #24628f;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card.tiktok .recruit-mobile-metrics span {
+    background: #f5faff;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card.douyin {
+    background: #fff0f5;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card.douyin > h5 {
+    color: #9a3f64;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card.douyin .recruit-mobile-metrics span {
+    background: #fff7fa;
+  }
+
   .management-recruiting-panel .workload-total-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
@@ -5430,11 +5471,29 @@ button.leave-chip:disabled {
     display: none;
   }
 
+  .management-recruiting-panel .workload-daily-desktop-table {
+    display: none;
+  }
+
+  .management-recruiting-panel .scout-record-desktop-table {
+    display: none;
+  }
+
   .management-recruiting-panel .workload-mobile-card-list[hidden] {
     display: grid;
   }
 
-  .management-recruiting-panel .workload-mobile-card-list {
+  .management-recruiting-panel .workload-daily-mobile-card-list[hidden] {
+    display: grid;
+  }
+
+  .management-recruiting-panel .scout-record-mobile-card-list[hidden] {
+    display: grid;
+  }
+
+  .management-recruiting-panel .workload-mobile-card-list,
+  .management-recruiting-panel .workload-daily-mobile-card-list,
+  .management-recruiting-panel .scout-record-mobile-card-list {
     gap: 12px;
     min-width: 0;
   }
@@ -5453,15 +5512,18 @@ button.leave-chip:disabled {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
     align-items: start;
+    min-width: 0;
+    width: 100%;
   }
 
   .management-recruiting-panel .workload-mobile-detail-head h5 {
     min-width: 0;
     margin: 0;
     overflow-wrap: anywhere;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 900;
     line-height: 1.35;
+    text-align: left;
   }
 
   .management-recruiting-panel .workload-mobile-detail-head span {
@@ -5469,7 +5531,7 @@ button.leave-chip:disabled {
     border: 1px solid #e2d4ee;
     border-radius: 999px;
     background: #f8f1ff;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     white-space: nowrap;
   }
@@ -5478,9 +5540,11 @@ button.leave-chip:disabled {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
+    width: 100%;
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.45;
+    text-align: left;
   }
 
   .management-recruiting-panel .workload-mobile-detail-card p b {
@@ -5488,6 +5552,21 @@ button.leave-chip:disabled {
     color: #4a2368;
     font-weight: 800;
     overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .management-recruiting-panel .workload-daily-mobile-card {
+    gap: 12px;
+  }
+
+  .management-recruiting-panel .workload-daily-mobile-card > h5 {
+    margin: 0;
+    color: #4a2368;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.35;
+    text-align: left;
+    justify-self: start;
   }
 
   .management-recruiting-panel .workload-mobile-metrics {
@@ -5495,12 +5574,17 @@ button.leave-chip:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     min-width: 0;
+    width: 100%;
+    align-items: stretch;
   }
 
   .management-recruiting-panel .workload-mobile-metrics span {
     display: grid;
+    align-content: center;
+    justify-items: center;
     gap: 5px;
     min-width: 0;
+    min-height: 68px;
     padding: 9px 8px;
     border: 1px solid #eadff3;
     border-radius: 8px;
@@ -5508,7 +5592,7 @@ button.leave-chip:disabled {
   }
 
   .management-recruiting-panel .workload-mobile-metrics small {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     line-height: 1.25;
     white-space: nowrap;
@@ -5519,6 +5603,77 @@ button.leave-chip:disabled {
     font-weight: 900;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+  }
+
+  .management-recruiting-panel .workload-daily-note {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+    padding-top: 2px;
+    text-align: left;
+  }
+
+  .management-recruiting-panel .workload-daily-note span {
+    color: #7a5a8f;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .management-recruiting-panel .workload-daily-note p {
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .management-recruiting-panel .scout-record-mobile-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #e2d4ee;
+    border-radius: 8px;
+    background: #fffafd;
+    box-shadow: 0 8px 18px rgba(74, 35, 104, 0.05);
+  }
+
+  .management-recruiting-panel .scout-record-mobile-card h5 {
+    min-width: 0;
+    margin: 0;
+    color: #4a2368;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .management-recruiting-panel .scout-record-mobile-card > span {
+    justify-self: end;
+    padding: 3px 8px;
+    border: 1px solid #e2d4ee;
+    border-radius: 999px;
+    color: #7a5a8f;
+    background: #f8f1ff;
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .management-recruiting-panel .scout-record-mobile-card .compact-button {
+    grid-column: 1 / -1;
+    justify-self: center;
+    justify-content: center;
+    width: 132px;
+    min-height: 36px;
   }
 }
 
