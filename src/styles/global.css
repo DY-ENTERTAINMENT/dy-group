@@ -4775,6 +4775,104 @@ button.leave-chip:disabled {
   color: var(--text);
 }
 
+.personal-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.personal-platform-card {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 204px;
+  padding: 20px 24px;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 8px;
+  text-align: center;
+  background: #ffffff;
+}
+
+.personal-platform-card--tiktok {
+  border-color: rgba(124, 58, 237, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(250, 245, 255, 0.96) 100%);
+}
+
+.personal-platform-card--douyin {
+  border-color: rgba(232, 62, 140, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(253, 242, 248, 0.96) 100%);
+}
+
+.personal-platform-card .platform-logo-title {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.personal-platform-total {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.personal-platform-total span {
+  color: #5b6475;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.personal-platform-total strong {
+  color: var(--dy-purple-dark);
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.personal-platform-card--douyin .personal-platform-total strong {
+  color: #be185d;
+}
+
+.personal-platform-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  max-width: 360px;
+  border-top: 1px solid rgba(124, 58, 237, 0.1);
+}
+
+.personal-platform-card--douyin .personal-platform-breakdown {
+  border-top-color: rgba(232, 62, 140, 0.12);
+}
+
+.personal-platform-breakdown span {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding-top: 13px;
+}
+
+.personal-platform-breakdown span + span {
+  border-left: 1px solid rgba(124, 58, 237, 0.1);
+}
+
+.personal-platform-card--douyin .personal-platform-breakdown span + span {
+  border-left-color: rgba(232, 62, 140, 0.12);
+}
+
+.personal-platform-breakdown small {
+  color: #5b6475;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.personal-platform-breakdown b {
+  color: var(--text);
+  font-size: 27px;
+  line-height: 1;
+  font-weight: 900;
+}
+
 .workload-total-card {
   justify-items: center;
   text-align: center;
@@ -5045,6 +5143,129 @@ button.leave-chip:disabled {
   background: var(--panel);
 }
 
+.personal-recruiting-panel .scout-summary-table {
+  border: 1px solid rgba(124, 58, 237, 0.1);
+}
+
+.personal-recruiting-panel .scout-summary-table th {
+  border-bottom-color: rgba(124, 58, 237, 0.13);
+  color: #4c1d95;
+  background: linear-gradient(90deg, rgba(250, 245, 255, 0.96), rgba(253, 242, 248, 0.9));
+}
+
+.personal-recruiting-panel .scout-summary-table td {
+  border-bottom-color: rgba(124, 58, 237, 0.08);
+}
+
+.personal-recruiting-panel .scout-summary-table tbody tr:hover td {
+  background: rgba(250, 245, 255, 0.72);
+}
+
+.personal-recruiting-panel .daily-work-input {
+  border-color: rgba(124, 58, 237, 0.18);
+  background: #ffffff;
+}
+
+.personal-recruiting-panel .daily-work-input:focus {
+  border-color: var(--dy-purple);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--dy-purple-ring);
+}
+
+.personal-daily-work-mobile {
+  display: none;
+}
+
+.personal-daily-work-card {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(250, 245, 255, 0.72) 55%, rgba(253, 242, 248, 0.58) 100%);
+}
+
+.personal-daily-work-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.personal-daily-work-card-head h5 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.personal-daily-work-card-head span {
+  flex: 0 0 auto;
+  border: 1px solid rgba(232, 62, 140, 0.16);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #be185d;
+  background: rgba(253, 242, 248, 0.86);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.personal-daily-work-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.personal-daily-work-card-metrics label,
+.personal-daily-work-note {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: #5b6475;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.personal-daily-work-card-metrics b,
+.personal-daily-work-note b {
+  min-width: 0;
+  color: var(--text);
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.personal-daily-work-card .daily-work-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.personal-daily-work-card textarea.daily-work-input {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.personal-daily-work-card-action form {
+  display: grid;
+  gap: 8px;
+}
+
+.personal-daily-work-card-action .compact-button {
+  width: 100%;
+  min-height: 40px;
+}
+
+.personal-daily-work-card-action > span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 800;
+}
+
 .candidate-accepted td {
   background: #dff7f3;
 }
@@ -5287,6 +5508,96 @@ button.leave-chip:disabled {
 }
 
 @media (max-width: 767px) {
+  .personal-recruiting-panel .list-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
+    align-items: center;
+    gap: 6px 12px;
+    padding: 16px;
+  }
+
+  .personal-recruiting-title {
+    display: contents;
+  }
+
+  .personal-recruiting-title > span {
+    grid-column: 1 / -1;
+  }
+
+  .personal-recruiting-title > h3 {
+    grid-column: 1;
+    align-self: center;
+    margin: 0;
+  }
+
+  .personal-recruiting-panel .scout-month-field {
+    grid-column: 2;
+    align-self: center;
+    min-width: 0;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .personal-recruiting-panel .scout-month-field > span {
+    display: none;
+  }
+
+  .personal-recruiting-panel .scout-month-field .month-select,
+  .personal-recruiting-panel .scout-month-field select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .personal-platform-grid {
+    grid-template-columns: 1fr;
+    gap: 11px;
+    padding: 12px 14px;
+  }
+
+  .personal-platform-card {
+    width: 100%;
+    min-height: 188px;
+    padding: 17px 16px;
+    gap: 14px;
+  }
+
+  .personal-platform-card .platform-logo-title {
+    font-size: 20px !important;
+  }
+
+  .personal-platform-total span {
+    font-size: 17px;
+  }
+
+  .personal-platform-total strong {
+    font-size: 34px;
+  }
+
+  .personal-platform-breakdown {
+    max-width: 100%;
+  }
+
+  .personal-platform-breakdown small {
+    font-size: 16px;
+  }
+
+  .personal-platform-breakdown b {
+    font-size: 24px;
+  }
+
+  .personal-daily-work-desktop {
+    display: none;
+  }
+
+  .personal-daily-work-mobile[hidden] {
+    display: grid;
+  }
+
+  .personal-daily-work-mobile {
+    gap: 10px;
+    min-width: 0;
+  }
+
   .scout-recruit-summary-block > .staff-table-wrap {
     display: none;
   }
@@ -5674,6 +5985,47 @@ button.leave-chip:disabled {
     justify-content: center;
     width: 132px;
     min-height: 36px;
+  }
+}
+
+@media (max-width: 520px) {
+  .personal-recruiting-panel .list-header {
+    grid-template-columns: minmax(0, 1fr) minmax(118px, 44%);
+    gap: 6px 10px;
+    padding: 14px;
+  }
+
+  .personal-recruiting-panel .scout-month-field {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .personal-platform-grid,
+  .personal-recruiting-panel .scout-summary-section {
+    padding: 10px 12px;
+  }
+
+  .personal-platform-card {
+    min-height: 180px;
+    padding: 16px 14px;
+    gap: 13px;
+  }
+
+  .personal-platform-total strong {
+    font-size: 32px;
+  }
+
+  .personal-daily-work-card {
+    gap: 13px;
+    padding: 12px;
+  }
+
+  .personal-daily-work-card-head {
+    align-items: flex-start;
+  }
+
+  .personal-daily-work-card-metrics {
+    gap: 10px;
   }
 }
 

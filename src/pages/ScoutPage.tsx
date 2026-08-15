@@ -667,9 +667,9 @@ function PersonalRecruitingPanel({
   onSaveDailyWorkLog: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
 }) {
   return (
-    <div className="staff-list-panel">
+    <div className="staff-list-panel personal-recruiting-panel">
       <div className="list-header">
-        <div>
+        <div className="personal-recruiting-title">
           <span>个人招募数据</span>
           <h3>{month}</h3>
         </div>
@@ -716,48 +716,60 @@ function DailyWorkLogPanel({
       ) : rows.length === 0 ? (
         <div className="table-state">本月暂无每日工作记录。</div>
       ) : (
-        <div className="staff-table-wrap">
-          <table className="staff-table scout-summary-table">
-            <thead>
-              <tr>
-                <th>工作日期</th>
-                <th>联系人数</th>
-                <th>回复人数</th>
-                <th>备注 / 今日进度</th>
-                <th>回复率</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <DailyWorkLogRow
-                  key={row.workDate}
-                  workDate={row.workDate}
-                  log={row.log}
-                  editable={canEdit && isRecentDailyWorkDate(row.workDate)}
-                  saving={savingDate === row.workDate}
-                  onSave={onSave}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="staff-table-wrap personal-daily-work-desktop">
+            <table className="staff-table scout-summary-table">
+              <thead>
+                <tr>
+                  <th>工作日期</th>
+                  <th>联系人数</th>
+                  <th>回复人数</th>
+                  <th>备注 / 今日进度</th>
+                  <th>回复率</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <DailyWorkLogRow
+                    key={row.workDate}
+                    workDate={row.workDate}
+                    log={row.log}
+                    editable={canEdit && isRecentDailyWorkDate(row.workDate)}
+                    saving={savingDate === row.workDate}
+                    onSave={onSave}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="personal-daily-work-mobile" hidden>
+            {rows.map((row) => (
+              <DailyWorkLogCard
+                key={row.workDate}
+                workDate={row.workDate}
+                log={row.log}
+                editable={canEdit && isRecentDailyWorkDate(row.workDate)}
+                saving={savingDate === row.workDate}
+                onSave={onSave}
+              />
+            ))}
+          </div>
+        </>
       )}
     </section>
   );
 }
 
-function DailyWorkLogRow({
+function useDailyWorkLogForm({
   workDate,
   log,
   editable,
-  saving,
   onSave,
 }: {
   workDate: string;
   log: DailyWorkLog | null;
   editable: boolean;
-  saving: boolean;
   onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
 }) {
   const [values, setValues] = useState<DailyWorkLogFormValues>({
@@ -797,6 +809,24 @@ function DailyWorkLogRow({
     await onSave(workDate, values);
   }
 
+  return { values, setValues, rowError, contactedCount, repliedCount, submit };
+}
+
+function DailyWorkLogRow({
+  workDate,
+  log,
+  editable,
+  saving,
+  onSave,
+}: {
+  workDate: string;
+  log: DailyWorkLog | null;
+  editable: boolean;
+  saving: boolean;
+  onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
+}) {
+  const { values, setValues, rowError, contactedCount, repliedCount, submit } = useDailyWorkLogForm({ workDate, log, editable, onSave });
+
   return (
     <tr>
       <td>{workDate}</td>
@@ -831,7 +861,7 @@ function DailyWorkLogRow({
           </span>
         )}
       </td>
-      <td>{formatReplyRate(contactedCount, repliedCount)}</td>
+      <td>{formatDailyWorkReplyRate(contactedCount, repliedCount)}</td>
       <td>
         {editable ? (
           <form id={`daily-work-${workDate}`} onSubmit={submit}>
@@ -848,28 +878,103 @@ function DailyWorkLogRow({
   );
 }
 
+function DailyWorkLogCard({
+  workDate,
+  log,
+  editable,
+  saving,
+  onSave,
+}: {
+  workDate: string;
+  log: DailyWorkLog | null;
+  editable: boolean;
+  saving: boolean;
+  onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
+}) {
+  const { values, setValues, rowError, contactedCount, repliedCount, submit } = useDailyWorkLogForm({ workDate, log, editable, onSave });
+  const formId = `daily-work-mobile-${workDate}`;
+
+  return (
+    <article className="personal-daily-work-card">
+      <div className="personal-daily-work-card-head">
+        <h5>{workDate}</h5>
+        <span>{formatDailyWorkReplyRate(contactedCount, repliedCount)}</span>
+      </div>
+      <div className="personal-daily-work-card-metrics">
+        <label>
+          <span>联系人数</span>
+          {editable ? (
+            <input className="daily-work-input" type="number" min="0" step="1" value={values.contacted_count} onChange={(event) => setValues({ ...values, contacted_count: event.target.value })} form={formId} />
+          ) : (
+            <b>{log?.contacted_count ?? 0}</b>
+          )}
+        </label>
+        <label>
+          <span>回复人数</span>
+          {editable ? (
+            <input className="daily-work-input" type="number" min="0" step="1" value={values.replied_count} onChange={(event) => setValues({ ...values, replied_count: event.target.value })} form={formId} />
+          ) : (
+            <b>{log?.replied_count ?? 0}</b>
+          )}
+        </label>
+      </div>
+      <label className="personal-daily-work-note">
+        <span>备注 / 今日进度</span>
+        {editable ? (
+          <textarea
+            className="daily-work-input"
+            rows={3}
+            value={values.note}
+            onChange={(event) => setValues({ ...values, note: event.target.value })}
+            placeholder="例如：今天主要联系 TikTok，有 3 位主播有兴趣，明天继续跟进"
+            form={formId}
+          />
+        ) : (
+          <b title={log?.note ?? undefined}>{log?.note || '-'}</b>
+        )}
+      </label>
+      <div className="personal-daily-work-card-action">
+        {editable ? (
+          <form id={formId} onSubmit={submit}>
+            <button className="primary-button compact-button" type="submit" disabled={saving}>
+              {saving ? '保存中...' : log ? '修改' : '填写'}
+            </button>
+            {rowError ? <small className="form-error">{rowError}</small> : null}
+          </form>
+        ) : (
+          <span>只读</span>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function RecruitBreakdownCards({ breakdown }: { breakdown: ReturnType<typeof createRecruitBreakdown> }) {
   return (
-    <div className="scout-stat-grid">
-      <RecruitCard title="招募总数" summary={breakdown.total} />
-      <RecruitCard title="TikTok" summary={breakdown.tiktok} />
-      <RecruitCard title="抖音" summary={breakdown.douyin} />
+    <div className="personal-platform-grid">
+      <RecruitCard title="TikTok" summary={breakdown.tiktok} logoUrl={tiktokLogoUrl} variant="tiktok" />
+      <RecruitCard title="抖音" summary={breakdown.douyin} logoUrl={douyinLogoUrl} variant="douyin" />
     </div>
   );
 }
 
-function RecruitCard({ title, summary }: { title: string; summary: { total: number; plusFiveOne: number; nonFiveOne: number } }) {
+function RecruitCard({ title, summary, logoUrl, variant }: { title: string; summary: { total: number; plusFiveOne: number; nonFiveOne: number }; logoUrl: string; variant: 'tiktok' | 'douyin' }) {
   return (
-    <section className="scout-stat-card">
-      <h4>{title}</h4>
-      <strong>{summary.total}</strong>
-      <div>
-        <span>5+1 数量</span>
-        <b>{summary.plusFiveOne}</b>
+    <section className={`personal-platform-card personal-platform-card--${variant}`}>
+      <PlatformLogoTitle logoUrl={logoUrl} title={title} logoSize={32} fontSize={21} />
+      <div className="personal-platform-total">
+        <span>招募总数</span>
+        <strong>{summary.total}</strong>
       </div>
-      <div>
-        <span>非5+1 数量</span>
-        <b>{summary.nonFiveOne}</b>
+      <div className="personal-platform-breakdown">
+        <span>
+          <small>5+1</small>
+          <b>{summary.plusFiveOne}</b>
+        </span>
+        <span>
+          <small>非5+1</small>
+          <b>{summary.nonFiveOne}</b>
+        </span>
       </div>
     </section>
   );
@@ -1967,7 +2072,7 @@ function RecruitMobilePlatformCard({ title, breakdown, platform }: { title: stri
 
 function PlatformLogoTitle({ logoUrl, title, logoSize, fontSize }: { logoUrl: string; title: string; logoSize: number; fontSize: number }) {
   return (
-    <span style={{ ...platformLogoTitleStyle, fontSize }}>
+    <span className="platform-logo-title" style={{ ...platformLogoTitleStyle, fontSize }}>
       <img src={logoUrl} alt="" aria-hidden="true" style={{ ...platformLogoStyle, width: logoSize, height: logoSize }} />
       <span>{title}</span>
     </span>
@@ -2471,6 +2576,11 @@ function isRecentDailyWorkDate(workDate: string) {
 function formatReplyRate(contactedCount: number, repliedCount: number) {
   if (contactedCount <= 0) return '0%';
   return `${((repliedCount / contactedCount) * 100).toFixed(2)}%`;
+}
+
+function formatDailyWorkReplyRate(contactedCount: number, repliedCount: number) {
+  if (repliedCount > contactedCount) return '--';
+  return formatReplyRate(contactedCount, repliedCount);
 }
 
 function addLocalDays(date: Date, days: number) {
