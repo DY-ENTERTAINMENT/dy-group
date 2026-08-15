@@ -5125,6 +5125,259 @@ button.leave-chip:disabled {
   }
 }
 
+@media (max-width: 767px) {
+  .scout-recruit-summary-block > .staff-table-wrap {
+    display: none;
+  }
+
+  .scout-recruit-summary-block > .recruit-mobile-card-list[hidden] {
+    display: grid;
+  }
+
+  .recruit-mobile-card-list {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .recruit-mobile-platform-list {
+    grid-template-columns: 1fr;
+  }
+
+  .recruit-mobile-row-card,
+  .recruit-mobile-platform-card {
+    display: grid;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-soft);
+  }
+
+  .recruit-mobile-row-card {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .recruit-mobile-row-card > h5,
+  .recruit-mobile-platform-card > h5 {
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+
+  .recruit-mobile-platform-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .recruit-mobile-platform-card {
+    gap: 10px;
+    padding: 12px;
+    background: var(--panel);
+  }
+
+  .recruit-mobile-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .recruit-mobile-metrics span {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 9px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    text-align: center;
+  }
+
+  .recruit-mobile-metrics small {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .recruit-mobile-metrics b {
+    color: var(--primary-dark);
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .management-recruiting-panel {
+    border-color: #e6d9f1;
+    background: #fcf7ff;
+  }
+
+  .management-recruiting-panel .scout-summary-section,
+  .management-recruiting-panel .scout-total-panel {
+    background: #fcf7ff;
+  }
+
+  .management-recruiting-panel .scout-summary-section h4,
+  .management-recruiting-panel .scout-total-panel h4,
+  .management-recruiting-panel .list-header h3 {
+    color: #4a2368;
+  }
+
+  .management-recruiting-panel .recruit-mobile-row-card,
+  .management-recruiting-panel .recruit-mobile-platform-card,
+  .management-recruiting-panel .workload-mobile-detail-card,
+  .management-recruiting-panel .scout-stat-card {
+    border-color: #e2d4ee;
+    background: #fffafd;
+  }
+
+  .management-recruiting-panel .recruit-mobile-platform-card,
+  .management-recruiting-panel .workload-mobile-detail-card {
+    box-shadow: 0 8px 18px rgba(74, 35, 104, 0.05);
+  }
+
+  .management-recruiting-panel .recruit-mobile-row-card > h5,
+  .management-recruiting-panel .recruit-mobile-platform-card > h5,
+  .management-recruiting-panel .workload-mobile-detail-card h5,
+  .management-recruiting-panel .scout-stat-card h4 {
+    color: #4a2368;
+  }
+
+  .management-recruiting-panel .recruit-mobile-metrics span,
+  .management-recruiting-panel .workload-mobile-metrics span {
+    border-color: #eadff3;
+    background: #f8f1ff;
+  }
+
+  .management-recruiting-panel .recruit-mobile-metrics small,
+  .management-recruiting-panel .workload-mobile-metrics small,
+  .management-recruiting-panel .workload-mobile-detail-card p span,
+  .management-recruiting-panel .workload-mobile-detail-head span {
+    color: #7a5a8f;
+  }
+
+  .management-recruiting-panel .recruit-mobile-metrics b,
+  .management-recruiting-panel .workload-mobile-metrics b,
+  .management-recruiting-panel .scout-stat-card > strong {
+    color: #5b2a7a;
+  }
+
+  .management-recruiting-panel .workload-total-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    min-width: 0;
+  }
+
+  .management-recruiting-panel .workload-total-card-grid > .scout-stat-card {
+    min-width: 0;
+  }
+
+  .management-recruiting-panel .workload-total-card-grid > .scout-stat-card:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table {
+    display: none;
+  }
+
+  .management-recruiting-panel .workload-mobile-card-list[hidden] {
+    display: grid;
+  }
+
+  .management-recruiting-panel .workload-mobile-card-list {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-card {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #e2d4ee;
+    border-radius: 8px;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-head h5 {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-head span {
+    padding: 3px 8px;
+    border: 1px solid #e2d4ee;
+    border-radius: 999px;
+    background: #f8f1ff;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-card p {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .management-recruiting-panel .workload-mobile-detail-card p b {
+    min-width: 0;
+    color: #4a2368;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  .management-recruiting-panel .workload-mobile-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .management-recruiting-panel .workload-mobile-metrics span {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 9px 8px;
+    border: 1px solid #eadff3;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-mobile-metrics small {
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .management-recruiting-panel .workload-mobile-metrics b {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 .agent-page,
 .designer-page {
   display: grid;
