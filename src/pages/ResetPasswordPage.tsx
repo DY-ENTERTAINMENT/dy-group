@@ -1,11 +1,16 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useLayoutEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
 import { authService } from '../services/auth.service';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+
+type ResetState = 'checking' | 'ready' | 'invalid';
+
+const RECOVERY_VALIDATION_TIMEOUT_MS = 10000;
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
+  const [resetState, setResetState] = useState<ResetState>('checking');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -13,6 +18,49 @@ export function ResetPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!isSupabaseConfigured || hasSupabaseRecoveryError()) {
+      setResetState('invalid');
+      return;
+    }
+
+    const hasRecoverySignal = hasSupabaseRecoverySignal();
+    let mounted = true;
+    let receivedRecovery = false;
+    const fallbackId = window.setTimeout(() => {
+      if (!mounted || receivedRecovery) {
+        return;
+      }
+
+      setResetState((current) => (current === 'checking' ? 'invalid' : current));
+    }, RECOVERY_VALIDATION_TIMEOUT_MS);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) {
+        return;
+      }
+
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        receivedRecovery = true;
+        window.clearTimeout(fallbackId);
+        setResetState('ready');
+        return;
+      }
+
+      if (event === 'INITIAL_SESSION' && !hasRecoverySignal) {
+        setResetState((current) => (current === 'checking' ? 'invalid' : current));
+      }
+    });
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(fallbackId);
+      subscription.unsubscribe();
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,6 +88,42 @@ export function ResetPasswordPage() {
 
     setSuccessMessage('密码已更新，请使用新密码登录。');
     setTimeout(() => navigate('/login', { replace: true }), 1200);
+  }
+
+  if (resetState === 'checking') {
+    return (
+      <section className="auth-card">
+        <div className="auth-card-heading">
+          <h2>重置密码</h2>
+          <p>正在验证重置链接…</p>
+        </div>
+
+        {!isSupabaseConfigured ? <p className="form-alert">请先在 .env 填写 Supabase 连接信息。</p> : null}
+
+        <p className="auth-switch">
+          <Link to="/login">返回登录</Link>
+        </p>
+      </section>
+    );
+  }
+
+  if (resetState === 'invalid') {
+    return (
+      <section className="auth-card">
+        <div className="auth-card-heading">
+          <h2>重置链接已失效</h2>
+          <p>此密码重置链接已失效或已过期，请重新申请密码重置邮件。</p>
+        </div>
+
+        <Link className="primary-button" to="/forgot-password">
+          <span>重新申请重置密码</span>
+        </Link>
+
+        <p className="auth-switch">
+          <Link to="/login">返回登录</Link>
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -99,4 +183,27 @@ export function ResetPasswordPage() {
       </p>
     </form>
   );
+}
+
+function hasSupabaseRecoveryError() {
+  const params = getUrlAuthParams();
+
+  return Boolean(params.get('error') || params.get('error_code') || params.get('error_description'));
+}
+
+function hasSupabaseRecoverySignal() {
+  const params = getUrlAuthParams();
+
+  return params.get('type') === 'recovery' || Boolean(params.get('access_token') || params.get('code'));
+}
+
+function getUrlAuthParams() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+  hashParams.forEach((value, key) => {
+    params.set(key, value);
+  });
+
+  return params;
 }
