@@ -43,6 +43,8 @@ type ScoutPageProps = {
 const currentMonth = new Date().toISOString().slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
 type CandidateFollowFilter = 'all' | 'today' | 'overdue';
+type CandidateStatusFilter = Candidate['status'] | 'all';
+const candidateStatusFilters: CandidateStatusFilter[] = ['pending', 'accepted', 'rejected', 'all'];
 const workloadGranularities: WorkloadGranularity[] = ['daily', 'weekly', 'monthly'];
 type WorkloadView = WorkloadGranularity | 'scout-records';
 type ScoutRecordView = Extract<WorkloadGranularity, 'daily' | 'monthly'>;
@@ -142,7 +144,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [managerFilter, setManagerFilter] = useState('');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
+  const [candidateStatusFilter, setCandidateStatusFilter] = useState<CandidateStatusFilter>('pending');
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
+  const [candidateUidQuery, setCandidateUidQuery] = useState('');
   const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('daily');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
@@ -195,7 +199,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const regionRecruitRows = useMemo(() => createRegionRecruitRows(managementMonthCreators), [managementMonthCreators]);
   const sortedCandidates = useMemo(() => {
     const malaysiaToday = getMalaysiaDateString();
+    const normalizedUidQuery = candidateUidQuery.trim();
     const filteredCandidates = candidates.filter((candidate) => {
+      if (candidateStatusFilter !== 'all' && candidate.status !== candidateStatusFilter) return false;
+
+      if (normalizedUidQuery && !(candidate.platform_user_id ?? '').includes(normalizedUidQuery)) return false;
+
       if (candidateFollowFilter === 'all') return true;
       if (candidate.follow_status === 'stopped' || !candidate.next_follow_up_date) return false;
       if (candidateFollowFilter === 'today') return candidate.next_follow_up_date === malaysiaToday;
@@ -211,7 +220,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         if (firstFollowDate !== secondFollowDate) return firstFollowDate.localeCompare(secondFollowDate);
         return new Date(second.updated_at).getTime() - new Date(first.updated_at).getTime();
       });
-  }, [candidateFollowFilter, candidates]);
+  }, [candidateFollowFilter, candidateStatusFilter, candidateUidQuery, candidates]);
 
   useEffect(() => {
     void loadData();
@@ -508,25 +517,21 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   }
 
   return (
-    <section className="scout-page">
-      <div className="toolbar-actions staff-actions-row">
-        {mode === 'recruit-list' ? (
-          <button className="secondary-action" type="button" onClick={openCandidateCreate}>
-            <Plus size={17} />
-            <span>新增</span>
+    <section className={`scout-page${mode === 'recruit-list' ? ' scout-candidate-page' : ''}`}>
+      {mode !== 'recruit-list' ? (
+        <div className="toolbar-actions staff-actions-row">
+          {mode === 'management-streamers' && canManageCreators ? (
+            <button className="secondary-action" type="button" onClick={() => openCreatorCreate()}>
+              <Plus size={17} />
+              <span>新增主播</span>
+            </button>
+          ) : null}
+          <button className="secondary-action" type="button" onClick={loadData} disabled={loading}>
+            <RefreshCw size={17} />
+            <span>刷新</span>
           </button>
-        ) : null}
-        {mode === 'management-streamers' && canManageCreators ? (
-          <button className="secondary-action" type="button" onClick={() => openCreatorCreate()}>
-            <Plus size={17} />
-            <span>新增主播</span>
-          </button>
-        ) : null}
-        <button className="secondary-action" type="button" onClick={loadData} disabled={loading}>
-          <RefreshCw size={17} />
-          <span>刷新</span>
-        </button>
-      </div>
+        </div>
+      ) : null}
 
       {error ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
@@ -545,11 +550,20 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       ) : null}
 
       {mode === 'recruit-list' ? (
+        <CandidateEntryPanel loading={loading} onCreate={openCandidateCreate} onRefresh={loadData} />
+      ) : null}
+
+      {mode === 'recruit-list' ? (
         <CandidatePanel
           loading={loading}
           candidates={sortedCandidates}
+          hasAnyCandidates={candidates.length > 0}
+          statusFilter={candidateStatusFilter}
+          onStatusFilter={setCandidateStatusFilter}
           followFilter={candidateFollowFilter}
           onFollowFilter={setCandidateFollowFilter}
+          uidQuery={candidateUidQuery}
+          onUidQuery={setCandidateUidQuery}
           onEdit={openCandidateEdit}
           onFollowUp={openFollowUp}
           onStatus={setCandidateStatus}
@@ -980,85 +994,143 @@ function RecruitCard({ title, summary, logoUrl, variant }: { title: string; summ
   );
 }
 
+function CandidateEntryPanel({ loading, onCreate, onRefresh }: { loading: boolean; onCreate: () => void; onRefresh: () => void }) {
+  return (
+    <section className="candidate-entry-panel">
+      <div className="candidate-entry-topline">
+        <div className="candidate-entry-intro">
+          <h3>新增人员名单</h3>
+          <p>记录需要持续跟进的主播名单，方便后续持续跟进与管理。</p>
+          <p className="candidate-entry-muted">可填写主播资料、平台身份、跟进日期与备注。</p>
+          <button className="primary-action candidate-create-button" type="button" onClick={onCreate}>
+            <Plus size={17} />
+            <span>新增名单</span>
+          </button>
+        </div>
+        <button className="secondary-action candidate-refresh-button" type="button" onClick={onRefresh} disabled={loading}>
+          <RefreshCw size={17} />
+          <span>刷新</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function CandidatePanel({
   loading,
   candidates,
+  hasAnyCandidates,
+  statusFilter,
+  onStatusFilter,
   followFilter,
   onFollowFilter,
+  uidQuery,
+  onUidQuery,
   onEdit,
   onFollowUp,
   onStatus,
 }: {
   loading: boolean;
   candidates: Candidate[];
+  hasAnyCandidates: boolean;
+  statusFilter: CandidateStatusFilter;
+  onStatusFilter: (filter: CandidateStatusFilter) => void;
   followFilter: CandidateFollowFilter;
   onFollowFilter: (filter: CandidateFollowFilter) => void;
+  uidQuery: string;
+  onUidQuery: (value: string) => void;
   onEdit: (candidate: Candidate) => void;
   onFollowUp: (candidate: Candidate) => void;
   onStatus: (candidate: Candidate, status: 'accepted' | 'rejected') => void;
 }) {
   return (
-    <div className="staff-list-panel">
-      <div className="list-header compact-list-header candidate-follow-header">
-        <div className="candidate-follow-header-title">
-          <span>跟进提醒</span>
-          <h3>{getCandidateFollowFilterLabel(followFilter)}</h3>
-        </div>
-        <div className="segmented-control" role="group" aria-label="名单跟进筛选">
-          {(['all', 'today', 'overdue'] as CandidateFollowFilter[]).map((filter) => (
-            <button key={filter} className={followFilter === filter ? 'active' : ''} type="button" onClick={() => onFollowFilter(filter)}>
-              {getCandidateFollowFilterLabel(filter)}
-            </button>
-          ))}
+    <div className="staff-list-panel candidate-list-panel">
+      <div className="candidate-reminder-header">
+        <h3>跟进提醒</h3>
+        <div className="candidate-filter-toolbar">
+          <div className="candidate-filter-row">
+            <div className="candidate-filter-group">
+              <span>状态</span>
+              <div className="segmented-control candidate-filter-control candidate-status-control" role="group" aria-label="名单状态筛选">
+                {candidateStatusFilters.map((filter) => (
+                  <button key={filter} className={statusFilter === filter ? 'active' : ''} type="button" onClick={() => onStatusFilter(filter)}>
+                    {getCandidateStatusFilterLabel(filter)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="candidate-filter-row candidate-filter-row-search">
+            <div className="candidate-filter-group">
+              <span>跟进</span>
+              <div className="segmented-control candidate-filter-control candidate-follow-control" role="group" aria-label="名单跟进筛选">
+                {(['all', 'today', 'overdue'] as CandidateFollowFilter[]).map((filter) => (
+                  <button key={filter} className={followFilter === filter ? 'active' : ''} type="button" onClick={() => onFollowFilter(filter)}>
+                    {getCandidateFollowFilterLabel(filter)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="candidate-search">
+              <span className="visually-hidden">搜索 TikTok / 抖音 UID</span>
+              <input value={uidQuery} onChange={(event) => onUidQuery(event.target.value)} placeholder="搜索 TikTok / 抖音 UID" />
+              {uidQuery.trim() ? (
+                <button type="button" onClick={() => onUidQuery('')} aria-label="清空 UID 搜索">
+                  <X size={15} />
+                </button>
+              ) : null}
+            </label>
+          </div>
         </div>
       </div>
       {loading ? (
         <div className="table-state">正在读取名单...</div>
       ) : candidates.length === 0 ? (
-        <div className="table-state">暂无名单。</div>
+        <div className="table-state">{hasAnyCandidates ? '暂无符合条件的名单' : '暂无名单。'}</div>
       ) : (
-        <div className="staff-table-wrap">
-          <table className="staff-table scout-table candidate-table">
-            <thead>
-              <tr>
-                <th>主播</th>
-                <th>平台身份</th>
-                <th>跟进</th>
-                <th>资料</th>
-                <th>备注</th>
-                <th>名单状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((candidate) => (
-                <tr key={candidate.id} className={candidate.status === 'accepted' ? 'candidate-accepted' : candidate.status === 'rejected' ? 'candidate-rejected' : ''}>
-                  <td className="candidate-primary-cell">
-                    <strong>{candidate.name}</strong>
-                    <span>{[candidate.gender, candidate.age ? `${candidate.age}岁` : ''].filter(Boolean).join(' / ') || '-'}</span>
-                  </td>
-                  <td className="candidate-identity-cell">
-                    <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
-                    <span>UID：{candidate.platform_user_id || '-'}</span>
-                    <span>账号：{candidate.platform_account || '-'}</span>
-                  </td>
-                  <td className="candidate-follow-cell">
-                    <span className="follow-status-badge">{getFollowStatusLabel(candidate.follow_status)}</span>
-                    <span>{candidate.next_follow_up_date || '-'}</span>
-                  </td>
-                  <td className="candidate-detail-cell">
-                    <strong>{candidate.talent || '-'}</strong>
-                    <span>来源：{candidate.source || '-'}</span>
-                    <span>联系：{candidate.contact || '-'}</span>
-                  </td>
-                  <td className="candidate-note-cell">
-                    <strong>{candidate.current_job || '-'}</strong>
-                    <span>{candidate.remark || '-'}</span>
-                  </td>
-                  <td>{getCandidateStatusLabel(candidate.status)}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="icon-button" type="button" onClick={() => onFollowUp(candidate)} aria-label="跟进">
+        <>
+          <div className="staff-table-wrap candidate-desktop-table">
+            <table className="staff-table scout-table candidate-table">
+              <thead>
+                <tr>
+                  <th>主播</th>
+                  <th>平台身份</th>
+                  <th>跟进</th>
+                  <th>资料</th>
+                  <th>备注</th>
+                  <th>名单状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((candidate) => (
+                  <tr key={candidate.id} className={candidate.status === 'accepted' ? 'candidate-accepted' : candidate.status === 'rejected' ? 'candidate-rejected' : ''}>
+                    <td className="candidate-primary-cell">
+                      <strong>{candidate.name}</strong>
+                      <span>{[candidate.gender, candidate.age ? `${candidate.age}岁` : ''].filter(Boolean).join(' / ') || '-'}</span>
+                    </td>
+                    <td className="candidate-identity-cell">
+                      <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
+                      <span>UID：{candidate.platform_user_id || '-'}</span>
+                      <span>账号：{candidate.platform_account || '-'}</span>
+                    </td>
+                    <td className="candidate-follow-cell">
+                      <span className="follow-status-badge">{getFollowStatusLabel(candidate.follow_status)}</span>
+                      <span>{candidate.next_follow_up_date || '-'}</span>
+                    </td>
+                    <td className="candidate-detail-cell">
+                      <strong>{candidate.talent || '-'}</strong>
+                      <span>来源：{candidate.source || '-'}</span>
+                      <span>联系：{candidate.contact || '-'}</span>
+                    </td>
+                    <td className="candidate-note-cell">
+                      <strong>{candidate.current_job || '-'}</strong>
+                      <span>{candidate.remark || '-'}</span>
+                    </td>
+                    <td><span className={`candidate-status-badge candidate-status-badge--${candidate.status}`}>{getCandidateStatusLabel(candidate.status)}</span></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-button" type="button" onClick={() => onFollowUp(candidate)} aria-label="跟进">
                         <MessageSquarePlus size={16} />
                       </button>
                       <button className="icon-button" type="button" onClick={() => onEdit(candidate)} aria-label="编辑">
@@ -1070,15 +1142,80 @@ function CandidatePanel({
                       <button className="icon-button reject-button" type="button" onClick={() => onStatus(candidate, 'rejected')} aria-label="拒绝">
                         <X size={16} />
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="candidate-mobile-card-list" hidden>
+            {candidates.map((candidate) => (
+              <CandidateMobileCard key={candidate.id} candidate={candidate} onEdit={onEdit} onFollowUp={onFollowUp} onStatus={onStatus} />
+            ))}
+          </div>
+        </>
       )}
     </div>
+  );
+}
+
+function CandidateMobileCard({
+  candidate,
+  onEdit,
+  onFollowUp,
+  onStatus,
+}: {
+  candidate: Candidate;
+  onEdit: (candidate: Candidate) => void;
+  onFollowUp: (candidate: Candidate) => void;
+  onStatus: (candidate: Candidate, status: 'accepted' | 'rejected') => void;
+}) {
+  const profileLine = [candidate.gender, candidate.age ? `${candidate.age}岁` : ''].filter(Boolean).join(' · ') || '-';
+
+  return (
+    <article className={`candidate-mobile-card candidate-mobile-card--${candidate.status}`}>
+      <div className="candidate-mobile-head">
+        <div>
+          <h4>{candidate.name}</h4>
+          <span>{profileLine}</span>
+        </div>
+        <span className={`candidate-status-badge candidate-status-badge--${candidate.status}`}>{getCandidateStatusLabel(candidate.status)}</span>
+      </div>
+
+      <section className="candidate-mobile-section">
+        <strong>{candidate.platform ? platformLabels[candidate.platform] : '-'}</strong>
+        <span>UID：{candidate.platform_user_id || '-'}</span>
+        <span>账号：{candidate.platform_account || '-'}</span>
+      </section>
+
+      <section className="candidate-mobile-section candidate-mobile-follow">
+        <strong>{getFollowStatusLabel(candidate.follow_status)} · {candidate.next_follow_up_date || '-'}</strong>
+        <span>来源：{candidate.source || '-'}</span>
+        <span>联系：{candidate.contact || '-'}</span>
+      </section>
+
+      <section className="candidate-mobile-section">
+        <span>才艺：{candidate.talent || '-'}</span>
+        <span>目前就职：{candidate.current_job || '-'}</span>
+        <p>备注：{candidate.remark || '-'}</p>
+      </section>
+
+      <div className="candidate-mobile-actions">
+        <button className="icon-button" type="button" onClick={() => onFollowUp(candidate)} aria-label="跟进">
+          <MessageSquarePlus size={17} />
+        </button>
+        <button className="icon-button" type="button" onClick={() => onEdit(candidate)} aria-label="编辑">
+          <Edit3 size={17} />
+        </button>
+        <button className="icon-button accept-button" type="button" onClick={() => onStatus(candidate, 'accepted')} aria-label="接受">
+          <Check size={17} />
+        </button>
+        <button className="icon-button reject-button" type="button" onClick={() => onStatus(candidate, 'rejected')} aria-label="拒绝">
+          <X size={17} />
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -2490,6 +2627,11 @@ function getCandidateFollowFilterLabel(filter: CandidateFollowFilter) {
   if (filter === 'today') return '今日待跟进';
   if (filter === 'overdue') return '已逾期';
   return '全部';
+}
+
+function getCandidateStatusFilterLabel(filter: CandidateStatusFilter) {
+  if (filter === 'all') return '全部';
+  return getCandidateStatusLabel(filter);
 }
 
 function getCandidateStatusLabel(status: Candidate['status']) {
