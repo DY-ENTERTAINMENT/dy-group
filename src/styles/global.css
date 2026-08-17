@@ -5073,6 +5073,106 @@ button.leave-chip:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+@media (min-width: 768px) {
+  .content-area:has(.management-recruiting-panel) {
+    padding-top: 24px;
+  }
+
+  .scout-page:has(.management-recruiting-panel) {
+    position: relative;
+    gap: 12px;
+  }
+
+  .scout-page:has(.management-recruiting-panel) > .toolbar-actions.staff-actions-row {
+    position: absolute;
+    top: 28px;
+    right: 18px;
+    z-index: 2;
+  }
+
+  .management-recruiting-panel > .scout-filters {
+    align-items: center;
+    padding: 14px 18px;
+  }
+
+  .management-recruiting-panel > .scout-filters .form-field {
+    margin-bottom: 0;
+  }
+
+  .management-recruiting-panel .segmented-control {
+    border-color: #c7d8ef;
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .segmented-control button {
+    border: 1px solid transparent;
+    color: var(--dy-purple);
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .segmented-control button:hover {
+    color: var(--dy-purple-dark);
+    background: #faf5ff;
+  }
+
+  .management-recruiting-panel .segmented-control button:active,
+  .management-recruiting-panel .segmented-control button.active {
+    border-color: rgba(124, 58, 237, 0.24);
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--dy-pink), var(--dy-purple));
+    box-shadow: 0 6px 14px rgba(124, 58, 237, 0.14);
+  }
+
+  .management-recruiting-panel .workload-total-card {
+    border-color: #c7d8ef;
+    background: linear-gradient(135deg, #ffffff 0%, #fff8fc 45%, #f6f0ff 100%);
+  }
+
+  .management-recruiting-panel .workload-total-card h4,
+  .management-recruiting-panel .scout-total-panel h4,
+  .management-recruiting-panel .list-header h3 {
+    color: var(--dy-purple-dark);
+  }
+
+  .management-recruiting-panel .workload-total-card > strong {
+    color: var(--dy-purple-dark);
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table,
+  .management-recruiting-panel .workload-daily-desktop-table,
+  .management-recruiting-panel .scout-record-desktop-table {
+    border: 1px solid #c7d8ef;
+    border-radius: 8px;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .staff-table th,
+  .management-recruiting-panel .workload-daily-desktop-table .staff-table th,
+  .management-recruiting-panel .scout-record-desktop-table .staff-table th {
+    border-bottom-color: #c7d8ef;
+    color: var(--dy-purple-dark);
+    background: linear-gradient(135deg, #ffffff 0%, #fff8fc 45%, #f6f0ff 100%);
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .staff-table td,
+  .management-recruiting-panel .workload-daily-desktop-table .staff-table td,
+  .management-recruiting-panel .scout-record-desktop-table .staff-table td {
+    border-bottom-color: #dbe6f5;
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .staff-table tbody tr:nth-child(even) td,
+  .management-recruiting-panel .workload-daily-desktop-table .staff-table tbody tr:nth-child(even) td,
+  .management-recruiting-panel .scout-record-desktop-table .staff-table tbody tr:nth-child(even) td {
+    background: #fffafd;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .staff-table tbody tr:hover td,
+  .management-recruiting-panel .workload-daily-desktop-table .staff-table tbody tr:hover td,
+  .management-recruiting-panel .scout-record-desktop-table .staff-table tbody tr:hover td {
+    background: #faf5ff;
+  }
+}
+
 .scout-month-field {
   min-width: 180px;
 }
@@ -5490,6 +5590,147 @@ button.leave-chip:disabled {
   font-size: 24px;
 }
 
+.recruit-summary-group-list {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.recruit-summary-group-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.recruit-summary-group-card > h5 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.recruit-platform-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.recruit-platform-summary-card {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  min-width: 0;
+  min-height: 214px;
+  padding: 20px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.recruit-platform-summary-card .platform-logo-title {
+  justify-content: center;
+  justify-self: center;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.recruit-platform-total {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.recruit-platform-total span {
+  color: #5b6475;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.recruit-platform-total strong {
+  color: #4f46a5;
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.recruit-platform-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.recruit-platform-breakdown span {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 14px;
+  text-align: center;
+}
+
+.recruit-platform-breakdown span + span {
+  border-left: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.recruit-platform-breakdown small {
+  color: #657186;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.recruit-platform-breakdown b {
+  color: var(--text);
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.recruit-platform-summary-card--tiktok {
+  border-color: rgba(127, 154, 190, 0.28);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(244, 249, 255, 0.98) 50%, rgba(246, 244, 255, 0.94) 100%);
+}
+
+.recruit-platform-summary-card--tiktok .recruit-platform-total strong {
+  color: #4f55b2;
+}
+
+.recruit-platform-summary-card--tiktok .recruit-platform-breakdown {
+  border-top-color: rgba(88, 110, 190, 0.12);
+}
+
+.recruit-platform-summary-card--tiktok .recruit-platform-breakdown span + span {
+  border-left-color: rgba(88, 110, 190, 0.12);
+}
+
+.recruit-platform-summary-card--douyin {
+  border-color: rgba(214, 151, 179, 0.28);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 247, 251, 0.98) 50%, rgba(250, 245, 255, 0.94) 100%);
+}
+
+.recruit-platform-summary-card--douyin .recruit-platform-total strong {
+  color: #b73778;
+}
+
+.recruit-platform-summary-card--douyin .recruit-platform-breakdown {
+  border-top-color: rgba(190, 78, 132, 0.12);
+}
+
+.recruit-platform-summary-card--douyin .recruit-platform-breakdown span + span {
+  border-left-color: rgba(190, 78, 132, 0.12);
+}
+
 @media (max-width: 960px) {
   .scout-stat-grid,
   .scout-platform-grid,
@@ -5598,6 +5839,56 @@ button.leave-chip:disabled {
     min-width: 0;
   }
 
+  .recruit-summary-group-list {
+    gap: 12px;
+  }
+
+  .recruit-summary-group-card {
+    gap: 12px;
+    width: 100%;
+    padding: 14px;
+    border-color: #e2e8f0;
+    background: #ffffff;
+  }
+
+  .recruit-summary-group-card > h5 {
+    color: #4a2368;
+    font-size: 16px;
+  }
+
+  .recruit-platform-card-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .recruit-platform-summary-card {
+    width: 100%;
+    min-height: 190px;
+    padding: 16px 15px;
+    gap: 15px;
+  }
+
+  .recruit-platform-summary-card .platform-logo-title {
+    font-size: 18px !important;
+  }
+
+  .recruit-platform-total span {
+    font-size: 16px;
+  }
+
+  .recruit-platform-total strong {
+    font-size: 34px;
+  }
+
+  .recruit-platform-breakdown small {
+    font-size: 14px;
+  }
+
+  .recruit-platform-breakdown b {
+    font-size: 23px;
+  }
+
   .scout-recruit-summary-block > .staff-table-wrap {
     display: none;
   }
@@ -5686,13 +5977,18 @@ button.leave-chip:disabled {
   }
 
   .management-recruiting-panel {
-    border-color: #e6d9f1;
-    background: #fcf7ff;
+    border-color: #e2e8f0;
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .scout-filters {
+    border-bottom-color: #e2e8f0;
+    background: #ffffff;
   }
 
   .management-recruiting-panel .scout-summary-section,
   .management-recruiting-panel .scout-total-panel {
-    background: #fcf7ff;
+    background: #ffffff;
   }
 
   .management-recruiting-panel .scout-summary-section h4,
@@ -5701,17 +5997,41 @@ button.leave-chip:disabled {
     color: #4a2368;
   }
 
+  .management-recruiting-panel .segmented-control {
+    border-color: #c7d8ef;
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .segmented-control button {
+    border: 1px solid transparent;
+    color: var(--dy-purple);
+    background: #ffffff;
+  }
+
+  .management-recruiting-panel .segmented-control button:hover {
+    color: var(--dy-purple-dark);
+    background: #faf5ff;
+  }
+
+  .management-recruiting-panel .segmented-control button:active,
+  .management-recruiting-panel .segmented-control button.active {
+    border-color: rgba(124, 58, 237, 0.24);
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--dy-pink), var(--dy-purple));
+    box-shadow: 0 6px 14px rgba(124, 58, 237, 0.14);
+  }
+
   .management-recruiting-panel .recruit-mobile-row-card,
   .management-recruiting-panel .recruit-mobile-platform-card,
   .management-recruiting-panel .workload-mobile-detail-card,
   .management-recruiting-panel .scout-stat-card {
-    border-color: #e2d4ee;
-    background: #fffafd;
+    border-color: #c7d8ef;
+    background: linear-gradient(135deg, #ffffff 0%, #fff8fc 45%, #f6f0ff 100%);
   }
 
   .management-recruiting-panel .recruit-mobile-platform-card,
   .management-recruiting-panel .workload-mobile-detail-card {
-    box-shadow: 0 8px 18px rgba(74, 35, 104, 0.05);
+    box-shadow: 0 6px 14px rgba(74, 35, 104, 0.04);
   }
 
   .management-recruiting-panel .recruit-mobile-row-card > h5,
@@ -5723,8 +6043,8 @@ button.leave-chip:disabled {
 
   .management-recruiting-panel .recruit-mobile-metrics span,
   .management-recruiting-panel .workload-mobile-metrics span {
-    border-color: #eadff3;
-    background: #f8f1ff;
+    border-color: #c7d8ef;
+    background: linear-gradient(135deg, #ffffff 0%, #fffbfd 58%, #faf7ff 100%);
   }
 
   .management-recruiting-panel .recruit-mobile-metrics small,
@@ -5814,7 +6134,7 @@ button.leave-chip:disabled {
     gap: 12px;
     min-width: 0;
     padding: 14px;
-    border: 1px solid #e2d4ee;
+    border: 1px solid #c7d8ef;
     border-radius: 8px;
   }
 
@@ -5839,7 +6159,7 @@ button.leave-chip:disabled {
 
   .management-recruiting-panel .workload-mobile-detail-head span {
     padding: 3px 8px;
-    border: 1px solid #e2d4ee;
+    border: 1px solid #c7d8ef;
     border-radius: 999px;
     background: #f8f1ff;
     font-size: 13px;
@@ -5897,7 +6217,7 @@ button.leave-chip:disabled {
     min-width: 0;
     min-height: 68px;
     padding: 9px 8px;
-    border: 1px solid #eadff3;
+    border: 1px solid #c7d8ef;
     border-radius: 8px;
     text-align: center;
   }
@@ -5950,9 +6270,9 @@ button.leave-chip:disabled {
     gap: 10px;
     min-width: 0;
     padding: 14px;
-    border: 1px solid #e2d4ee;
+    border: 1px solid #c7d8ef;
     border-radius: 8px;
-    background: #fffafd;
+    background: linear-gradient(135deg, #ffffff 0%, #fff8fc 45%, #f6f0ff 100%);
     box-shadow: 0 8px 18px rgba(74, 35, 104, 0.05);
   }
 
@@ -5970,7 +6290,7 @@ button.leave-chip:disabled {
   .management-recruiting-panel .scout-record-mobile-card > span {
     justify-self: end;
     padding: 3px 8px;
-    border: 1px solid #e2d4ee;
+    border: 1px solid #c7d8ef;
     border-radius: 999px;
     color: #7a5a8f;
     background: #f8f1ff;

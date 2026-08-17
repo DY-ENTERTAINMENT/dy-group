@@ -1865,198 +1865,66 @@ function SummaryTable({ title, label, rows }: { title: string; label: string; ro
   return (
     <section className="scout-summary-section scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>{title}</h4>
-      <div className="staff-table-wrap">
-        <table className="staff-table scout-summary-table" style={summaryTableStyle}>
-          <colgroup>
-            <col style={{ width: '22%' }} />
-            <col span={3} style={{ width: '13%' }} />
-            <col span={3} style={{ width: '13%' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th rowSpan={2} style={summaryHeaderCellStyle}>{label}</th>
-              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...tiktokHeaderCellStyle }}>
-                <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={30} fontSize={17} />
-              </th>
-              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...douyinHeaderCellStyle }}>
-                <PlatformLogoTitle logoUrl={douyinLogoUrl} title="抖音" logoSize={30} fontSize={17} />
-              </th>
-            </tr>
-            <tr>
-              {summaryMetricLabels.map((metric) => (
-                <th key={`tiktok-${metric}`} style={{ ...summarySubHeaderCellStyle, ...tiktokSubHeaderCellStyle }}>{metric}</th>
-              ))}
-              {summaryMetricLabels.map((metric) => (
-                <th key={`douyin-${metric}`} style={{ ...summarySubHeaderCellStyle, ...douyinSubHeaderCellStyle }}>{metric}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key}>
-                <td style={summaryLabelCellStyle}>{row.label}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.total}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.plusFiveOne}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.tiktok.nonFiveOne}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.total}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.plusFiveOne}</td>
-                <td style={summaryNumberCellStyle}>{row.breakdown.douyin.nonFiveOne}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <MobileRecruitSummaryCards rows={rows} />
+      {rows.length === 0 ? (
+        <div className="table-state">暂无统计数据。</div>
+      ) : (
+        <div className="recruit-summary-group-list">
+          {rows.map((row) => (
+            <article className="recruit-summary-group-card" key={row.key}>
+              <h5>{row.label}</h5>
+              <RecruitPlatformCardGrid tiktok={row.breakdown.tiktok} douyin={row.breakdown.douyin} />
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
-
-const summaryMetricLabels = ['招募总数', '5+1', '非5+1'];
 
 const summarySectionTitleStyle = {
   fontSize: 18,
   fontWeight: 600,
 } as const;
 
-const summaryTableStyle = {
-  tableLayout: 'fixed',
-  minWidth: 0,
-  width: '100%',
-  borderCollapse: 'collapse',
-} as const;
-
-const summaryHeaderCellStyle = {
-  border: '1px solid #d8dee8',
-  textAlign: 'center',
-  verticalAlign: 'middle',
-  whiteSpace: 'normal',
-  padding: '13px 12px',
-  fontSize: 15,
-  fontWeight: 600,
-  lineHeight: 1.35,
-} as const;
-
-const summarySubHeaderCellStyle = {
-  ...summaryHeaderCellStyle,
-  padding: '12px 12px',
-  fontSize: 15,
-  fontWeight: 600,
-} as const;
-
-const tiktokHeaderCellStyle = {
-  background: '#eaf4ff',
-  color: '#24628f',
-} as const;
-
-const douyinHeaderCellStyle = {
-  background: '#fff0f5',
-  color: '#9a3f64',
-} as const;
-
-const tiktokSubHeaderCellStyle = {
-  background: '#f5faff',
-} as const;
-
-const douyinSubHeaderCellStyle = {
-  background: '#fff7fa',
-} as const;
-
-const summaryLabelCellStyle = {
-  border: '1px solid #d8dee8',
-  textAlign: 'left',
-  fontWeight: 600,
-  fontSize: 16,
-  padding: '13px 12px',
-  lineHeight: 1.35,
-} as const;
-
-const summaryNumberCellStyle = {
-  border: '1px solid #d8dee8',
-  textAlign: 'center',
-  fontVariantNumeric: 'tabular-nums',
-  fontSize: 18,
-  fontWeight: 600,
-  padding: '13px 12px',
-  lineHeight: 1.35,
-} as const;
-
 function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<typeof createRecruitBreakdown> }) {
   return (
     <div className="scout-total-panel scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>DY Group 总计</h4>
-      <div className="staff-table-wrap">
-        <table className="staff-table scout-summary-table" style={summaryTableStyle}>
-          <colgroup>
-            <col span={3} style={{ width: '16.66%' }} />
-            <col span={3} style={{ width: '16.66%' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...tiktokHeaderCellStyle }}>
-                <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={36} fontSize={18} />
-              </th>
-              <th colSpan={3} style={{ ...summaryHeaderCellStyle, ...douyinHeaderCellStyle }}>
-                <PlatformLogoTitle logoUrl={douyinLogoUrl} title="抖音" logoSize={36} fontSize={18} />
-              </th>
-            </tr>
-            <tr>
-              {summaryMetricLabels.map((metric) => (
-                <th key={`group-tiktok-${metric}`} style={{ ...summarySubHeaderCellStyle, ...tiktokSubHeaderCellStyle }}>{metric}</th>
-              ))}
-              {summaryMetricLabels.map((metric) => (
-                <th key={`group-douyin-${metric}`} style={{ ...summarySubHeaderCellStyle, ...douyinSubHeaderCellStyle }}>{metric}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={summaryNumberCellStyle}>{breakdown.tiktok.total}</td>
-              <td style={summaryNumberCellStyle}>{breakdown.tiktok.plusFiveOne}</td>
-              <td style={summaryNumberCellStyle}>{breakdown.tiktok.nonFiveOne}</td>
-              <td style={summaryNumberCellStyle}>{breakdown.douyin.total}</td>
-              <td style={summaryNumberCellStyle}>{breakdown.douyin.plusFiveOne}</td>
-              <td style={summaryNumberCellStyle}>{breakdown.douyin.nonFiveOne}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div className="recruit-mobile-card-list recruit-mobile-platform-list" hidden>
-        <RecruitMobilePlatformCard title="TikTok" breakdown={breakdown.tiktok} platform="tiktok" />
-        <RecruitMobilePlatformCard title="抖音" breakdown={breakdown.douyin} platform="douyin" />
-      </div>
+      <RecruitPlatformCardGrid tiktok={breakdown.tiktok} douyin={breakdown.douyin} />
     </div>
   );
 }
 
-function MobileRecruitSummaryCards({ rows }: { rows: RecruitBreakdownRow[] }) {
-  if (rows.length === 0) {
-    return <div className="recruit-mobile-card-list" hidden><div className="table-state">暂无统计数据。</div></div>;
-  }
-
+function RecruitPlatformCardGrid({ tiktok, douyin }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary }) {
   return (
-    <div className="recruit-mobile-card-list" hidden>
-      {rows.map((row) => (
-        <article className="recruit-mobile-row-card" key={row.key}>
-          <h5>{row.label}</h5>
-          <div className="recruit-mobile-platform-grid">
-            <RecruitMobilePlatformCard title="TikTok" breakdown={row.breakdown.tiktok} platform="tiktok" />
-            <RecruitMobilePlatformCard title="抖音" breakdown={row.breakdown.douyin} platform="douyin" />
-          </div>
-        </article>
-      ))}
+    <div className="recruit-platform-card-grid">
+      <RecruitPlatformSummaryCard title="TikTok" breakdown={tiktok} platform="tiktok" logoUrl={tiktokLogoUrl} />
+      <RecruitPlatformSummaryCard title="抖音" breakdown={douyin} platform="douyin" logoUrl={douyinLogoUrl} />
     </div>
   );
 }
 
-function RecruitMobilePlatformCard({ title, breakdown, platform }: { title: string; breakdown: ReturnType<typeof createRecruitBreakdown>['tiktok']; platform: 'tiktok' | 'douyin' }) {
+type RecruitPlatformSummary = ReturnType<typeof createRecruitBreakdown>['tiktok'];
+
+function RecruitPlatformSummaryCard({
+  title,
+  breakdown,
+  platform,
+  logoUrl,
+}: {
+  title: string;
+  breakdown: RecruitPlatformSummary;
+  platform: 'tiktok' | 'douyin';
+  logoUrl: string;
+}) {
   return (
-    <section className={`recruit-mobile-platform-card ${platform}`}>
-      <h5>{title}</h5>
-      <div className="recruit-mobile-metrics">
-        <span>
-          <small>招募总数</small>
-          <b>{breakdown.total}</b>
-        </span>
+    <section className={`recruit-platform-summary-card recruit-platform-summary-card--${platform}`}>
+      <PlatformLogoTitle logoUrl={logoUrl} title={title} logoSize={34} fontSize={18} />
+      <div className="recruit-platform-total">
+        <span>招募总数</span>
+        <strong>{breakdown.total}</strong>
+      </div>
+      <div className="recruit-platform-breakdown">
         <span>
           <small>5+1</small>
           <b>{breakdown.plusFiveOne}</b>
