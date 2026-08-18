@@ -115,6 +115,7 @@ export type CreatorEntityFormValues = {
 
 export type CreatorProfile = {
   id: string;
+  creator_entity_id: string | null;
   joined_date: string;
   platform: CreatorPlatform;
   platform_user_id: string;
@@ -177,6 +178,7 @@ export type RegionRecruitSummary = RecruitSummary & {
 
 const creatorSelect = `
   id,
+  creator_entity_id,
   joined_date,
   platform,
   platform_user_id,
@@ -548,6 +550,7 @@ function formatLocalDate(date: Date) {
 function mapCreatorRow(row: any): CreatorProfile {
   return {
     id: row.id,
+    creator_entity_id: row.creator_entity_id,
     joined_date: row.joined_date,
     platform: row.platform,
     platform_user_id: row.platform_user_id,
