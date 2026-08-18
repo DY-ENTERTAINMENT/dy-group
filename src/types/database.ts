@@ -393,6 +393,7 @@ export type ManagementScoutWorkloadStat = {
 
 export type CreatorProfile = {
   id: string;
+  creator_entity_id: string | null;
   joined_date: string;
   platform: CreatorPlatform;
   platform_user_id: string;

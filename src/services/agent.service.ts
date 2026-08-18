@@ -111,6 +111,7 @@ const db = supabase as any;
 
 const creatorSelect = `
   id,
+  creator_entity_id,
   joined_date,
   platform,
   platform_user_id,
@@ -370,6 +371,7 @@ function splitLines(value: string) {
 function mapCreatorRow(row: any): CreatorProfile {
   return {
     id: row.id,
+    creator_entity_id: row.creator_entity_id,
     joined_date: row.joined_date,
     platform: row.platform,
     platform_user_id: row.platform_user_id,

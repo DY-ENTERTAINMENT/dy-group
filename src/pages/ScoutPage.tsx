@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, Edit3, MessageSquarePlus, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, ChevronRight, Edit3, Layers, MessageSquarePlus, Plus, RefreshCw, Search, UsersRound, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -26,6 +26,7 @@ import {
   type CreatorPlatform,
   type CreatorPlatformFormValues,
   type CreatorProfile,
+  type CreatorStatus,
   type CreatorStatusFilter,
   type CreatorType,
   type FollowStatus,
@@ -124,6 +125,23 @@ const emptyCreatorEntityForm: CreatorEntityFormValues = {
 const creatorTypes: CreatorType[] = ['5+1', 'online', 'offline', 'company'];
 const followStatuses: FollowStatus[] = ['pending', 'following', 'interview', 'ready_onboarding'];
 
+type CreatorGroupStatus = CreatorStatus | 'mixed';
+
+type CreatorProfileGroup = {
+  id: string;
+  displayName: string;
+  profiles: CreatorProfile[];
+  managerName: string;
+  status: CreatorGroupStatus;
+};
+
+type CreatorGroupSummary = {
+  total: number;
+  tiktok: number;
+  douyin: number;
+  dualPlatform: number;
+};
+
 export function ScoutPage({ mode }: ScoutPageProps) {
   const { profile } = useAuth();
   const permissions = usePermissions();
@@ -158,6 +176,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorEntityForm, setCreatorEntityForm] = useState<CreatorEntityFormValues>(emptyCreatorEntityForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
   const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
+  const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -172,7 +191,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const filteredCreators = useMemo(
     () =>
       creators.filter((creator) => {
-        if (platformFilter && creator.platform !== platformFilter) return false;
+        if (platformFilter && platformFilter !== 'dual_platform' && creator.platform !== platformFilter) return false;
         if (regionFilter && creator.region_id !== regionFilter) return false;
         if (scoutFilter && creator.scout_employee_id !== scoutFilter) return false;
         if (managerFilter && creator.manager_employee_id !== managerFilter) return false;
@@ -521,7 +540,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       {mode !== 'recruit-list' ? (
         <div className="toolbar-actions staff-actions-row">
           {mode === 'management-streamers' && canManageCreators ? (
-            <button className="secondary-action" type="button" onClick={() => openCreatorCreate()}>
+            <button className="secondary-action creator-create-action" type="button" onClick={() => openCreatorCreate()}>
               <Plus size={17} />
               <span>新增主播</span>
             </button>
@@ -595,6 +614,19 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onCreatorTypeFilter={setCreatorTypeFilter}
           onCreatorStatusFilter={setCreatorStatusFilter}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
+          onEdit={openCreatorEdit}
+          onStatus={openCreatorStatus}
+          onView={setSelectedCreatorGroup}
+        />
+      ) : null}
+
+      {selectedCreatorGroup ? (
+        <CreatorDetailDrawer
+          group={selectedCreatorGroup}
+          managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
+          canEdit={canManageCreators}
+          canManageStatus={canManageCreatorStatus}
+          onClose={() => setSelectedCreatorGroup(null)}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
         />
@@ -1258,6 +1290,7 @@ function CreatorStatsPanel({
   managerDisplayNameByCreatorId,
   onEdit,
   onStatus,
+  onView,
 }: {
   loading: boolean;
   creators: CreatorProfile[];
@@ -1280,12 +1313,36 @@ function CreatorStatsPanel({
   managerDisplayNameByCreatorId: Record<string, string>;
   onEdit: (creator: CreatorProfile) => void;
   onStatus: (creator: CreatorProfile) => void;
+  onView: (group: CreatorProfileGroup) => void;
 }) {
+  const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
+  const visibleCreators = useMemo(() => filterCreatorsBySearch(creators, creatorSearchQuery), [creators, creatorSearchQuery]);
+  const creatorGroups = useMemo(() => filterCreatorGroupsByPlatform(groupCreatorProfiles(visibleCreators, managerDisplayNameByCreatorId), platformFilter), [visibleCreators, managerDisplayNameByCreatorId, platformFilter]);
+  const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => getDefaultCreatorPageSize());
+  const totalItems = creatorGroups.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * pageSize;
+  const paginatedCreatorGroups = useMemo(() => creatorGroups.slice(pageStartIndex, pageStartIndex + pageSize), [creatorGroups, pageSize, pageStartIndex]);
+  const pageNumbers = useMemo(() => createPaginationItems(safeCurrentPage, totalPages), [safeCurrentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   return (
-    <div className="staff-list-panel">
+    <div className="staff-list-panel creator-stats-panel">
+      <CreatorSummaryCards summary={summary} isManagement={isManagement} />
       <CreatorFilters
         options={options}
         isManagement={isManagement}
+        searchQuery={creatorSearchQuery}
         platformFilter={platformFilter}
         regionFilter={regionFilter}
         scoutFilter={scoutFilter}
@@ -1293,6 +1350,7 @@ function CreatorStatsPanel({
         creatorTypeFilter={creatorTypeFilter}
         creatorStatusFilter={creatorStatusFilter}
         onPlatformFilter={onPlatformFilter}
+        onSearchQuery={setCreatorSearchQuery}
         onRegionFilter={onRegionFilter}
         onScoutFilter={onScoutFilter}
         onManagerFilter={onManagerFilter}
@@ -1301,18 +1359,56 @@ function CreatorStatsPanel({
       />
       {loading ? (
         <div className="table-state">正在读取主播统计...</div>
-      ) : creators.length === 0 ? (
+      ) : creatorGroups.length === 0 ? (
         <div className="table-state">暂无主播资料。</div>
       ) : (
-        <CreatorTable creators={creators} managerDisplayNameByCreatorId={managerDisplayNameByCreatorId} canEdit={canEdit} canManageStatus={canManageStatus} onEdit={onEdit} onStatus={onStatus} />
+        <>
+          <CreatorTable creatorGroups={paginatedCreatorGroups} onView={onView} />
+          <CreatorPagination
+            currentPage={safeCurrentPage}
+            pageSize={pageSize}
+            pageNumbers={pageNumbers}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+function CreatorSummaryCards({ summary, isManagement }: { summary: CreatorGroupSummary; isManagement: boolean }) {
+  return (
+    <div className="creator-summary-grid">
+      <CreatorSummaryCard title={isManagement ? '总主播统计' : '我的主播'} value={summary.total} icon={<UsersRound size={20} />} />
+      <CreatorSummaryCard title="TikTok 主播" value={summary.tiktok} logoUrl={tiktokLogoUrl} />
+      <CreatorSummaryCard title="抖音主播" value={summary.douyin} logoUrl={douyinLogoUrl} />
+      <CreatorSummaryCard title="双平台主播" value={summary.dualPlatform} icon={<Layers size={20} />} />
+    </div>
+  );
+}
+
+function CreatorSummaryCard({ title, value, icon, logoUrl }: { title: string; value: number; icon?: ReactNode; logoUrl?: string }) {
+  return (
+    <article className="creator-summary-card">
+      <div className="creator-summary-card-header">
+        <div className="creator-summary-icon">{logoUrl ? <img src={logoUrl} alt="" /> : icon}</div>
+        <div className="creator-summary-card-title">{title}</div>
+      </div>
+      <div className="creator-summary-card-value">
+        <span className="creator-summary-number">{value}</span>
+        <span className="creator-summary-unit">位</span>
+      </div>
+    </article>
   );
 }
 
 function CreatorFilters(props: {
   options: ScoutOptions;
   isManagement: boolean;
+  searchQuery: string;
   platformFilter: string;
   regionFilter: string;
   scoutFilter: string;
@@ -1320,6 +1416,7 @@ function CreatorFilters(props: {
   creatorTypeFilter: string;
   creatorStatusFilter: CreatorStatusFilter;
   onPlatformFilter: (value: string) => void;
+  onSearchQuery: (value: string) => void;
   onRegionFilter: (value: string) => void;
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
@@ -1328,10 +1425,18 @@ function CreatorFilters(props: {
 }) {
   return (
     <div className="scout-filters">
+      <label className="form-field creator-search-field">
+        <span>搜索</span>
+        <div className="creator-search-input">
+          <Search size={16} />
+          <input value={props.searchQuery} onChange={(event) => props.onSearchQuery(event.target.value)} placeholder="搜索主播名字 / 主播号 / UID" />
+        </div>
+      </label>
       <SelectField label="平台" value={props.platformFilter} onChange={props.onPlatformFilter}>
         <option value="">全部</option>
         <option value="tiktok">TikTok</option>
         <option value="douyin">抖音</option>
+        <option value="dual_platform">双平台</option>
       </SelectField>
       <SelectField label="区域" value={props.regionFilter} onChange={props.onRegionFilter}>
         <option value="">全部</option>
@@ -1364,74 +1469,249 @@ function CreatorFilters(props: {
   );
 }
 
-function CreatorTable({
-  creators,
-  managerDisplayNameByCreatorId,
-  canEdit,
-  canManageStatus,
-  onEdit,
-  onStatus,
-}: {
-  creators: CreatorProfile[];
-  managerDisplayNameByCreatorId: Record<string, string>;
-  canEdit: boolean;
-  canManageStatus: boolean;
-  onEdit: (creator: CreatorProfile) => void;
-  onStatus: (creator: CreatorProfile) => void;
-}) {
+function CreatorTable({ creatorGroups, onView }: { creatorGroups: CreatorProfileGroup[]; onView: (group: CreatorProfileGroup) => void }) {
   return (
-    <div className="staff-table-wrap">
-      <table className="staff-table scout-table">
+    <div className="creator-list-wrap">
+      <table className="staff-table scout-table creator-profile-table">
         <thead>
           <tr>
-            <th>入会日期</th>
-            <th>平台</th>
-            <th>主播ID / UID</th>
-            <th>主播号</th>
             <th>主播名字</th>
-            <th>区域</th>
-            <th>星探</th>
+            <th>平台账号（UID / 类型）</th>
             <th>经纪人</th>
-            <th>主播形式</th>
-            <th>银行</th>
-            <th>银行户口</th>
-            {canEdit || canManageStatus ? <th>操作</th> : null}
+            <th>状态</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          {creators.map((creator) => (
-            <tr key={creator.id}>
-              <td>{creator.joined_date}</td>
-              <td>{platformLabels[creator.platform]}</td>
-              <td>{creator.platform_user_id}</td>
-              <td>{creator.platform_account}</td>
-              <td>{creator.creator_name}</td>
-              <td>{creator.region?.code ?? '-'}</td>
-              <td>{getEmployeeName(creator.scout) || '-'}</td>
-              <td>{getEmployeeName(creator.manager) || managerDisplayNameByCreatorId[creator.id] || '-'}</td>
-              <td>{creatorTypeLabels[creator.creator_type]}</td>
-              <td>{creator.bank_name || '-'}</td>
-              <td>{creator.bank_account || '-'}</td>
-              {canEdit || canManageStatus ? (
-                <td>
-                  <div className="row-actions">
-                    {canEdit ? (
-                      <button className="icon-button" type="button" onClick={() => onEdit(creator)} aria-label="编辑主播">
-                        <Edit3 size={16} />
-                      </button>
-                    ) : null}
-                    {canManageStatus ? (
-                      <button className="secondary-button compact-button" type="button" onClick={() => onStatus(creator)}>
-                        状态
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              ) : null}
+          {creatorGroups.map((group) => (
+            <tr key={group.id} className="creator-profile-row">
+              <td>
+                <strong className="creator-row-name">{group.displayName}</strong>
+              </td>
+              <td>
+                <div className="creator-platform-lines">
+                  {group.profiles.map((creator) => (
+                    <div key={creator.id} className="creator-platform-line">
+                      <span className="creator-platform-name">
+                        <PlatformLogo platform={creator.platform} />
+                        <span>{platformLabels[creator.platform]}</span>
+                      </span>
+                      <span className="creator-platform-uid"><span>UID</span> {creator.platform_user_id}</span>
+                      <CreatorTypeBadge type={creator.creator_type} />
+                    </div>
+                  ))}
+                </div>
+              </td>
+              <td>{group.managerName}</td>
+              <td>
+                <CreatorStatusBadge status={group.status} />
+              </td>
+              <td>
+                <button className="creator-view-button" type="button" onClick={() => onView(group)}>
+                  <span>查看资料</span>
+                  <ChevronRight size={16} />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function CreatorPagination({
+  currentPage,
+  pageSize,
+  pageNumbers,
+  totalItems,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  currentPage: number;
+  pageSize: number;
+  pageNumbers: Array<number | 'ellipsis'>;
+  totalItems: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  const canGoPrevious = currentPage > 1;
+  const canGoNext = currentPage < totalPages;
+
+  return (
+    <div className="creator-pagination">
+      <div className="creator-pagination-total">共 {totalItems} 位主播</div>
+      <div className="creator-pagination-controls" aria-label="主播分页">
+        <button className="creator-page-button" type="button" disabled={!canGoPrevious} onClick={() => onPageChange(currentPage - 1)} aria-label="上一页">
+          ‹
+        </button>
+        <div className="creator-page-numbers">
+          {pageNumbers.map((item, index) =>
+            item === 'ellipsis' ? (
+              <span key={`ellipsis-${index}`} className="creator-page-ellipsis">…</span>
+            ) : (
+              <button key={item} className={`creator-page-button${item === currentPage ? ' active' : ''}`} type="button" onClick={() => onPageChange(item)} aria-current={item === currentPage ? 'page' : undefined}>
+                {item}
+              </button>
+            ),
+          )}
+        </div>
+        <span className="creator-page-compact">{currentPage} / {totalPages}</span>
+        <button className="creator-page-button" type="button" disabled={!canGoNext} onClick={() => onPageChange(currentPage + 1)} aria-label="下一页">
+          ›
+        </button>
+      </div>
+      <label className="creator-page-size">
+        <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+          <option value={10}>10 条/页</option>
+          <option value={20}>20 条/页</option>
+          <option value={50}>50 条/页</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function CreatorTypeBadge({ type }: { type: CreatorType }) {
+  return <span className={`creator-type-badge creator-type-badge--${type === '5+1' ? 'plus' : 'standard'}`}>{type === '5+1' ? '5+1' : '非5+1'}</span>;
+}
+
+function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
+  return <span className={`creator-status-badge creator-status-badge--${status}`}>{getCreatorStatusLabel(status)}</span>;
+}
+
+function PlatformLogo({ platform }: { platform: CreatorPlatform }) {
+  return <img className="creator-platform-logo" src={platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" />;
+}
+
+function CreatorDetailDrawer({
+  group,
+  managerDisplayNameByCreatorId,
+  canEdit,
+  canManageStatus,
+  onClose,
+  onEdit,
+  onStatus,
+}: {
+  group: CreatorProfileGroup;
+  managerDisplayNameByCreatorId: Record<string, string>;
+  canEdit: boolean;
+  canManageStatus: boolean;
+  onClose: () => void;
+  onEdit: (creator: CreatorProfile) => void;
+  onStatus: (creator: CreatorProfile) => void;
+}) {
+  const primaryCreator = group.profiles[0];
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+      <aside className="creator-detail-drawer" role="dialog" aria-modal="true" aria-label="主播资料" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="creator-drawer-header">
+          <div>
+            <span>主播资料</span>
+            <h3>{group.displayName}</h3>
+          </div>
+          <div className="creator-drawer-header-actions">
+            <CreatorStatusBadge status={group.status} />
+            <button className="icon-button" type="button" onClick={onClose} aria-label="关闭">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="creator-drawer-body">
+          <DrawerSection title="平台账号">
+            {sortCreatorProfiles(group.profiles).map((creator) => (
+              <article key={creator.id} className="creator-platform-detail-card">
+                <div className="creator-platform-detail-head">
+                  <strong className="creator-platform-detail-title">
+                    <PlatformLogo platform={creator.platform} />
+                    <span>{platformLabels[creator.platform]}</span>
+                  </strong>
+                  <CreatorTypeBadge type={creator.creator_type} />
+                </div>
+                <DrawerField label="主播号" value={creator.platform_account} />
+                <DrawerField label="UID" value={creator.platform_user_id} />
+                <DrawerField label="加入日期" value={creator.joined_date} />
+                <DrawerField label="主播形式" value={creatorTypeLabels[creator.creator_type]} />
+                <DrawerField label="状态" value={<CreatorStatusBadge status={(creator.status ?? 'active') as CreatorStatus} />} />
+                {canEdit || canManageStatus ? (
+                  <div className="creator-platform-actions">
+                    {canEdit ? (
+                      <button className="secondary-button compact-button" type="button" onClick={() => { onClose(); onEdit(creator); }}>
+                        <Edit3 size={15} />
+                        <span>编辑</span>
+                      </button>
+                    ) : null}
+                    {canManageStatus ? (
+                      <button className="secondary-button compact-button" type="button" onClick={() => { onClose(); onStatus(creator); }}>
+                        状态
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </DrawerSection>
+
+          <DrawerSection title="所属资料">
+            <div className="creator-drawer-field-grid">
+              <DrawerField label="区域" value={getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')} />
+              <DrawerField label="星探" value={getConsistentValue(group.profiles, (creator) => getEmployeeName(creator.scout))} />
+              <DrawerField label="经纪人" value={getConsistentValue(group.profiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId))} />
+            </div>
+          </DrawerSection>
+
+          <DrawerSection title="主播资料">
+            <div className="creator-drawer-field-grid">
+              <DrawerField label="主播形式" value={getCreatorTypeDetail(group.profiles)} />
+              <DrawerField label="状态" value={<CreatorStatusBadge status={group.status} />} />
+            </div>
+          </DrawerSection>
+
+          <DrawerSection title="银行资料">
+            <div className="creator-drawer-field-grid">
+              <DrawerField label="银行" value={getConsistentValue(group.profiles, (creator) => creator.bank_name ?? '') || primaryCreator.bank_name || '-'} />
+              <DrawerField label="银行户口" value={getConsistentValue(group.profiles, (creator) => creator.bank_account ?? '') || primaryCreator.bank_account || '-'} />
+            </div>
+          </DrawerSection>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="creator-drawer-section">
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+function DrawerField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="creator-drawer-field">
+      <span>{label}</span>
+      <strong>{value || '-'}</strong>
     </div>
   );
 }
@@ -2552,6 +2832,119 @@ function OnboardingManagerSelect({
       ))}
     </SelectField>
   );
+}
+
+function groupCreatorProfiles(creators: CreatorProfile[], managerDisplayNameByCreatorId: Record<string, string>): CreatorProfileGroup[] {
+  const groups = new Map<string, CreatorProfile[]>();
+
+  creators.forEach((creator) => {
+    const key = creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), creator]);
+  });
+
+  return Array.from(groups.entries()).map(([id, profiles]) => {
+    const sortedProfiles = sortCreatorProfiles(profiles);
+    return {
+      id,
+      displayName: getConsistentValue(sortedProfiles, (creator) => creator.creator_name),
+      profiles: sortedProfiles,
+      managerName: getConsistentValue(sortedProfiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId)),
+      status: getCreatorGroupStatus(sortedProfiles),
+    };
+  });
+}
+
+function summarizeCreatorGroups(groups: CreatorProfileGroup[]): CreatorGroupSummary {
+  return groups.reduce<CreatorGroupSummary>(
+    (summary, group) => {
+      const platforms = new Set(group.profiles.map((creator) => creator.platform));
+      summary.total += 1;
+      if (platforms.has('tiktok')) summary.tiktok += 1;
+      if (platforms.has('douyin')) summary.douyin += 1;
+      if (platforms.has('tiktok') && platforms.has('douyin')) summary.dualPlatform += 1;
+      return summary;
+    },
+    { total: 0, tiktok: 0, douyin: 0, dualPlatform: 0 },
+  );
+}
+
+function filterCreatorGroupsByPlatform(groups: CreatorProfileGroup[], platformFilter: string) {
+  if (platformFilter !== 'dual_platform') return groups;
+
+  return groups.filter((group) => {
+    if (!group.profiles.some((creator) => creator.creator_entity_id)) return false;
+    const platforms = new Set(group.profiles.map((creator) => creator.platform));
+    return platforms.has('tiktok') && platforms.has('douyin');
+  });
+}
+
+function filterCreatorsBySearch(creators: CreatorProfile[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return creators;
+
+  return creators.filter((creator) =>
+    [creator.creator_name, creator.platform_account, creator.platform_user_id].some((value) => value.toLowerCase().includes(normalizedQuery)),
+  );
+}
+
+function getDefaultCreatorPageSize() {
+  if (typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches) return 10;
+  return 20;
+}
+
+function createPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([1, totalPages]);
+  for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
+    if (page > 1 && page < totalPages) pages.add(page);
+  }
+
+  const sortedPages = Array.from(pages).sort((first, second) => first - second);
+  return sortedPages.reduce<Array<number | 'ellipsis'>>((items, page, index) => {
+    const previousPage = sortedPages[index - 1];
+    if (previousPage && page - previousPage > 1) items.push('ellipsis');
+    items.push(page);
+    return items;
+  }, []);
+}
+
+function sortCreatorProfiles(creators: CreatorProfile[]) {
+  const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
+  return [...creators].sort((first, second) => platformOrder[first.platform] - platformOrder[second.platform]);
+}
+
+function getCreatorManagerName(creator: CreatorProfile, managerDisplayNameByCreatorId: Record<string, string>) {
+  return getEmployeeName(creator.manager) || managerDisplayNameByCreatorId[creator.id] || '';
+}
+
+function getCreatorGroupStatus(creators: CreatorProfile[]): CreatorGroupStatus {
+  const statuses = new Set(creators.map((creator) => creator.status ?? 'active'));
+  return statuses.size === 1 ? ([...statuses][0] as CreatorStatus) : 'mixed';
+}
+
+function getCreatorStatusLabel(status: CreatorGroupStatus) {
+  if (status === 'invalid') return '无效';
+  if (status === 'mixed') return '状态不同';
+  return '在职';
+}
+
+function getCreatorTypeDetail(creators: CreatorProfile[]) {
+  const labels = Array.from(new Set(creators.map((creator) => creatorTypeLabels[creator.creator_type])));
+  if (labels.length <= 1) return labels[0] ?? '-';
+
+  return sortCreatorProfiles(creators)
+    .map((creator) => `${platformLabels[creator.platform]}：${creatorTypeLabels[creator.creator_type]}`)
+    .join(' ｜ ');
+}
+
+function getConsistentValue(creators: CreatorProfile[], getValue: (creator: CreatorProfile) => string) {
+  const values = Array.from(new Set(creators.map((creator) => getValue(creator).trim()).filter(Boolean)));
+  if (values.length === 0) return '-';
+  if (values.length > 1) return '资料不同';
+  return values[0];
 }
 
 function createDailyWorkRows(logs: DailyWorkLog[], month: string) {
