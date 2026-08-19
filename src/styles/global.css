@@ -7107,6 +7107,94 @@ button.leave-chip:disabled {
   border-left-color: rgba(190, 78, 132, 0.12);
 }
 
+.scout-compact-summary-section {
+  gap: 12px;
+}
+
+.scout-compact-summary-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.scout-compact-name-col {
+  width: 24%;
+}
+
+.scout-compact-metric-col {
+  width: 12.666%;
+}
+
+.scout-compact-summary-table th,
+.scout-compact-summary-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 13px;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+
+.scout-compact-summary-table thead th {
+  color: #435169;
+  font-weight: 900;
+}
+
+.scout-compact-name-head,
+.scout-compact-name-cell {
+  text-align: left;
+}
+
+.scout-compact-name-head {
+  background: #ffffff;
+  vertical-align: middle;
+}
+
+.scout-compact-name-cell {
+  color: var(--text);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.scout-compact-summary-table .scout-compact-platform-head {
+  text-align: center;
+}
+
+.scout-compact-platform-head .platform-logo-title {
+  margin: 0 auto;
+  font-weight: 900;
+}
+
+.scout-compact-platform-head--tiktok,
+.scout-compact-cell--tiktok {
+  border-color: rgba(108, 153, 205, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f5fbff 58%, #eaf5ff 100%);
+}
+
+.scout-compact-platform-head--douyin,
+.scout-compact-cell--douyin {
+  border-color: rgba(222, 146, 181, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #fff7fb 58%, #ffeef5 100%);
+}
+
+.scout-compact-summary-table .scout-compact-metric-head,
+.scout-compact-summary-table .scout-compact-number-cell {
+  text-align: center;
+}
+
+.scout-compact-number-cell {
+  color: #1f2937;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.scout-compact-mobile-list {
+  display: none;
+}
+
 @media (max-width: 960px) {
   .scout-stat-grid,
   .scout-platform-grid,
@@ -7350,6 +7438,89 @@ button.leave-chip:disabled {
     font-weight: 900;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+  }
+
+  .scout-compact-table-wrap {
+    display: none;
+  }
+
+  .scout-compact-mobile-list[hidden] {
+    display: grid;
+  }
+
+  .scout-compact-mobile-list {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .scout-compact-mobile-platform-card {
+    display: grid;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .scout-compact-mobile-platform-card .platform-logo-title {
+    justify-content: flex-start;
+    color: var(--text);
+    font-weight: 900;
+  }
+
+  .scout-compact-mobile-platform-card--tiktok {
+    border: 1px solid rgba(108, 153, 205, 0.24);
+    background: linear-gradient(135deg, #ffffff 0%, #f5fbff 56%, #eaf5ff 100%);
+  }
+
+  .scout-compact-mobile-platform-card--douyin {
+    border: 1px solid rgba(222, 146, 181, 0.24);
+    background: linear-gradient(135deg, #ffffff 0%, #fff7fb 56%, #ffeef5 100%);
+  }
+
+  .scout-compact-mobile-platform-table {
+    display: grid;
+    grid-template-columns: minmax(68px, 1.25fr) repeat(3, minmax(0, 0.9fr));
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.58);
+  }
+
+  .scout-compact-mobile-platform-table span,
+  .scout-compact-mobile-platform-table b {
+    min-width: 0;
+    padding: 7px 5px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    color: #253044;
+    font-size: 12px;
+    line-height: 1.25;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scout-compact-mobile-platform-table span {
+    color: #637086;
+    font-weight: 900;
+  }
+
+  .scout-compact-mobile-platform-table b {
+    font-weight: 900;
+  }
+
+  .scout-compact-mobile-platform-table > :nth-child(4n + 1) {
+    padding-left: 7px;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .scout-compact-mobile-platform-table > :nth-last-child(-n + 4) {
+    border-bottom: 0;
+  }
+
+  .scout-compact-mobile-name-head {
+    white-space: nowrap;
   }
 
   .management-recruiting-panel {

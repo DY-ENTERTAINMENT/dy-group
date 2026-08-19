@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, ChevronRight, Edit3, Layers, MessageSquarePlus, Plus, RefreshCw, Search, UsersRound, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
@@ -1850,7 +1850,7 @@ function ManagementRecruitingPanel({
         <>
           <ManagementRecruitBreakdownPanel breakdown={breakdown} />
           <SummaryTable title="区域总计" label="区域" rows={regionRecruitRows} />
-          <SummaryTable title="每位星探统计" label="星探" rows={scoutRecruitRows} />
+          <ScoutRecruitSummaryTable rows={scoutRecruitRows} />
           <ManagementWorkloadPanel
             stats={workloadStats}
             granularity={workloadGranularity}
@@ -2296,6 +2296,122 @@ function SummaryTable({ title, label, rows }: { title: string; label: string; ro
       )}
     </section>
   );
+}
+
+function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
+  const sortedRows = rows
+    .map((row, index) => ({ row, index }))
+    .sort((first, second) => {
+      const firstTotal = getRecruitBreakdownTotal(first.row.breakdown);
+      const secondTotal = getRecruitBreakdownTotal(second.row.breakdown);
+
+      if (secondTotal !== firstTotal) return secondTotal - firstTotal;
+      return first.index - second.index;
+    })
+    .map(({ row }) => row);
+
+  return (
+    <section className="scout-summary-section scout-recruit-summary-block scout-compact-summary-section">
+      <h4 style={summarySectionTitleStyle}>每位星探统计</h4>
+      {sortedRows.length === 0 ? (
+        <div className="table-state">暂无统计数据。</div>
+      ) : (
+        <>
+          <div className="staff-table-wrap scout-compact-table-wrap">
+            <table className="staff-table scout-compact-summary-table">
+              <colgroup>
+                <col className="scout-compact-name-col" />
+                <col className="scout-compact-metric-col" />
+                <col className="scout-compact-metric-col" />
+                <col className="scout-compact-metric-col" />
+                <col className="scout-compact-metric-col" />
+                <col className="scout-compact-metric-col" />
+                <col className="scout-compact-metric-col" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th rowSpan={2} className="scout-compact-name-head">
+                    星探
+                  </th>
+                  <th colSpan={3} className="scout-compact-platform-head scout-compact-platform-head--tiktok">
+                    <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={22} fontSize={13} />
+                  </th>
+                  <th colSpan={3} className="scout-compact-platform-head scout-compact-platform-head--douyin">
+                    <PlatformLogoTitle logoUrl={douyinLogoUrl} title="抖音" logoSize={22} fontSize={13} />
+                  </th>
+                </tr>
+                <tr>
+                  <th className="scout-compact-metric-head scout-compact-cell--tiktok">招募总数</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--tiktok">5+1</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--tiktok">非5+1</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--douyin">招募总数</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--douyin">5+1</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--douyin">非5+1</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((row) => (
+                  <tr key={row.key}>
+                    <td className="scout-compact-name-cell">{row.label}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.total}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.plusFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.nonFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.total}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.plusFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.nonFiveOne}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="scout-compact-mobile-list" hidden>
+            <ScoutRecruitMobilePlatformTable title="TikTok" platform="tiktok" rows={sortedRows} logoUrl={tiktokLogoUrl} />
+            <ScoutRecruitMobilePlatformTable title="抖音" platform="douyin" rows={sortedRows} logoUrl={douyinLogoUrl} />
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ScoutRecruitMobilePlatformTable({
+  title,
+  platform,
+  rows,
+  logoUrl,
+}: {
+  title: string;
+  platform: 'tiktok' | 'douyin';
+  rows: RecruitBreakdownRow[];
+  logoUrl: string;
+}) {
+  return (
+    <section className={`scout-compact-mobile-platform-card scout-compact-mobile-platform-card--${platform}`}>
+      <PlatformLogoTitle logoUrl={logoUrl} title={title} logoSize={20} fontSize={13} />
+      <div className="scout-compact-mobile-platform-table">
+        <span className="scout-compact-mobile-name-head">星探</span>
+        <span>招募总数</span>
+        <span>5+1</span>
+        <span>非5+1</span>
+        {rows.map((row) => {
+          const breakdown = row.breakdown[platform];
+
+          return (
+            <Fragment key={`${platform}-${row.key}`}>
+              <b className="scout-compact-mobile-name-cell">{row.label}</b>
+              <b>{breakdown.total}</b>
+              <b>{breakdown.plusFiveOne}</b>
+              <b>{breakdown.nonFiveOne}</b>
+            </Fragment>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function getRecruitBreakdownTotal(breakdown: RecruitBreakdownRow['breakdown']) {
+  return breakdown.tiktok.total + breakdown.douyin.total;
 }
 
 const summarySectionTitleStyle = {
