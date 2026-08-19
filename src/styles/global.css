@@ -4799,6 +4799,109 @@ button.leave-chip:disabled {
   color: var(--text);
 }
 
+.agent-revenue-card-grid {
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+}
+
+.agent-revenue-card {
+  align-content: center;
+  gap: 14px;
+  justify-items: center;
+  min-height: 188px;
+  overflow: hidden;
+  padding: 22px 20px;
+  position: relative;
+  text-align: center;
+}
+
+.agent-revenue-card--tiktok {
+  background:
+    linear-gradient(135deg, rgba(37, 244, 238, 0.13), rgba(142, 121, 255, 0.1) 48%, rgba(255, 255, 255, 0.92)),
+    var(--panel-soft);
+}
+
+.agent-revenue-card--douyin {
+  background:
+    linear-gradient(135deg, rgba(254, 44, 85, 0.11), rgba(198, 91, 255, 0.09) 52%, rgba(255, 255, 255, 0.92)),
+    var(--panel-soft);
+}
+
+.agent-revenue-card-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.agent-revenue-card-title img {
+  display: block;
+  height: 24px;
+  object-fit: contain;
+  width: 24px;
+}
+
+.agent-revenue-card-total {
+  align-items: baseline;
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.agent-revenue-card-total span {
+  font-size: clamp(30px, 4vw, 42px);
+  font-weight: 950;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.agent-revenue-card-total small {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.agent-revenue-card .agent-revenue-card-breakdown {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 2px;
+  max-width: 360px;
+  width: 100%;
+}
+
+.agent-revenue-card .agent-revenue-card-metric {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 14px;
+  text-align: center;
+}
+
+.agent-revenue-card .agent-revenue-card-metric + .agent-revenue-card-metric {
+  border-left: 1px solid rgba(15, 23, 42, 0.09);
+}
+
+.agent-revenue-card .agent-revenue-card-metric span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-revenue-card .agent-revenue-card-metric b {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
 .personal-platform-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7200,6 +7303,14 @@ button.leave-chip:disabled {
   .scout-platform-grid,
   .scout-total-grid {
     grid-template-columns: 1fr;
+  }
+
+  .agent-revenue-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-revenue-card-total span {
+    font-size: clamp(28px, 9vw, 38px);
   }
 
   .platform-checkbox-grid {

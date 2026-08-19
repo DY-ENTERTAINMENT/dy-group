@@ -3,6 +3,8 @@ import { Check, Plus, RefreshCw, Send, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
+import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
+import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
   adjustmentStatusLabels,
   adjustmentTypeLabels,
@@ -213,11 +215,53 @@ function RevenuePanel(props: {
   onPlatform: (value: string) => void;
   onRegion: (value: string) => void;
 }) {
-  return <div className="staff-list-panel"><AgentFilters {...props} /><div className="scout-stat-grid">{props.loading ? <div className="table-state">正在统计流水...</div> : <><RevenueCard title="总流水" summary={props.breakdown.total} /><RevenueCard title="TikTok" summary={props.breakdown.tiktok} /><RevenueCard title="抖音" summary={props.breakdown.douyin} /></>}</div></div>;
+  const showTikTok = !props.platform || props.platform === 'tiktok';
+  const showDouyin = !props.platform || props.platform === 'douyin';
+
+  return (
+    <div className="staff-list-panel">
+      <AgentFilters {...props} />
+      <div className="scout-stat-grid agent-revenue-card-grid">
+        {props.loading ? (
+          <div className="table-state">正在统计流水...</div>
+        ) : (
+          <>
+            {showTikTok ? <RevenueCard title="TikTok" summary={props.breakdown.tiktok} logoUrl={tiktokLogoUrl} unit="钻石" platform="tiktok" /> : null}
+            {showDouyin ? <RevenueCard title="抖音" summary={props.breakdown.douyin} logoUrl={douyinLogoUrl} unit="音浪" platform="douyin" /> : null}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function RevenueCard({ title, summary }: { title: string; summary: { total: number; plusFiveOne: number; nonFiveOne: number } }) {
-  return <section className="scout-stat-card"><h4>{title}</h4><strong>{formatMoney(summary.total)}</strong><div><span>5+1 流水</span><b>{formatMoney(summary.plusFiveOne)}</b></div><div><span>非5+1 流水</span><b>{formatMoney(summary.nonFiveOne)}</b></div></section>;
+function RevenueCard({ title, summary, logoUrl, unit, platform }: { title: string; summary: { total: number; plusFiveOne: number; nonFiveOne: number }; logoUrl: string; unit: string; platform: 'tiktok' | 'douyin' }) {
+  return (
+    <section className={`scout-stat-card agent-revenue-card agent-revenue-card--${platform}`}>
+      <h4 className="agent-revenue-card-title">
+        <img src={logoUrl} alt="" aria-hidden="true" />
+        <span>{title}</span>
+      </h4>
+      <strong className="agent-revenue-card-total">
+        <span>{formatRevenueAmount(summary.total)}</span>
+        <small>{unit}</small>
+      </strong>
+      <div className="agent-revenue-card-breakdown">
+        <div className="agent-revenue-card-metric">
+          <span>5+1</span>
+          <b>{formatRevenueAmount(summary.plusFiveOne)}</b>
+        </div>
+        <div className="agent-revenue-card-metric">
+          <span>非5+1</span>
+          <b>{formatRevenueAmount(summary.nonFiveOne)}</b>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatRevenueAmount(value: number) {
+  return (Number(value) || 0).toLocaleString('en-MY', { maximumFractionDigits: 2 });
 }
 
 function AgentFilters(props: { month: string; platform: string; regionId: string; options: AgentOptions; onMonth: (value: string) => void; onPlatform: (value: string) => void; onRegion: (value: string) => void }) {
