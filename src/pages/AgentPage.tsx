@@ -13,7 +13,6 @@ import {
   creatorTypeLabels,
   designStatusLabels,
   designTypeLabels,
-  formatMoney,
   getEmployeeName,
   platformLabels,
   printMethodLabels,
@@ -71,8 +70,14 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [month, setMonth] = useState(currentMonth);
   const [platform, setPlatform] = useState('tiktok');
   const [regionId, setRegionId] = useState('');
+  const [creatorSearch, setCreatorSearch] = useState('');
+  const [creatorPlatform, setCreatorPlatform] = useState('');
+  const [creatorType, setCreatorType] = useState('');
+  const [creatorStatus, setCreatorStatus] = useState('');
+  const [creatorCompleteness, setCreatorCompleteness] = useState('');
   const [revenues, setRevenues] = useState<RevenueRecord[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
+  const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRequest[]>([]);
   const [designRequests, setDesignRequests] = useState<DesignRequest[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormValues>(emptyAdjustment);
@@ -107,7 +112,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         setRevenues(await agentService.listRevenueData({ profileId: profile?.id, month, platform, regionId: defaultRegion, management: isManagement }));
       }
       if (mode === 'creators' && profile?.id) {
-        setCreators(await agentService.listManagedCreators(profile.id, { month, platform, regionId: defaultRegion }));
+        setCreators(await agentService.listManagedCreators(profile.id, { regionId: defaultRegion }));
       }
       if (mode === 'adjustments' && profile?.id) {
         setAdjustments(await agentService.listAdjustments(profile.id));
@@ -171,6 +176,19 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
     }
   }
 
+  function openAdjustmentForCreator(group: CreatorProfileGroup, creatorProfile?: CreatorProfile) {
+    const targetCreator = creatorProfile ?? group.profiles[0];
+    if (!targetCreator) return;
+
+    setAdjustmentForm({
+      ...emptyAdjustment,
+      platform: targetCreator.platform,
+      platform_user_id: targetCreator.platform_user_id,
+      content: `主播：${group.displayName}`,
+    });
+    setAdjustmentModalOpen(true);
+  }
+
   return (
     <section className="agent-page">
       <div className="toolbar-actions staff-actions-row">
@@ -191,11 +209,37 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       ) : null}
 
       {mode === 'creators' ? (
-        <CreatorDataPanel loading={loading} month={month} platform={platform} regionId={regionId} options={options} creators={creators} revenues={revenues} onMonth={setMonth} onPlatform={setPlatform} onRegion={setRegionId} />
+        <CreatorDataPanel
+          loading={loading}
+          search={creatorSearch}
+          platform={creatorPlatform}
+          creatorType={creatorType}
+          status={creatorStatus}
+          completeness={creatorCompleteness}
+          regionId={regionId}
+          options={options}
+          creators={creators}
+          onSearch={setCreatorSearch}
+          onPlatform={setCreatorPlatform}
+          onCreatorType={setCreatorType}
+          onStatus={setCreatorStatus}
+          onCompleteness={setCreatorCompleteness}
+          onRegion={setRegionId}
+          onView={setSelectedCreatorGroup}
+          onAdjustment={openAdjustmentForCreator}
+        />
       ) : null}
 
       {mode === 'adjustments' ? <AdjustmentPanel loading={loading} pendingCount={pendingAdjustments} adjustments={adjustments} /> : null}
       {mode === 'design-requests' ? <AgentDesignPanel loading={loading} unclaimed={unclaimedDesigns} inProgress={inProgressDesigns} requests={designRequests} onStatus={updateDesignStatus} /> : null}
+
+      {selectedCreatorGroup ? (
+        <CreatorDetailDrawer
+          group={selectedCreatorGroup}
+          onClose={() => setSelectedCreatorGroup(null)}
+          onAdjustment={(creatorProfile) => openAdjustmentForCreator(selectedCreatorGroup, creatorProfile)}
+        />
+      ) : null}
 
       {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
       {designModalOpen ? <DesignModal values={designForm} saving={saving} onChange={setDesignForm} onClose={() => setDesignModalOpen(false)} onSubmit={submitDesign} /> : null}
@@ -268,8 +312,285 @@ function AgentFilters(props: { month: string; platform: string; regionId: string
   return <div className="scout-filters"><label className="form-field"><span>年月份</span><MonthSelect value={props.month} onChange={props.onMonth} /></label><SelectField label="平台" value={props.platform} onChange={props.onPlatform}><option value="tiktok">TikTok</option><option value="douyin">抖音</option><option value="">全部</option></SelectField><SelectField label="区域" value={props.regionId} onChange={props.onRegion}><option value="">全部</option>{props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}</SelectField></div>;
 }
 
-function CreatorDataPanel(props: { loading: boolean; month: string; platform: string; regionId: string; options: AgentOptions; creators: CreatorProfile[]; revenues: RevenueRecord[]; onMonth: (value: string) => void; onPlatform: (value: string) => void; onRegion: (value: string) => void }) {
-  return <div className="staff-list-panel"><AgentFilters {...props} />{props.loading ? <div className="table-state">正在读取主播数据...</div> : <div className="staff-table-wrap"><table className="staff-table agent-table"><thead><tr><th>ID</th><th>主播名字</th><th>KPI 天数</th><th>KPI 时长</th><th>KPI 流水</th><th>已达天数</th><th>已达时长</th><th>已达流水</th></tr></thead><tbody>{props.creators.map((creator) => { const revenue = props.revenues.find((item) => item.creator_profile_id === creator.id); return <tr key={creator.id}><td>{creator.platform_user_id}</td><td>{creator.creator_name}</td><td>{revenue?.kpi_days ?? 0}</td><td>{revenue?.kpi_hours ?? 0}</td><td>{formatMoney(revenue?.kpi_revenue ?? 0)}</td><td>{revenue?.achieved_days ?? 0}</td><td>{revenue?.achieved_hours ?? 0}</td><td>{formatMoney(revenue?.achieved_revenue ?? 0)}</td></tr>; })}</tbody></table></div>}</div>;
+function CreatorDataPanel(props: {
+  loading: boolean;
+  search: string;
+  platform: string;
+  creatorType: string;
+  status: string;
+  completeness: string;
+  regionId: string;
+  options: AgentOptions;
+  creators: CreatorProfile[];
+  onSearch: (value: string) => void;
+  onPlatform: (value: string) => void;
+  onCreatorType: (value: string) => void;
+  onStatus: (value: string) => void;
+  onCompleteness: (value: string) => void;
+  onRegion: (value: string) => void;
+  onView: (group: CreatorProfileGroup) => void;
+  onAdjustment: (group: CreatorProfileGroup, creatorProfile?: CreatorProfile) => void;
+}) {
+  const creatorGroups = useMemo(() => {
+    const groups = groupCreatorProfiles(props.creators);
+    return filterCreatorGroups(groups, {
+      search: props.search,
+      platform: props.platform,
+      creatorType: props.creatorType,
+      status: props.status,
+      completeness: props.completeness,
+    });
+  }, [props.completeness, props.creatorType, props.creators, props.platform, props.search, props.status]);
+  const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
+
+  return (
+    <div className="staff-list-panel agent-creator-panel">
+      <CreatorSummaryStrip summary={summary} />
+      <CreatorManagementFilters {...props} />
+      {props.loading ? (
+        <div className="table-state">正在读取主播数据...</div>
+      ) : creatorGroups.length === 0 ? (
+        <div className="table-state">暂无主播资料。</div>
+      ) : (
+        <>
+          <div className="staff-table-wrap agent-creator-table-wrap">
+            <table className="staff-table agent-table agent-creator-table">
+              <thead>
+                <tr>
+                  <th>主播</th>
+                  <th>平台账号</th>
+                  <th>区域</th>
+                  <th>状态</th>
+                  <th>资料完整度</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creatorGroups.map((group) => (
+                  <tr key={group.id}>
+                    <td><strong className="agent-creator-name">{group.displayName}</strong></td>
+                    <td><CreatorPlatformLines profiles={group.profiles} /></td>
+                    <td>{group.regionName}</td>
+                    <td><CreatorStatusBadge status={group.status} /></td>
+                    <td><CompletenessBadge completeness={group.completeness} /></td>
+                    <td>
+                      <div className="agent-creator-actions">
+                        <button className="secondary-button compact-button" type="button" onClick={() => props.onView(group)}>查看资料</button>
+                        <button className="secondary-button compact-button" type="button" onClick={() => props.onAdjustment(group)}>申请修改</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="agent-creator-mobile-list">
+            {creatorGroups.map((group) => (
+              <article key={group.id} className="agent-creator-mobile-card">
+                <div className="agent-creator-mobile-head">
+                  <strong>{group.displayName}</strong>
+                  <CreatorStatusBadge status={group.status} />
+                </div>
+                <CreatorPlatformLines profiles={group.profiles} />
+                <div className="agent-creator-mobile-meta">
+                  <span>区域：{group.regionName}</span>
+                  <CompletenessBadge completeness={group.completeness} />
+                </div>
+                <div className="agent-creator-actions">
+                  <button className="secondary-button compact-button" type="button" onClick={() => props.onView(group)}>查看资料</button>
+                  <button className="secondary-button compact-button" type="button" onClick={() => props.onAdjustment(group)}>申请修改</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+type CreatorGroupStatus = 'active' | 'invalid' | 'mixed';
+type CreatorCompleteness = 'complete' | 'missing' | 'critical';
+
+type CreatorProfileGroup = {
+  id: string;
+  displayName: string;
+  profiles: CreatorProfile[];
+  platforms: Set<CreatorPlatform>;
+  regionName: string;
+  scoutName: string;
+  managerName: string;
+  status: CreatorGroupStatus;
+  completeness: CreatorCompleteness;
+};
+
+type CreatorGroupSummary = {
+  total: number;
+  tiktok: number;
+  douyin: number;
+  dualPlatform: number;
+  incomplete: number;
+};
+
+function CreatorSummaryStrip({ summary }: { summary: CreatorGroupSummary }) {
+  return (
+    <div className="agent-creator-summary-grid">
+      <CreatorSummaryCard title="我的主播" value={summary.total} />
+      <CreatorSummaryCard title="TikTok" value={summary.tiktok} logoUrl={tiktokLogoUrl} />
+      <CreatorSummaryCard title="抖音" value={summary.douyin} logoUrl={douyinLogoUrl} />
+      <CreatorSummaryCard title="双平台" value={summary.dualPlatform} />
+      <CreatorSummaryCard title="待补资料" value={summary.incomplete} tone={summary.incomplete > 0 ? 'warning' : 'default'} />
+    </div>
+  );
+}
+
+function CreatorSummaryCard({ title, value, logoUrl, tone = 'default' }: { title: string; value: number; logoUrl?: string; tone?: 'default' | 'warning' }) {
+  return (
+    <article className={`agent-creator-summary-card agent-creator-summary-card--${tone}`}>
+      <div className="agent-creator-summary-title">{logoUrl ? <img src={logoUrl} alt="" aria-hidden="true" /> : null}<span>{title}</span></div>
+      <strong>{value.toLocaleString('en-MY')}</strong>
+    </article>
+  );
+}
+
+function CreatorManagementFilters(props: {
+  search: string;
+  platform: string;
+  creatorType: string;
+  status: string;
+  completeness: string;
+  regionId: string;
+  options: AgentOptions;
+  onSearch: (value: string) => void;
+  onPlatform: (value: string) => void;
+  onCreatorType: (value: string) => void;
+  onStatus: (value: string) => void;
+  onCompleteness: (value: string) => void;
+  onRegion: (value: string) => void;
+}) {
+  return (
+    <div className="scout-filters agent-creator-filters">
+      <label className="form-field agent-creator-search-field">
+        <span>搜索</span>
+        <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="主播名 / UID / 平台账号" />
+      </label>
+      <SelectField label="平台" value={props.platform} onChange={props.onPlatform}>
+        <option value="">全部</option>
+        <option value="tiktok">TikTok</option>
+        <option value="douyin">抖音</option>
+        <option value="dual_platform">双平台</option>
+      </SelectField>
+      <SelectField label="类型" value={props.creatorType} onChange={props.onCreatorType}>
+        <option value="">全部</option>
+        <option value="5+1">5+1</option>
+        <option value="non_5_1">非5+1</option>
+      </SelectField>
+      <SelectField label="状态" value={props.status} onChange={props.onStatus}>
+        <option value="">全部</option>
+        <option value="active">在职</option>
+        <option value="invalid">无效</option>
+        <option value="mixed">状态不同</option>
+      </SelectField>
+      <SelectField label="资料完整度" value={props.completeness} onChange={props.onCompleteness}>
+        <option value="">全部</option>
+        <option value="complete">完整</option>
+        <option value="missing">待补资料</option>
+        <option value="critical">重要资料缺失</option>
+      </SelectField>
+      <SelectField label="区域" value={props.regionId} onChange={props.onRegion}>
+        <option value="">全部</option>
+        {props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
+      </SelectField>
+    </div>
+  );
+}
+
+function CreatorPlatformLines({ profiles }: { profiles: CreatorProfile[] }) {
+  return (
+    <div className="agent-creator-platform-lines">
+      {sortCreatorProfiles(profiles).map((creator) => (
+        <div key={creator.id} className="agent-creator-platform-line">
+          <span className="agent-creator-platform-name">
+            <img src={creator.platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" aria-hidden="true" />
+            <span>{platformLabels[creator.platform]}</span>
+          </span>
+          <span className="agent-creator-platform-uid">{creator.platform_user_id}</span>
+          <CreatorTypeBadge type={creator.creator_type} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CreatorTypeBadge({ type }: { type: CreatorProfile['creator_type'] }) {
+  const isPlus = type === '5+1';
+  return <span className={`agent-creator-type-badge agent-creator-type-badge--${isPlus ? 'plus' : 'standard'}`}>{isPlus ? '5+1' : '非5+1'}</span>;
+}
+
+function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
+  return <span className={`agent-creator-status-badge agent-creator-status-badge--${status}`}>{getCreatorStatusLabel(status)}</span>;
+}
+
+function CompletenessBadge({ completeness }: { completeness: CreatorCompleteness }) {
+  return <span className={`agent-creator-completeness-badge agent-creator-completeness-badge--${completeness}`}>{getCompletenessLabel(completeness)}</span>;
+}
+
+function CreatorDetailDrawer({ group, onClose, onAdjustment }: { group: CreatorProfileGroup; onClose: () => void; onAdjustment: (creatorProfile?: CreatorProfile) => void }) {
+  return (
+    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+      <aside className="agent-creator-drawer" role="dialog" aria-modal="true" aria-label="主播资料" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="agent-creator-drawer-header">
+          <div>
+            <span>主播资料</span>
+            <h3>{group.displayName}</h3>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+        </div>
+        <div className="agent-creator-drawer-body">
+          <DrawerSection title="基本资料">
+            <div className="agent-creator-drawer-grid">
+              <DrawerField label="主播名" value={group.displayName} />
+              <DrawerField label="区域" value={group.regionName} />
+              <DrawerField label="经纪人" value={group.managerName} />
+              <DrawerField label="星探" value={group.scoutName} />
+              <DrawerField label="主播状态" value={<CreatorStatusBadge status={group.status} />} />
+              <DrawerField label="资料完整度" value={<CompletenessBadge completeness={group.completeness} />} />
+            </div>
+          </DrawerSection>
+          {sortCreatorProfiles(group.profiles).map((creator) => (
+            <DrawerSection key={creator.id} title={`${platformLabels[creator.platform]} 平台资料`}>
+              <div className="agent-creator-drawer-platform-title">
+                <img src={creator.platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" aria-hidden="true" />
+                <strong>{platformLabels[creator.platform]}</strong>
+                <CreatorTypeBadge type={creator.creator_type} />
+              </div>
+              <div className="agent-creator-drawer-grid">
+                <DrawerField label="UID" value={creator.platform_user_id} />
+                <DrawerField label="平台账号" value={creator.platform_account} />
+                <DrawerField label="入会日期" value={creator.joined_date} />
+                <DrawerField label="主播形式" value={creatorTypeLabels[creator.creator_type]} />
+                <DrawerField label="账号状态" value={<CreatorStatusBadge status={(creator.status ?? 'active') as CreatorGroupStatus} />} />
+                <DrawerField label="公会状态" value={getOptionalCreatorField(creator, 'membership_status') || '-'} />
+                <DrawerField label="退出日期" value={getOptionalCreatorField(creator, 'exited_date') || '-'} />
+                <DrawerField label="退出原因" value={getOptionalCreatorField(creator, 'exited_reason') || '-'} />
+                <DrawerField label="银行" value={creator.bank_name || '-'} />
+                <DrawerField label="银行户口" value={creator.bank_account || '-'} />
+              </div>
+              <button className="secondary-button compact-button" type="button" onClick={() => onAdjustment(creator)}>申请修改资料</button>
+            </DrawerSection>
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="agent-creator-drawer-section"><h4>{title}</h4>{children}</section>;
+}
+
+function DrawerField({ label, value }: { label: string; value: ReactNode }) {
+  return <div className="agent-creator-drawer-field"><span>{label}</span><strong>{value || '-'}</strong></div>;
 }
 
 function AdjustmentPanel({ loading, pendingCount, adjustments }: { loading: boolean; pendingCount: number; adjustments: AdjustmentRequest[] }) {
@@ -299,6 +620,121 @@ function TextField({ label, value, onChange, type = 'text', required }: { label:
 
 function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
   return <label className="form-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
+}
+
+function groupCreatorProfiles(creators: CreatorProfile[]): CreatorProfileGroup[] {
+  const groups = new Map<string, CreatorProfile[]>();
+  creators.forEach((creator) => {
+    const key = creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), creator]);
+  });
+
+  return Array.from(groups.entries()).map(([id, profiles]) => {
+    const sortedProfiles = sortCreatorProfiles(profiles);
+    const completeness = getCreatorCompleteness(sortedProfiles);
+    return {
+      id,
+      displayName: getConsistentValue(sortedProfiles, (creator) => creator.creator_name),
+      profiles: sortedProfiles,
+      platforms: new Set(sortedProfiles.map((creator) => creator.platform)),
+      regionName: getConsistentValue(sortedProfiles, (creator) => creator.region?.code ?? creator.region?.name ?? ''),
+      scoutName: getConsistentValue(sortedProfiles, (creator) => getEmployeeName(creator.scout)),
+      managerName: getConsistentValue(sortedProfiles, (creator) => getEmployeeName(creator.manager)),
+      status: getCreatorGroupStatus(sortedProfiles),
+      completeness,
+    };
+  });
+}
+
+function filterCreatorGroups(groups: CreatorProfileGroup[], filters: { search: string; platform: string; creatorType: string; status: string; completeness: string }) {
+  const normalizedSearch = filters.search.trim().toLowerCase();
+  return groups.filter((group) => {
+    if (normalizedSearch) {
+      const searchable = [
+        group.displayName,
+        ...group.profiles.flatMap((creator) => [creator.creator_name, creator.platform_user_id, creator.platform_account]),
+      ].join(' ').toLowerCase();
+      if (!searchable.includes(normalizedSearch)) return false;
+    }
+
+    if (filters.platform === 'dual_platform') {
+      if (!(group.platforms.has('tiktok') && group.platforms.has('douyin'))) return false;
+    } else if (filters.platform && !group.platforms.has(filters.platform as CreatorPlatform)) {
+      return false;
+    }
+
+    if (filters.creatorType === '5+1' && !group.profiles.some((creator) => creator.creator_type === '5+1')) return false;
+    if (filters.creatorType === 'non_5_1' && !group.profiles.some((creator) => creator.creator_type !== '5+1')) return false;
+    if (filters.status && group.status !== filters.status) return false;
+    if (filters.completeness && group.completeness !== filters.completeness) return false;
+    return true;
+  });
+}
+
+function summarizeCreatorGroups(groups: CreatorProfileGroup[]): CreatorGroupSummary {
+  return groups.reduce<CreatorGroupSummary>((summary, group) => {
+    summary.total += 1;
+    if (group.platforms.has('tiktok')) summary.tiktok += 1;
+    if (group.platforms.has('douyin')) summary.douyin += 1;
+    if (group.platforms.has('tiktok') && group.platforms.has('douyin')) summary.dualPlatform += 1;
+    if (group.completeness !== 'complete') summary.incomplete += 1;
+    return summary;
+  }, { total: 0, tiktok: 0, douyin: 0, dualPlatform: 0, incomplete: 0 });
+}
+
+function getCreatorCompleteness(profiles: CreatorProfile[]): CreatorCompleteness {
+  const hasCriticalMissing = profiles.some((creator) =>
+    !creator.creator_name
+    || !creator.region_id
+    || !creator.manager_employee_id
+    || !creator.scout_employee_id
+    || !creator.platform
+    || !creator.platform_user_id
+    || !creator.platform_account
+    || !creator.joined_date
+    || !creator.creator_type,
+  );
+  if (hasCriticalMissing) return 'critical';
+
+  const hasMissingBank = profiles.some((creator) =>
+    (creator.creator_type === '5+1' || creator.creator_type === 'company')
+    && (!creator.bank_name || !creator.bank_account),
+  );
+  return hasMissingBank ? 'missing' : 'complete';
+}
+
+function sortCreatorProfiles(creators: CreatorProfile[]) {
+  const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
+  return [...creators].sort((first, second) => platformOrder[first.platform] - platformOrder[second.platform]);
+}
+
+function getCreatorGroupStatus(creators: CreatorProfile[]): CreatorGroupStatus {
+  const statuses = new Set(creators.map((creator) => creator.status ?? 'active'));
+  return statuses.size === 1 ? ([...statuses][0] as CreatorGroupStatus) : 'mixed';
+}
+
+function getCreatorStatusLabel(status: CreatorGroupStatus) {
+  if (status === 'invalid') return '无效';
+  if (status === 'mixed') return '状态不同';
+  return '在职';
+}
+
+function getCompletenessLabel(completeness: CreatorCompleteness) {
+  if (completeness === 'complete') return '完整';
+  if (completeness === 'critical') return '重要资料缺失';
+  return '待补资料';
+}
+
+function getConsistentValue(creators: CreatorProfile[], getValue: (creator: CreatorProfile) => string) {
+  const values = Array.from(new Set(creators.map((creator) => getValue(creator).trim()).filter(Boolean)));
+  if (values.length === 0) return '-';
+  if (values.length > 1) return '资料不同';
+  return values[0];
+}
+
+function getOptionalCreatorField(creator: CreatorProfile, field: string) {
+  const value = (creator as unknown as Record<string, unknown>)[field];
+  return typeof value === 'string' ? value : '';
 }
 
 function formatDate(value: string) {

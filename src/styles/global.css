@@ -4902,6 +4902,285 @@ button.leave-chip:disabled {
   overflow-wrap: anywhere;
 }
 
+.agent-creator-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-creator-summary-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 16px 18px 0;
+}
+
+.agent-creator-summary-card {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-height: 104px;
+  padding: 16px;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(105, 89, 255, 0.1), rgba(255, 255, 255, 0.92)),
+    var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.agent-creator-summary-card--warning {
+  background:
+    linear-gradient(135deg, rgba(244, 114, 182, 0.13), rgba(255, 255, 255, 0.92)),
+    var(--panel-soft);
+}
+
+.agent-creator-summary-title {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
+}
+
+.agent-creator-summary-title img {
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
+}
+
+.agent-creator-summary-card strong {
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.agent-creator-filters {
+  grid-template-columns: minmax(220px, 1.3fr) repeat(5, minmax(120px, 1fr));
+}
+
+.agent-creator-search-field input {
+  width: 100%;
+}
+
+.agent-creator-table-wrap {
+  display: block;
+}
+
+.agent-creator-table th,
+.agent-creator-table td {
+  vertical-align: middle;
+}
+
+.agent-creator-name {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.agent-creator-platform-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-creator-platform-line {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(80px, max-content) minmax(120px, 1fr) max-content;
+  min-width: 0;
+}
+
+.agent-creator-platform-name {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  font-weight: 900;
+  gap: 7px;
+}
+
+.agent-creator-platform-name img {
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
+}
+
+.agent-creator-platform-uid {
+  color: var(--muted);
+  font-weight: 800;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-creator-type-badge,
+.agent-creator-status-badge,
+.agent-creator-completeness-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-content: center;
+  line-height: 1;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.agent-creator-type-badge--plus {
+  background: rgba(105, 89, 255, 0.12);
+  color: var(--primary-dark);
+}
+
+.agent-creator-type-badge--standard {
+  background: rgba(15, 23, 42, 0.07);
+  color: var(--muted);
+}
+
+.agent-creator-status-badge--active,
+.agent-creator-completeness-badge--complete {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.agent-creator-status-badge--invalid,
+.agent-creator-completeness-badge--critical {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.agent-creator-status-badge--mixed,
+.agent-creator-completeness-badge--missing {
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
+}
+
+.agent-creator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-creator-mobile-list {
+  display: none;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.agent-creator-mobile-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.agent-creator-mobile-head,
+.agent-creator-mobile-meta {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.agent-creator-mobile-head strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.agent-creator-mobile-meta {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.agent-creator-drawer {
+  background: var(--panel);
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.16);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  margin-left: auto;
+  max-width: 560px;
+  width: min(100%, 560px);
+}
+
+.agent-creator-drawer-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-creator-drawer-header span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-creator-drawer-header h3 {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+
+.agent-creator-drawer-body {
+  display: grid;
+  gap: 16px;
+  overflow: auto;
+  padding: 18px 22px 24px;
+}
+
+.agent-creator-drawer-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.agent-creator-drawer-section h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.agent-creator-drawer-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-creator-drawer-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agent-creator-drawer-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-creator-drawer-field strong {
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.agent-creator-drawer-platform-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.agent-creator-drawer-platform-title img {
+  height: 22px;
+  object-fit: contain;
+  width: 22px;
+}
+
 .personal-platform-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7311,6 +7590,43 @@ button.leave-chip:disabled {
 
   .agent-revenue-card-total span {
     font-size: clamp(28px, 9vw, 38px);
+  }
+
+  .agent-creator-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-creator-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-creator-search-field {
+    grid-column: 1 / -1;
+  }
+
+  .agent-creator-table-wrap {
+    display: none;
+  }
+
+  .agent-creator-mobile-list {
+    display: grid;
+  }
+
+  .agent-creator-platform-line {
+    grid-template-columns: minmax(76px, max-content) minmax(0, 1fr) max-content;
+  }
+
+  .agent-creator-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-creator-drawer {
+    width: 100%;
+  }
+
+  .agent-creator-drawer-grid {
+    grid-template-columns: 1fr;
   }
 
   .platform-checkbox-grid {
