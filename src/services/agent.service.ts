@@ -47,6 +47,18 @@ export type AdjustmentRequest = {
   creator: Pick<CreatorProfile, 'id' | 'creator_name' | 'platform_account' | 'platform_user_id'> | null;
 };
 
+type AdjustmentEmployee = Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> & { employee_code?: string | null };
+
+export type AdjustmentReviewRequest = AdjustmentRequest & {
+  requester_profile_id: string;
+  requester_employee_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  requester: AdjustmentEmployee | null;
+  reviewer: { id: string; full_name: string | null; nickname: string | null; email: string | null } | null;
+};
+
 export type AdjustmentFormValues = {
   platform: CreatorPlatform;
   platform_user_id: string;
@@ -270,9 +282,52 @@ export const agentService = {
     return data ?? [];
   },
 
+  async listAdjustmentReviews(): Promise<AdjustmentReviewRequest[]> {
+    const { data, error } = await db
+      .from('creator_adjustment_requests')
+      .select('*, creator:creator_profiles(id, creator_name, platform_account, platform_user_id), requester:employees!creator_adjustment_requests_requester_employee_id_fkey(id, employee_code, full_name, nickname, email), reviewer:profiles!creator_adjustment_requests_reviewed_by_fkey(id, full_name, nickname, email)')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async createAdjustment(profileId: string, values: AdjustmentFormValues) {
+    validateAdjustmentTarget(values);
     const { error } = await db.from('creator_adjustment_requests').insert({ requester_profile_id: profileId, ...normalizeAdjustment(values) });
     if (error) throw error;
+  },
+
+  async reviewAdjustmentRequest(profileId: string, input: { id: string; status: Extract<AdjustmentStatus, 'approved' | 'rejected'>; reviewNote?: string }) {
+    const trimmedNote = input.reviewNote?.trim() ?? '';
+    if (input.status === 'rejected' && !trimmedNote) {
+      throw new Error('拒绝原因必须填写。');
+    }
+
+    const { data: currentRequest, error: currentRequestError } = await db
+      .from('creator_adjustment_requests')
+      .select('request_type, target_email, status')
+      .eq('id', input.id)
+      .maybeSingle();
+    if (currentRequestError) throw currentRequestError;
+    if (!currentRequest || currentRequest.status !== 'pending') throw new Error('这笔申请已审批或不存在。');
+    if (input.status === 'approved' && requiresTargetEmail(currentRequest.request_type as AdjustmentType) && !currentRequest.target_email?.trim()) {
+      throw new Error(currentRequest.request_type === 'change_manager' ? '目标经纪人 Email 缺失，请申请人重新提交。' : '目标星探 Email 缺失，请申请人重新提交。');
+    }
+
+    const { data, error } = await db
+      .from('creator_adjustment_requests')
+      .update({
+        status: input.status,
+        reviewed_by: profileId,
+        reviewed_at: new Date().toISOString(),
+        review_note: trimmedNote || null,
+      })
+      .eq('id', input.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('这笔申请已审批或不存在。');
   },
 
   async listDesignRequests(filters: { profileId?: string; designerProfileId?: string; mode: 'agent' | 'intake' | 'progress' }) {
@@ -344,6 +399,20 @@ function normalizeAdjustment(values: AdjustmentFormValues) {
     target_email: values.target_email.trim() || null,
     content: values.content.trim() || null,
   };
+}
+
+function validateAdjustmentTarget(values: AdjustmentFormValues) {
+  if (!requiresTargetEmail(values.request_type)) return;
+  if (!values.target_nickname.trim()) {
+    throw new Error(values.request_type === 'change_manager' ? '目标经纪人昵称必须填写。' : '目标星探昵称必须填写。');
+  }
+  if (!values.target_email.trim()) {
+    throw new Error(values.request_type === 'change_manager' ? '目标经纪人 Email 缺失，请填写后再提交。' : '目标星探 Email 缺失，请填写后再提交。');
+  }
+}
+
+function requiresTargetEmail(requestType: AdjustmentType) {
+  return requestType === 'change_manager' || requestType === 'change_scout';
 }
 
 function normalizeDesign(values: DesignFormValues) {

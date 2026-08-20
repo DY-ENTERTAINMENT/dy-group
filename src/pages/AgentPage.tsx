@@ -3,6 +3,7 @@ import { Check, Plus, RefreshCw, Send, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
 import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
 import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
@@ -18,6 +19,7 @@ import {
   printMethodLabels,
   type AdjustmentFormValues,
   type AdjustmentRequest,
+  type AdjustmentReviewRequest,
   type AdjustmentType,
   type AgentOptions,
   type DesignFormValues,
@@ -27,7 +29,7 @@ import {
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
 
-export type AgentPageMode = 'revenue' | 'creators' | 'adjustments' | 'design-requests' | 'management-revenue';
+export type AgentPageMode = 'revenue' | 'creators' | 'adjustments' | 'design-requests' | 'management-revenue' | 'management-adjustments';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
@@ -65,6 +67,7 @@ const designTypes: DesignRequestType[] = ['banner', 'standee', 'poster', 'specia
 
 export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const { profile } = useAuth();
+  const permissions = usePermissions();
   const isManagement = mode === 'management-revenue';
   const [options, setOptions] = useState<AgentOptions>({ regions: [], employees: [], currentEmployee: null });
   const [month, setMonth] = useState(currentMonth);
@@ -75,10 +78,17 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [creatorType, setCreatorType] = useState('');
   const [creatorStatus, setCreatorStatus] = useState('');
   const [creatorCompleteness, setCreatorCompleteness] = useState('');
+  const [reviewStatus, setReviewStatus] = useState('pending');
+  const [reviewPlatform, setReviewPlatform] = useState('');
+  const [reviewType, setReviewType] = useState('');
+  const [reviewSearch, setReviewSearch] = useState('');
   const [revenues, setRevenues] = useState<RevenueRecord[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRequest[]>([]);
+  const [adjustmentReviews, setAdjustmentReviews] = useState<AdjustmentReviewRequest[]>([]);
+  const [selectedAdjustmentReview, setSelectedAdjustmentReview] = useState<AdjustmentReviewRequest | null>(null);
+  const [reviewAction, setReviewAction] = useState<{ request: AdjustmentReviewRequest; status: 'approved' | 'rejected'; note: string } | null>(null);
   const [designRequests, setDesignRequests] = useState<DesignRequest[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormValues>(emptyAdjustment);
   const [designForm, setDesignForm] = useState<DesignFormValues>(emptyDesign);
@@ -93,6 +103,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const pendingAdjustments = adjustments.filter((item) => item.status === 'pending').length;
   const unclaimedDesigns = designRequests.filter((item) => item.status === 'unclaimed').length;
   const inProgressDesigns = designRequests.filter((item) => item.status === 'in_progress' || item.status === 'revision').length;
+  const canReviewAdjustments = permissions.canUse('management-streamer-stats');
 
   useEffect(() => {
     void loadData();
@@ -117,6 +128,9 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       if (mode === 'adjustments' && profile?.id) {
         setAdjustments(await agentService.listAdjustments(profile.id));
       }
+      if (mode === 'management-adjustments') {
+        setAdjustmentReviews(await agentService.listAdjustmentReviews());
+      }
       if (mode === 'design-requests' && profile?.id) {
         setDesignRequests(await agentService.listDesignRequests({ profileId: profile.id, mode: 'agent' }));
       }
@@ -130,6 +144,15 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   async function submitAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!profile?.id) return;
+    const missingTargetEmail = getMissingTargetEmailMessage(adjustmentForm.request_type, adjustmentForm.target_email);
+    if (missingTargetEmail) {
+      setError(missingTargetEmail);
+      return;
+    }
+    if (requiresTargetEmail(adjustmentForm.request_type) && !adjustmentForm.target_nickname.trim()) {
+      setError(adjustmentForm.request_type === 'change_manager' ? '目标经纪人昵称必须填写。' : '目标星探昵称必须填写。');
+      return;
+    }
     setSaving(true);
     setError('');
     setMessage('');
@@ -173,6 +196,43 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       await loadData();
     } catch (statusError) {
       setError(`更新美工申请失败：${getErrorMessage(statusError)}`);
+    }
+  }
+
+  async function submitAdjustmentReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile?.id || !reviewAction) return;
+    if (reviewAction.request.status !== 'pending') {
+      setError('这笔申请已审批，不能重复操作。');
+      setReviewAction(null);
+      return;
+    }
+    if (reviewAction.status === 'rejected' && !reviewAction.note.trim()) {
+      setError('拒绝原因必须填写。');
+      return;
+    }
+    const missingTargetEmail = reviewAction.status === 'approved' ? getMissingTargetEmailReviewMessage(reviewAction.request) : '';
+    if (missingTargetEmail) {
+      setError(missingTargetEmail);
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await agentService.reviewAdjustmentRequest(profile.id, {
+        id: reviewAction.request.id,
+        status: reviewAction.status,
+        reviewNote: reviewAction.note,
+      });
+      setMessage(reviewAction.status === 'approved' ? '资料调整申请已通过。' : '资料调整申请已拒绝。');
+      setReviewAction(null);
+      await loadData();
+    } catch (reviewError) {
+      setError(`审批申请失败：${getErrorMessage(reviewError)}`);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -231,6 +291,23 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       ) : null}
 
       {mode === 'adjustments' ? <AdjustmentPanel loading={loading} pendingCount={pendingAdjustments} adjustments={adjustments} /> : null}
+      {mode === 'management-adjustments' ? (
+        <AdjustmentReviewPanel
+          loading={loading}
+          requests={adjustmentReviews}
+          status={reviewStatus}
+          platform={reviewPlatform}
+          requestType={reviewType}
+          search={reviewSearch}
+          canReview={canReviewAdjustments}
+          onStatus={setReviewStatus}
+          onPlatform={setReviewPlatform}
+          onRequestType={setReviewType}
+          onSearch={setReviewSearch}
+          onView={setSelectedAdjustmentReview}
+          onAction={(request, status) => setReviewAction({ request, status, note: '' })}
+        />
+      ) : null}
       {mode === 'design-requests' ? <AgentDesignPanel loading={loading} unclaimed={unclaimedDesigns} inProgress={inProgressDesigns} requests={designRequests} onStatus={updateDesignStatus} /> : null}
 
       {selectedCreatorGroup ? (
@@ -242,6 +319,8 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       ) : null}
 
       {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
+      {selectedAdjustmentReview ? <AdjustmentReviewDrawer request={selectedAdjustmentReview} onClose={() => setSelectedAdjustmentReview(null)} /> : null}
+      {reviewAction ? <AdjustmentReviewActionModal action={reviewAction} saving={saving} onChange={(note) => setReviewAction({ ...reviewAction, note })} onClose={() => setReviewAction(null)} onSubmit={submitAdjustmentReview} /> : null}
       {designModalOpen ? <DesignModal values={designForm} saving={saving} onChange={setDesignForm} onClose={() => setDesignModalOpen(false)} onSubmit={submitDesign} /> : null}
     </section>
   );
@@ -597,6 +676,224 @@ function AdjustmentPanel({ loading, pendingCount, adjustments }: { loading: bool
   return <div className="staff-list-panel"><div className="agent-count-strip"><span>审核中 <b>{pendingCount}</b></span></div>{loading ? <div className="table-state">正在读取申请...</div> : <div className="staff-table-wrap"><table className="staff-table agent-table"><thead><tr><th>平台</th><th>主播</th><th>调整项目</th><th>申请日期</th><th>申请状态</th></tr></thead><tbody>{adjustments.map((item) => <tr key={item.id}><td>{platformLabels[item.platform]}</td><td>{item.creator?.creator_name ?? item.platform_user_id ?? '-'}</td><td>{adjustmentTypeLabels[item.request_type]}</td><td>{formatDate(item.created_at)}</td><td>{adjustmentStatusLabels[item.status]}</td></tr>)}</tbody></table></div>}</div>;
 }
 
+function AdjustmentReviewPanel(props: {
+  loading: boolean;
+  requests: AdjustmentReviewRequest[];
+  status: string;
+  platform: string;
+  requestType: string;
+  search: string;
+  canReview: boolean;
+  onStatus: (value: string) => void;
+  onPlatform: (value: string) => void;
+  onRequestType: (value: string) => void;
+  onSearch: (value: string) => void;
+  onView: (request: AdjustmentReviewRequest) => void;
+  onAction: (request: AdjustmentReviewRequest, status: 'approved' | 'rejected') => void;
+}) {
+  const filteredRequests = useMemo(() => filterAdjustmentReviews(props.requests, props), [props]);
+  const summary = useMemo(() => summarizeAdjustmentReviews(props.requests), [props.requests]);
+
+  return (
+    <div className="staff-list-panel adjustment-review-panel">
+      <div className="adjustment-review-summary-grid">
+        <ReviewSummaryCard title="待审核" value={summary.pending} tone="pending" />
+        <ReviewSummaryCard title="已通过" value={summary.approved} tone="approved" />
+        <ReviewSummaryCard title="已拒绝" value={summary.rejected} tone="rejected" />
+        <ReviewSummaryCard title="本月申请" value={summary.currentMonth} />
+      </div>
+      <div className="scout-filters adjustment-review-filters">
+        <SelectField label="状态" value={props.status} onChange={props.onStatus}>
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已拒绝</option>
+          <option value="">全部</option>
+        </SelectField>
+        <SelectField label="平台" value={props.platform} onChange={props.onPlatform}>
+          <option value="">全部</option>
+          <option value="tiktok">TikTok</option>
+          <option value="douyin">抖音</option>
+        </SelectField>
+        <SelectField label="申请类型" value={props.requestType} onChange={props.onRequestType}>
+          <option value="">全部</option>
+          {adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}
+        </SelectField>
+        <label className="form-field adjustment-review-search-field">
+          <span>搜索</span>
+          <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="主播名 / UID / 经纪人" />
+        </label>
+      </div>
+      {props.loading ? (
+        <div className="table-state">正在读取审批申请...</div>
+      ) : filteredRequests.length === 0 ? (
+        <div className="table-state">暂无资料调整申请。</div>
+      ) : (
+        <>
+          <div className="staff-table-wrap adjustment-review-table-wrap">
+            <table className="staff-table agent-table adjustment-review-table">
+              <thead>
+                <tr>
+                  <th>主播</th>
+                  <th>平台 / UID</th>
+                  <th>申请项目</th>
+                  <th>目标资料</th>
+                  <th>申请人</th>
+                  <th>申请时间</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td><strong>{getAdjustmentCreatorName(request)}</strong></td>
+                    <td><ReviewPlatformLabel request={request} /></td>
+                    <td>{adjustmentTypeLabels[request.request_type]}</td>
+                    <td>{formatAdjustmentTarget(request)}</td>
+                    <td>{getAdjustmentRequesterName(request)}</td>
+                    <td>{formatDate(request.created_at)}</td>
+                    <td><AdjustmentStatusBadge status={request.status} /></td>
+                    <td><ReviewActions request={request} canReview={props.canReview} onView={props.onView} onAction={props.onAction} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="adjustment-review-mobile-list">
+            {filteredRequests.map((request) => (
+              <article className="adjustment-review-mobile-card" key={request.id}>
+                <div className="adjustment-review-mobile-head">
+                  <strong>{getAdjustmentCreatorName(request)}</strong>
+                  <AdjustmentStatusBadge status={request.status} />
+                </div>
+                <ReviewPlatformLabel request={request} />
+                <div className="adjustment-review-mobile-meta">
+                  <span>{adjustmentTypeLabels[request.request_type]}</span>
+                  <span>{formatAdjustmentTarget(request)}</span>
+                  <span>申请人：{getAdjustmentRequesterName(request)}</span>
+                  <span>申请时间：{formatDate(request.created_at)}</span>
+                </div>
+                <ReviewActions request={request} canReview={props.canReview} onView={props.onView} onAction={props.onAction} />
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReviewSummaryCard({ title, value, tone = 'default' }: { title: string; value: number; tone?: 'default' | AdjustmentReviewRequest['status'] }) {
+  return <article className={`adjustment-review-summary-card adjustment-review-summary-card--${tone}`}><span>{title}</span><strong>{value.toLocaleString('en-MY')}</strong></article>;
+}
+
+function ReviewPlatformLabel({ request }: { request: AdjustmentReviewRequest }) {
+  const logoUrl = request.platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl;
+  return (
+    <span className="adjustment-review-platform">
+      <img src={logoUrl} alt="" aria-hidden="true" />
+      <span>{platformLabels[request.platform]}</span>
+      <b>{request.platform_user_id ?? '-'}</b>
+    </span>
+  );
+}
+
+function ReviewActions({ request, canReview, onView, onAction }: { request: AdjustmentReviewRequest; canReview: boolean; onView: (request: AdjustmentReviewRequest) => void; onAction: (request: AdjustmentReviewRequest, status: 'approved' | 'rejected') => void }) {
+  const missingTargetEmail = getMissingTargetEmailReviewMessage(request);
+  return (
+    <div className="adjustment-review-actions">
+      <button className="secondary-button compact-button" type="button" onClick={() => onView(request)}>查看详情</button>
+      {request.status === 'pending' && canReview ? (
+        <>
+          {missingTargetEmail ? <span className="adjustment-review-action-note">{missingTargetEmail}</span> : <button className="secondary-button compact-button accept-button" type="button" onClick={() => onAction(request, 'approved')}>通过</button>}
+          <button className="secondary-button compact-button reject-button" type="button" onClick={() => onAction(request, 'rejected')}>拒绝</button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function AdjustmentStatusBadge({ status }: { status: AdjustmentReviewRequest['status'] }) {
+  return <span className={`adjustment-review-status adjustment-review-status--${status}`}>{adjustmentStatusLabels[status]}</span>;
+}
+
+function AdjustmentReviewDrawer({ request, onClose }: { request: AdjustmentReviewRequest; onClose: () => void }) {
+  return (
+    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+      <aside className="adjustment-review-drawer" role="dialog" aria-modal="true" aria-label="主播资料调整审批详情" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="adjustment-review-drawer-header">
+          <div>
+            <span>资料调整审批</span>
+            <h3>{getAdjustmentCreatorName(request)}</h3>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+        </div>
+        <div className="adjustment-review-drawer-body">
+          <DrawerSection title="主播资料">
+            <div className="agent-creator-drawer-grid">
+              <DrawerField label="主播名" value={getAdjustmentCreatorName(request)} />
+              <DrawerField label="平台" value={platformLabels[request.platform]} />
+              <DrawerField label="UID" value={request.platform_user_id ?? '-'} />
+              <DrawerField label="平台账号" value={request.creator?.platform_account ?? '-'} />
+            </div>
+          </DrawerSection>
+          <DrawerSection title="申请内容">
+            <div className="agent-creator-drawer-grid">
+              <DrawerField label="申请类型" value={adjustmentTypeLabels[request.request_type]} />
+              <DrawerField label="目标资料" value={formatAdjustmentTarget(request)} />
+              {request.request_type === 'change_manager' ? <DrawerField label="目标经纪人昵称" value={request.target_nickname ?? '-'} /> : null}
+              {request.request_type === 'change_manager' ? <DrawerField label="目标经纪人后台 Email" value={request.target_email ?? '-'} /> : null}
+              {request.request_type === 'change_scout' ? <DrawerField label="目标星探昵称" value={request.target_nickname ?? '-'} /> : null}
+              {request.request_type === 'change_scout' ? <DrawerField label="目标星探后台 Email" value={request.target_email ?? '-'} /> : null}
+              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行" value={request.bank_name ?? '-'} /> : null}
+              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行户口" value={request.bank_account ?? '-'} /> : null}
+              <DrawerField label="申请备注" value={request.content ?? '-'} />
+            </div>
+          </DrawerSection>
+          <DrawerSection title="申请记录">
+            <div className="agent-creator-drawer-grid">
+              <DrawerField label="申请人" value={getAdjustmentRequesterName(request)} />
+              <DrawerField label="申请时间" value={formatDate(request.created_at)} />
+              <DrawerField label="状态" value={<AdjustmentStatusBadge status={request.status} />} />
+              {request.reviewed_at ? <DrawerField label="审批时间" value={formatDate(request.reviewed_at)} /> : null}
+              {request.reviewer ? <DrawerField label="审批人" value={request.reviewer.nickname || request.reviewer.full_name || request.reviewer.email || '-'} /> : null}
+              {request.review_note ? <DrawerField label="审批备注" value={request.review_note} /> : null}
+            </div>
+          </DrawerSection>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function AdjustmentReviewActionModal({ action, saving, onChange, onClose, onSubmit }: { action: { request: AdjustmentReviewRequest; status: 'approved' | 'rejected'; note: string }; saving: boolean; onChange: (note: string) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const approving = action.status === 'approved';
+  const missingTargetEmail = approving ? getMissingTargetEmailReviewMessage(action.request) : '';
+  return (
+    <SystemModal
+      title={approving ? '确认通过资料调整申请？' : '确认拒绝资料调整申请？'}
+      ariaLabel={approving ? '确认通过资料调整申请' : '确认拒绝资料调整申请'}
+      onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="adjustment-review-action-form" disabled={saving || Boolean(missingTargetEmail)}>{approving ? '确认通过' : '确认拒绝'}</button></>}
+    >
+      <form id="adjustment-review-action-form" className="adjustment-review-confirm" onSubmit={onSubmit}>
+        <div className="adjustment-review-confirm-summary">
+          <strong>{getAdjustmentCreatorName(action.request)}</strong>
+          <span>{platformLabels[action.request.platform]} / {action.request.platform_user_id ?? '-'}</span>
+          <span>{adjustmentTypeLabels[action.request.request_type]}</span>
+          <span>{formatAdjustmentTarget(action.request)}</span>
+        </div>
+        {missingTargetEmail ? <p className="form-alert">{missingTargetEmail}</p> : null}
+        {approving && action.request.request_type === 'change_manager' ? <p className="form-alert">审批通过后，系统将执行主播经纪人归属同步。</p> : null}
+        <label className="form-field form-field-wide">
+          <span>{approving ? '审批备注' : '拒绝原因'}</span>
+          <textarea value={action.note} onChange={(event) => onChange(event.target.value)} required={!approving} />
+        </label>
+      </form>
+    </SystemModal>
+  );
+}
+
 function AgentDesignPanel({ loading, unclaimed, inProgress, requests, onStatus }: { loading: boolean; unclaimed: number; inProgress: number; requests: DesignRequest[]; onStatus: (request: DesignRequest, status: 'confirming' | 'revision' | 'ok' | 'cancelled') => void }) {
   return <div className="staff-list-panel"><div className="agent-count-strip"><span>未接单 <b>{unclaimed}</b></span><span>制作中 <b>{inProgress}</b></span></div>{loading ? <div className="table-state">正在读取美工申请...</div> : <div className="staff-table-wrap"><table className="staff-table agent-table"><thead><tr><th>类型</th><th>主播</th><th>状态</th><th>美工</th><th>申请内容</th><th>操作</th></tr></thead><tbody>{requests.map((item) => <tr key={item.id}><td>{designTypeLabels[item.request_type]}</td><td>{item.creator_name || item.platform_user_id || '-'}</td><td>{designStatusLabels[item.status]}</td><td>{getEmployeeName(item.designer) || '-'}</td><td>{item.design_content || item.special_content || '-'}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => onStatus(item, 'confirming')} aria-label="跟主播确认中"><Send size={16} /></button><button className="icon-button" type="button" onClick={() => onStatus(item, 'revision')} aria-label="调整申请"><RefreshCw size={16} /></button><button className="icon-button accept-button" type="button" onClick={() => onStatus(item, 'ok')} aria-label="OK"><Check size={16} /></button><button className="icon-button reject-button" type="button" onClick={() => onStatus(item, 'cancelled')} aria-label="取消"><X size={16} /></button></div></td></tr>)}</tbody></table></div>}</div>;
 }
@@ -605,7 +902,7 @@ function AdjustmentModal({ values, saving, onChange, onClose, onSubmit }: { valu
   const needsEffective = ['to_online', 'to_company', 'to_5_1', 'change_bank'].includes(values.request_type);
   const needsBank = ['to_company', 'to_5_1', 'change_bank'].includes(values.request_type);
   const needsTarget = values.request_type === 'change_manager' || values.request_type === 'change_scout';
-  return <SystemModal title="添加新申请" ariaLabel="主播资料调整申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="adjustment-form" disabled={saving}>提交</button></>}><form id="adjustment-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><SelectField label="可申请项目" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as AdjustmentType })}>{adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}</SelectField>{values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}{needsEffective ? <TextField label="生效日期" type="date" value={values.effective_date} onChange={(value) => onChange({ ...values, effective_date: value })} /> : null}{needsBank ? <><TextField label="全名" value={values.full_name} onChange={(value) => onChange({ ...values, full_name: value })} /><TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} /><TextField label="银行户口" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} /></> : null}{needsTarget ? <><TextField label={values.request_type === 'change_manager' ? '经纪人昵称' : '星探昵称'} value={values.target_nickname} onChange={(value) => onChange({ ...values, target_nickname: value })} /><TextField label={values.request_type === 'change_manager' ? '经纪人后台 Email' : '星探后台 Email'} value={values.target_email} onChange={(value) => onChange({ ...values, target_email: value })} /></> : null}<label className="form-field form-field-wide"><span>特殊申请 / 备注</span><textarea value={values.content} onChange={(event) => onChange({ ...values, content: event.target.value })} /></label></div></form></SystemModal>;
+  return <SystemModal title="添加新申请" ariaLabel="主播资料调整申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="adjustment-form" disabled={saving}>提交</button></>}><form id="adjustment-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><SelectField label="可申请项目" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as AdjustmentType })}>{adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}</SelectField>{values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}{needsEffective ? <TextField label="生效日期" type="date" value={values.effective_date} onChange={(value) => onChange({ ...values, effective_date: value })} /> : null}{needsBank ? <><TextField label="全名" value={values.full_name} onChange={(value) => onChange({ ...values, full_name: value })} /><TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} /><TextField label="银行户口" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} /></> : null}{needsTarget ? <><TextField label={values.request_type === 'change_manager' ? '经纪人昵称' : '星探昵称'} value={values.target_nickname} onChange={(value) => onChange({ ...values, target_nickname: value })} required /><TextField label={values.request_type === 'change_manager' ? '经纪人后台 Email' : '星探后台 Email'} type="email" value={values.target_email} onChange={(value) => onChange({ ...values, target_email: value })} required /></> : null}<label className="form-field form-field-wide"><span>特殊申请 / 备注</span><textarea value={values.content} onChange={(event) => onChange({ ...values, content: event.target.value })} /></label></div></form></SystemModal>;
 }
 
 function DesignModal({ values, saving, onChange, onClose, onSubmit }: { values: DesignFormValues; saving: boolean; onChange: (values: DesignFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
@@ -735,6 +1032,68 @@ function getConsistentValue(creators: CreatorProfile[], getValue: (creator: Crea
 function getOptionalCreatorField(creator: CreatorProfile, field: string) {
   const value = (creator as unknown as Record<string, unknown>)[field];
   return typeof value === 'string' ? value : '';
+}
+
+function filterAdjustmentReviews(requests: AdjustmentReviewRequest[], filters: { status: string; platform: string; requestType: string; search: string }) {
+  const normalizedSearch = filters.search.trim().toLowerCase();
+  return requests.filter((request) => {
+    if (filters.status && request.status !== filters.status) return false;
+    if (filters.platform && request.platform !== filters.platform) return false;
+    if (filters.requestType && request.request_type !== filters.requestType) return false;
+    if (!normalizedSearch) return true;
+
+    return [
+      getAdjustmentCreatorName(request),
+      request.platform_user_id ?? '',
+      request.creator?.platform_account ?? '',
+      request.target_nickname ?? '',
+      request.target_email ?? '',
+      getAdjustmentRequesterName(request),
+    ].join(' ').toLowerCase().includes(normalizedSearch);
+  });
+}
+
+function summarizeAdjustmentReviews(requests: AdjustmentReviewRequest[]) {
+  return requests.reduce(
+    (summary, request) => {
+      summary[request.status] += 1;
+      if (String(request.created_at).startsWith(currentMonth)) summary.currentMonth += 1;
+      return summary;
+    },
+    { pending: 0, approved: 0, rejected: 0, currentMonth: 0 },
+  );
+}
+
+function getAdjustmentCreatorName(request: AdjustmentReviewRequest) {
+  return request.creator?.creator_name || request.platform_user_id || '-';
+}
+
+function getAdjustmentRequesterName(request: AdjustmentReviewRequest) {
+  return request.requester?.nickname || request.requester?.full_name || request.requester?.email || '-';
+}
+
+function formatAdjustmentTarget(request: AdjustmentReviewRequest) {
+  if (request.request_type === 'change_manager') return request.target_nickname || request.target_email || '转经纪人';
+  if (request.request_type === 'change_scout') return request.target_nickname || request.target_email || '转星探';
+  if (request.request_type === 'change_bank') return [request.bank_name, request.bank_account].filter(Boolean).join(' / ') || '更换银行户口';
+  if (request.request_type === 'to_online') return '转线上';
+  if (request.request_type === 'to_company') return '转公司提';
+  if (request.request_type === 'to_5_1') return '转5+1';
+  return request.content || '特殊申请';
+}
+
+function requiresTargetEmail(requestType: AdjustmentType) {
+  return requestType === 'change_manager' || requestType === 'change_scout';
+}
+
+function getMissingTargetEmailMessage(requestType: AdjustmentType, targetEmail: string | null | undefined) {
+  if (!requiresTargetEmail(requestType) || targetEmail?.trim()) return '';
+  return requestType === 'change_manager' ? '目标经纪人 Email 缺失，请填写后再提交。' : '目标星探 Email 缺失，请填写后再提交。';
+}
+
+function getMissingTargetEmailReviewMessage(request: AdjustmentReviewRequest) {
+  if (!requiresTargetEmail(request.request_type) || request.target_email?.trim()) return '';
+  return request.request_type === 'change_manager' ? '目标经纪人 Email 缺失，请申请人重新提交。' : '目标星探 Email 缺失，请申请人重新提交。';
 }
 
 function formatDate(value: string) {

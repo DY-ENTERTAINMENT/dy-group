@@ -205,6 +205,14 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: getMenuPath('management-creator-adjustment-reviews'),
+            element: (
+              <RequirePermission permissionKey="management-streamer-stats">
+                <AgentPage mode="management-adjustments" />
+              </RequirePermission>
+            ),
+          },
+          {
             path: getMenuPath('management-recruiting-data'),
             element: (
               <RequirePermission permissionKey="management-recruiting-data">

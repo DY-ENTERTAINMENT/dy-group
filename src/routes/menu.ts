@@ -30,6 +30,7 @@ export type MenuItem = {
   section?: string;
   group?: string;
   disabled?: boolean;
+  permissionKey?: string;
   regionFeaturePermissionKey?: RegionFeaturePermissionKey;
 };
 
@@ -222,6 +223,15 @@ export const menuItems: MenuItem[] = [
     icon: Database,
     section: '管理',
     group: '管理',
+  },
+  {
+    key: 'management-creator-adjustment-reviews',
+    label: '主播资料调整审批',
+    path: '/management/creator-adjustment-reviews',
+    icon: ClipboardCheck,
+    section: '管理',
+    group: '管理',
+    permissionKey: 'management-streamer-stats',
   },
   {
     key: 'management-recruiting-data',

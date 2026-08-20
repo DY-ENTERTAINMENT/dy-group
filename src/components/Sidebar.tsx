@@ -47,7 +47,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: SidebarPro
         }
         if (!item.section) return true;
         if (item.key === 'settings') return permissions.isSuperAdmin;
-        return permissions.canView(item.key);
+        return permissions.canView(item.permissionKey ?? item.key);
       }),
     [permissions],
   );
