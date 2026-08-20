@@ -11,6 +11,23 @@ export type LeaveFormValues = {
 };
 
 const MEDICAL_BUCKET = 'leave-medical-attachments';
+const MAX_MEDICAL_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MEDICAL_ATTACHMENT_FORMATS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+} as const;
+const MEDICAL_ATTACHMENT_EXTENSIONS = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+} as const;
+const HEIC_MEDICAL_ATTACHMENT_TYPES = new Set(['image/heic', 'image/heif']);
+const HEIC_MEDICAL_ATTACHMENT_EXTENSIONS = new Set(['heic', 'heif']);
+const CONVERTED_MEDICAL_ATTACHMENT_QUALITY = 0.92;
 
 export type LeaveRequestItem = LeaveRequest & {
   employee: Pick<Employee, 'id' | 'full_name' | 'phone' | 'employee_code' | 'region_id'> | null;
@@ -127,15 +144,49 @@ export const leaveService = {
   },
 
   async uploadMedicalAttachment(profileId: string, file: File) {
-    if (!file.type.startsWith('image/')) {
-      throw new Error('病假证明必须是图片格式。');
+    const fileType = file.type.toLowerCase();
+    const originalExtension = file.name.split('.').pop()?.toLowerCase() || '';
+    const isHeicAttachment = HEIC_MEDICAL_ATTACHMENT_TYPES.has(fileType) || HEIC_MEDICAL_ATTACHMENT_EXTENSIONS.has(originalExtension);
+    let uploadFile: File | Blob = file;
+    let contentType: keyof typeof MEDICAL_ATTACHMENT_FORMATS;
+    let extension: (typeof MEDICAL_ATTACHMENT_FORMATS)[keyof typeof MEDICAL_ATTACHMENT_FORMATS];
+
+    if (isHeicAttachment) {
+      uploadFile = await convertHeicMedicalAttachmentToJpeg(file);
+      contentType = 'image/jpeg';
+      extension = 'jpg';
+
+      if (uploadFile.size > MAX_MEDICAL_ATTACHMENT_SIZE) {
+        throw new Error('病假证明转换后超过 10MB，请重新拍摄、截图或选择较小的照片。');
+      }
+    } else if (fileType) {
+      if (!(fileType in MEDICAL_ATTACHMENT_FORMATS)) {
+        throw new Error('病假证明必须是 JPG、PNG、WEBP 或 GIF 图片。');
+      }
+
+      if (file.size > MAX_MEDICAL_ATTACHMENT_SIZE) {
+        throw new Error('病假证明图片不能超过 10MB，请压缩后重新上传。');
+      }
+
+      contentType = fileType as keyof typeof MEDICAL_ATTACHMENT_FORMATS;
+      extension = MEDICAL_ATTACHMENT_FORMATS[contentType];
+    } else {
+      if (!(originalExtension in MEDICAL_ATTACHMENT_EXTENSIONS)) {
+        throw new Error('病假证明必须是 JPG、PNG、WEBP 或 GIF 图片。');
+      }
+
+      if (file.size > MAX_MEDICAL_ATTACHMENT_SIZE) {
+        throw new Error('病假证明图片不能超过 10MB，请压缩后重新上传。');
+      }
+
+      contentType = MEDICAL_ATTACHMENT_EXTENSIONS[originalExtension as keyof typeof MEDICAL_ATTACHMENT_EXTENSIONS];
+      extension = MEDICAL_ATTACHMENT_FORMATS[contentType];
     }
 
-    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const path = `${profileId}/${Date.now()}.${extension}`;
-    const { error } = await supabase.storage.from(MEDICAL_BUCKET).upload(path, file, {
+    const { error } = await supabase.storage.from(MEDICAL_BUCKET).upload(path, uploadFile, {
       cacheControl: '3600',
-      contentType: file.type,
+      contentType,
       upsert: false,
     });
 
@@ -269,6 +320,70 @@ export function getLeaveStats(requests: LeaveRequestItem[]): LeaveStats {
       rejected: 0,
     },
   );
+}
+
+async function convertHeicMedicalAttachmentToJpeg(file: File) {
+  let imageUrl = '';
+  let canvas: HTMLCanvasElement | null = null;
+
+  try {
+    imageUrl = URL.createObjectURL(file);
+    const image = await loadMedicalAttachmentImage(imageUrl);
+    canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+
+    const context = canvas.getContext('2d');
+    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error('Invalid HEIC/HEIF image.');
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const jpegBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas?.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to convert HEIC/HEIF image.'));
+            return;
+          }
+
+          resolve(blob);
+        },
+        'image/jpeg',
+        CONVERTED_MEDICAL_ATTACHMENT_QUALITY,
+      );
+    });
+
+    return new File([jpegBlob], `${getFileNameWithoutExtension(file.name) || 'medical-attachment'}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+  } catch {
+    throw new Error('HEIC/HEIF 图片转换失败，请转换为 JPG，或截图/重新拍照后上传。');
+  } finally {
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+    }
+
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
+}
+
+function loadMedicalAttachmentImage(source: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to load HEIC/HEIF image.'));
+    image.src = source;
+  });
+}
+
+function getFileNameWithoutExtension(fileName: string) {
+  const extensionStart = fileName.lastIndexOf('.');
+  return extensionStart > 0 ? fileName.slice(0, extensionStart) : fileName;
 }
 
 async function findEmployeeByProfileId(profileId: string) {
