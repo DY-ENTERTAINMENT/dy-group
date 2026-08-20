@@ -475,7 +475,19 @@ function LeaveRequestModal({
               <div className="form-field">
                 <span>病假证明上传</span>
                 <label className="secondary-action attachment-upload-action">
-                  {uploadingAttachment ? '上传中...' : '上传图片 / 拍照上传'}
+                  {uploadingAttachment ? '上传中...' : '从相册选择'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingAttachment || saving}
+                    onChange={(event) => {
+                      onUploadAttachment(event.target.files?.[0]);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                <label className="secondary-action attachment-upload-action">
+                  {uploadingAttachment ? '上传中...' : '立即拍照'}
                   <input
                     type="file"
                     accept="image/*"
@@ -492,7 +504,7 @@ function LeaveRequestModal({
                     查看已上传病假证明
                   </a>
                 ) : (
-                  <p className="form-helper">请选择图片，手机端可直接拍照上传。</p>
+                  <p className="form-helper">可从相册选择已有照片，或直接使用手机相机拍照上传。</p>
                 )}
               </div>
             ) : null}
