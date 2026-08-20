@@ -20,6 +20,7 @@ import {
   type AdjustmentFormValues,
   type AdjustmentRequest,
   type AdjustmentReviewRequest,
+  type AdjustmentTargetEmployee,
   type AdjustmentType,
   type AgentOptions,
   type DesignFormValues,
@@ -318,7 +319,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         />
       ) : null}
 
-      {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
+      {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} currentRegionId={options.currentEmployee?.region_id ?? ''} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
       {selectedAdjustmentReview ? <AdjustmentReviewDrawer request={selectedAdjustmentReview} onClose={() => setSelectedAdjustmentReview(null)} /> : null}
       {reviewAction ? <AdjustmentReviewActionModal action={reviewAction} saving={saving} onChange={(note) => setReviewAction({ ...reviewAction, note })} onClose={() => setReviewAction(null)} onSubmit={submitAdjustmentReview} /> : null}
       {designModalOpen ? <DesignModal values={designForm} saving={saving} onChange={setDesignForm} onClose={() => setDesignModalOpen(false)} onSubmit={submitDesign} /> : null}
@@ -898,11 +899,198 @@ function AgentDesignPanel({ loading, unclaimed, inProgress, requests, onStatus }
   return <div className="staff-list-panel"><div className="agent-count-strip"><span>未接单 <b>{unclaimed}</b></span><span>制作中 <b>{inProgress}</b></span></div>{loading ? <div className="table-state">正在读取美工申请...</div> : <div className="staff-table-wrap"><table className="staff-table agent-table"><thead><tr><th>类型</th><th>主播</th><th>状态</th><th>美工</th><th>申请内容</th><th>操作</th></tr></thead><tbody>{requests.map((item) => <tr key={item.id}><td>{designTypeLabels[item.request_type]}</td><td>{item.creator_name || item.platform_user_id || '-'}</td><td>{designStatusLabels[item.status]}</td><td>{getEmployeeName(item.designer) || '-'}</td><td>{item.design_content || item.special_content || '-'}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => onStatus(item, 'confirming')} aria-label="跟主播确认中"><Send size={16} /></button><button className="icon-button" type="button" onClick={() => onStatus(item, 'revision')} aria-label="调整申请"><RefreshCw size={16} /></button><button className="icon-button accept-button" type="button" onClick={() => onStatus(item, 'ok')} aria-label="OK"><Check size={16} /></button><button className="icon-button reject-button" type="button" onClick={() => onStatus(item, 'cancelled')} aria-label="取消"><X size={16} /></button></div></td></tr>)}</tbody></table></div>}</div>;
 }
 
-function AdjustmentModal({ values, saving, onChange, onClose, onSubmit }: { values: AdjustmentFormValues; saving: boolean; onChange: (values: AdjustmentFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function AdjustmentModal({
+  values,
+  saving,
+  currentRegionId,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  values: AdjustmentFormValues;
+  saving: boolean;
+  currentRegionId: string;
+  onChange: (values: AdjustmentFormValues) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
   const needsEffective = ['to_online', 'to_company', 'to_5_1', 'change_bank'].includes(values.request_type);
   const needsBank = ['to_company', 'to_5_1', 'change_bank'].includes(values.request_type);
   const needsTarget = values.request_type === 'change_manager' || values.request_type === 'change_scout';
-  return <SystemModal title="添加新申请" ariaLabel="主播资料调整申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="adjustment-form" disabled={saving}>提交</button></>}><form id="adjustment-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><SelectField label="可申请项目" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as AdjustmentType })}>{adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}</SelectField>{values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}{needsEffective ? <TextField label="生效日期" type="date" value={values.effective_date} onChange={(value) => onChange({ ...values, effective_date: value })} /> : null}{needsBank ? <><TextField label="全名" value={values.full_name} onChange={(value) => onChange({ ...values, full_name: value })} /><TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} /><TextField label="银行户口" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} /></> : null}{needsTarget ? <><TextField label={values.request_type === 'change_manager' ? '经纪人昵称' : '星探昵称'} value={values.target_nickname} onChange={(value) => onChange({ ...values, target_nickname: value })} required /><TextField label={values.request_type === 'change_manager' ? '经纪人后台 Email' : '星探后台 Email'} type="email" value={values.target_email} onChange={(value) => onChange({ ...values, target_email: value })} required /></> : null}<label className="form-field form-field-wide"><span>特殊申请 / 备注</span><textarea value={values.content} onChange={(event) => onChange({ ...values, content: event.target.value })} /></label></div></form></SystemModal>;
+  function updateRequestType(value: string) {
+    onChange({ ...values, request_type: value as AdjustmentType, target_nickname: '', target_email: '' });
+  }
+
+  function updateTarget(employee: AdjustmentTargetEmployee | null) {
+    onChange({
+      ...values,
+      target_nickname: employee ? employee.nickname || employee.full_name : '',
+      target_email: employee?.email ?? '',
+    });
+  }
+
+  return (
+    <SystemModal
+      title="添加新申请"
+      ariaLabel="主播资料调整申请"
+      onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="adjustment-form" disabled={saving}>提交</button></>}
+    >
+      <form id="adjustment-form" onSubmit={onSubmit}>
+        <div className="form-grid">
+          <SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}>
+            <option value="tiktok">TikTok</option>
+            <option value="douyin">抖音</option>
+          </SelectField>
+          <SelectField label="可申请项目" value={values.request_type} onChange={updateRequestType}>
+            {adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}
+          </SelectField>
+          {values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}
+          {needsEffective ? <TextField label="生效日期" type="date" value={values.effective_date} onChange={(value) => onChange({ ...values, effective_date: value })} /> : null}
+          {needsBank ? (
+            <>
+              <TextField label="全名" value={values.full_name} onChange={(value) => onChange({ ...values, full_name: value })} />
+              <TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} />
+              <TextField label="银行户口" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} />
+            </>
+          ) : null}
+          {needsTarget ? (
+            <AdjustmentTargetEmployeeSearch
+              label={values.request_type === 'change_manager' ? '目标经纪人' : '目标星探'}
+              targetType={values.request_type === 'change_manager' ? 'manager' : 'scout'}
+              selectedTargetEmail={values.target_email}
+              currentRegionId={currentRegionId}
+              onSelect={updateTarget}
+            />
+          ) : null}
+          <label className="form-field form-field-wide">
+            <span>特殊申请 / 备注</span>
+            <textarea value={values.content} onChange={(event) => onChange({ ...values, content: event.target.value })} />
+          </label>
+        </div>
+      </form>
+    </SystemModal>
+  );
+}
+
+function AdjustmentTargetEmployeeSearch({
+  label,
+  targetType,
+  selectedTargetEmail,
+  currentRegionId,
+  onSelect,
+}: {
+  label: string;
+  targetType: 'manager' | 'scout';
+  selectedTargetEmail: string;
+  currentRegionId: string;
+  onSelect: (employee: AdjustmentTargetEmployee | null) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [employees, setEmployees] = useState<AdjustmentTargetEmployee[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+  const selectedEmployee = employees.find((employee) => employee.email?.toLowerCase() === selectedTargetEmail.toLowerCase()) ?? null;
+  const selectedLabel = selectedEmployee ? formatAdjustmentTargetEmployee(selectedEmployee) : '';
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    setEmployees([]);
+
+    agentService.listAdjustmentTargetEmployees(targetType)
+      .then((items) => {
+        if (!active) return;
+        setEmployees(items);
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setError(`读取候选员工失败：${getErrorMessage(loadError)}`);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [targetType]);
+
+  useEffect(() => {
+    if (selectedLabel) setQuery(selectedLabel);
+    if (!selectedTargetEmail) setQuery('');
+  }, [selectedLabel, selectedTargetEmail]);
+
+  const filteredEmployees = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return employees
+      .filter((employee) => {
+        if (!normalizedQuery || selectedLabel === query) return true;
+        return [
+          employee.nickname ?? '',
+          employee.full_name,
+          employee.employee_code ?? '',
+        ].join(' ').toLowerCase().includes(normalizedQuery);
+      })
+      .sort((first, second) => {
+        const firstSameRegion = currentRegionId && first.region_id === currentRegionId ? 0 : 1;
+        const secondSameRegion = currentRegionId && second.region_id === currentRegionId ? 0 : 1;
+        if (firstSameRegion !== secondSameRegion) return firstSameRegion - secondSameRegion;
+        return formatAdjustmentTargetEmployee(first).localeCompare(formatAdjustmentTargetEmployee(second), 'zh-Hans');
+      })
+      .slice(0, 8);
+  }, [currentRegionId, employees, query, selectedLabel]);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setOpen(true);
+    if (selectedEmployee && value !== selectedLabel) onSelect(null);
+  }
+
+  function selectEmployee(employee: AdjustmentTargetEmployee) {
+    setQuery(formatAdjustmentTargetEmployee(employee));
+    setOpen(false);
+    onSelect(employee.email ? employee : null);
+  }
+
+  return (
+    <label className="form-field form-field-wide agent-adjustment-target-field">
+      <span>{label}</span>
+      <div className="agent-adjustment-target-combobox">
+        <input
+          value={query}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+          onChange={(event) => handleQueryChange(event.target.value)}
+          onFocus={() => setOpen(true)}
+          placeholder="搜索姓名 / 昵称 / 员工编号"
+          required
+        />
+        {selectedEmployee ? <span className="agent-adjustment-target-selected">已选择：{formatAdjustmentTargetEmployee(selectedEmployee)}</span> : null}
+        {error ? <span className="agent-adjustment-target-error">{error}</span> : null}
+        {open ? (
+          <div className="agent-adjustment-target-dropdown" role="listbox">
+            {loading ? <div className="agent-adjustment-target-empty">正在读取候选员工...</div> : null}
+            {!loading && filteredEmployees.length === 0 ? <div className="agent-adjustment-target-empty">没有符合条件的员工</div> : null}
+            {!loading && filteredEmployees.map((employee) => (
+              <button
+                key={employee.id}
+                className="agent-adjustment-target-option"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectEmployee(employee)}
+                role="option"
+                aria-selected={employee.id === selectedEmployee?.id}
+              >
+                {formatAdjustmentTargetEmployee(employee)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </label>
+  );
 }
 
 function DesignModal({ values, saving, onChange, onClose, onSubmit }: { values: DesignFormValues; saving: boolean; onChange: (values: DesignFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
@@ -1080,6 +1268,12 @@ function formatAdjustmentTarget(request: AdjustmentReviewRequest) {
   if (request.request_type === 'to_company') return '转公司提';
   if (request.request_type === 'to_5_1') return '转5+1';
   return request.content || '特殊申请';
+}
+
+function formatAdjustmentTargetEmployee(employee: AdjustmentTargetEmployee) {
+  const code = employee.employee_code ? `（${employee.employee_code}）` : '';
+  if (employee.nickname && employee.nickname !== employee.full_name) return `${employee.nickname} · ${employee.full_name}${code}`;
+  return `${employee.full_name}${code}`;
 }
 
 function requiresTargetEmail(requestType: AdjustmentType) {

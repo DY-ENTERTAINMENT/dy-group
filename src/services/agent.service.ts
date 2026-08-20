@@ -29,6 +29,9 @@ export type AgentOptions = {
   currentEmployee: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'> | null;
 };
 
+export type AdjustmentTargetEmployee = Pick<Employee, 'id' | 'employee_code' | 'full_name' | 'nickname' | 'email' | 'region_id'>;
+export type AdjustmentTargetType = 'manager' | 'scout';
+
 export type AdjustmentRequest = {
   id: string;
   platform: CreatorPlatform;
@@ -287,6 +290,12 @@ export const agentService = {
       .from('creator_adjustment_requests')
       .select('*, creator:creator_profiles(id, creator_name, platform_account, platform_user_id), requester:employees!creator_adjustment_requests_requester_employee_id_fkey(id, employee_code, full_name, nickname, email), reviewer:profiles!creator_adjustment_requests_reviewed_by_fkey(id, full_name, nickname, email)')
       .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async listAdjustmentTargetEmployees(targetType: AdjustmentTargetType): Promise<AdjustmentTargetEmployee[]> {
+    const { data, error } = await db.rpc('get_agent_adjustment_target_employees', { p_target_type: targetType });
     if (error) throw error;
     return data ?? [];
   },

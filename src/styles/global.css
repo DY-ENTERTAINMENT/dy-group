@@ -5307,6 +5307,70 @@ button.leave-chip:disabled {
   max-width: 220px;
 }
 
+.agent-adjustment-target-field {
+  position: relative;
+}
+
+.agent-adjustment-target-combobox {
+  display: grid;
+  gap: 7px;
+  position: relative;
+}
+
+.agent-adjustment-target-selected {
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-adjustment-target-error {
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-adjustment-target-dropdown {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+  display: grid;
+  gap: 4px;
+  left: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+}
+
+.agent-adjustment-target-option {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.agent-adjustment-target-option:hover,
+.agent-adjustment-target-option[aria-selected='true'] {
+  background: var(--panel-soft);
+}
+
+.agent-adjustment-target-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
 .adjustment-review-mobile-list {
   display: none;
   gap: 12px;
