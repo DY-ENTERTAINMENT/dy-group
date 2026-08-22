@@ -85,6 +85,8 @@ type EmployeeRowWithRelations = Pick<
   job_titles: Pick<JobTitle, 'id' | 'name'> | null;
 };
 
+const ATTENDANCE_RECORDS_PAGE_SIZE = 1000;
+
 export const attendanceManagementService = {
   async getAttendancePhotoSignedUrl(photoPath: string): Promise<string> {
     const { data, error } = await supabase.storage.from('attendance-photos').createSignedUrl(photoPath, 60);
@@ -167,12 +169,7 @@ export const attendanceManagementService = {
       regionsResult,
     ] = await Promise.all([
       scopedEmployeesQuery,
-      supabase
-        .from('attendance_records')
-        .select('*')
-        .gte('punched_at', range.startIso)
-        .lt('punched_at', range.endIso)
-        .order('punched_at', { ascending: true }),
+      fetchAttendanceRecordsByPeriod(range),
       supabase
         .from('leave_requests')
         .select('*')
@@ -211,10 +208,6 @@ export const attendanceManagementService = {
       throw employeesResult.error;
     }
 
-    if (attendanceResult.error) {
-      throw attendanceResult.error;
-    }
-
     if (leaveResult.error) {
       throw leaveResult.error;
     }
@@ -247,7 +240,7 @@ export const attendanceManagementService = {
       employees: ((employeesResult.data ?? []) as unknown as EmployeeRowWithRelations[])
         .map(mapEmployeeRow)
         .filter((employee) => shouldShowEmployeeForPeriod(employee, range.startDate)),
-      attendanceRecords: attendanceResult.data ?? [],
+      attendanceRecords: attendanceResult,
       abnormalReviewHistory: abnormalReviewHistoryResult.data ?? [],
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
@@ -304,6 +297,31 @@ function shouldShowEmployeeForPeriod(employee: AttendanceEmployee, startDate: st
   }
 
   return false;
+}
+
+async function fetchAttendanceRecordsByPeriod(range: AttendancePeriodRange): Promise<AttendanceRecord[]> {
+  const records: AttendanceRecord[] = [];
+
+  for (let offset = 0; ; offset += ATTENDANCE_RECORDS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select('*')
+      .gte('punched_at', range.startIso)
+      .lt('punched_at', range.endIso)
+      .order('punched_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + ATTENDANCE_RECORDS_PAGE_SIZE - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    records.push(...(data ?? []));
+
+    if (!data || data.length < ATTENDANCE_RECORDS_PAGE_SIZE) {
+      return records;
+    }
+  }
 }
 
 function mergeLeaveRequests(primary: LeaveRequest[], secondary: LeaveRequest[]) {
