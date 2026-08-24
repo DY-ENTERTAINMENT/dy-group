@@ -5852,6 +5852,134 @@ button.leave-chip:disabled {
     background: #ffffff;
   }
 
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table {
+    min-width: 980px;
+    table-layout: fixed;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily {
+    min-width: 1040px;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded {
+    min-width: 1120px;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table th,
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table td {
+    padding: 13px 14px;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 1.45;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table th {
+    font-size: 12px;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table td {
+    font-size: 14px;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table td > span {
+    margin: 0 auto;
+    color: inherit;
+    font-size: inherit;
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--daily):not(.workload-team-table--onboarded) .workload-col-period {
+    width: 28%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--daily):not(.workload-team-table--onboarded) .workload-col-scout {
+    width: 18%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--daily):not(.workload-team-table--onboarded) .workload-col-region {
+    width: 12%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--daily):not(.workload-team-table--onboarded) .workload-col-metric {
+    width: 14%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily .workload-col-period {
+    width: 16%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily .workload-col-scout {
+    width: 12%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily .workload-col-region {
+    width: 8%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily .workload-col-metric {
+    width: 10%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--daily .workload-col-note {
+    width: 34%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded .workload-col-scout {
+    width: 10%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded .workload-col-period {
+    width: 18%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded .workload-col-region {
+    width: 7%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded .workload-col-metric {
+    width: 10%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded .workload-col-creators {
+    width: 25%;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--onboarded) th:first-child,
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table:not(.workload-team-table--onboarded) td:first-child,
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded th:nth-child(2),
+  .management-recruiting-panel .workload-detail-desktop-table .workload-team-table--onboarded td:nth-child(2) {
+    white-space: nowrap;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-new-creators-head,
+  .management-recruiting-panel .workload-detail-desktop-table .workload-new-creators-cell {
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-new-creators-cell > .workload-new-creators-list {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    max-width: 360px;
+    margin: 0 auto;
+    color: inherit;
+    font-size: inherit;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-detail-desktop-table .workload-new-creators-line {
+    display: block;
+    margin-top: 0;
+    color: inherit;
+    font-size: inherit;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
   .management-recruiting-panel .workload-detail-desktop-table .staff-table tbody tr:nth-child(even) td,
   .management-recruiting-panel .workload-daily-desktop-table .staff-table tbody tr:nth-child(even) td,
   .management-recruiting-panel .scout-record-desktop-table .staff-table tbody tr:nth-child(even) td {
@@ -8527,6 +8655,87 @@ button.leave-chip:disabled {
     font-weight: 900;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+  }
+
+  .management-recruiting-panel .workload-mobile-onboarded-count {
+    display: grid;
+    justify-items: center;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .management-recruiting-panel .workload-mobile-onboarded-count span {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 5px;
+    width: min(100%, 160px);
+    min-height: 68px;
+    padding: 9px 8px;
+    border: 1px solid #c7d8ef;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #ffffff 0%, #fffbfd 58%, #faf7ff 100%);
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-mobile-onboarded-count small {
+    color: #7a5a8f;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .management-recruiting-panel .workload-mobile-onboarded-count b {
+    color: #5b2a7a;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .management-recruiting-panel .workload-mobile-new-creators {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #c7d8ef;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #ffffff 0%, #fffbfd 58%, #faf7ff 100%);
+    text-align: center;
+  }
+
+  .management-recruiting-panel .workload-mobile-new-creators > span {
+    color: #7a5a8f;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .management-recruiting-panel .workload-mobile-new-creators > div {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+    color: #5b2a7a;
+    font-size: 14px;
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  .management-recruiting-panel .workload-mobile-new-creators b {
+    max-width: 100%;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    overflow-wrap: break-word;
+    text-align: center;
+    white-space: normal;
+    word-break: keep-all;
   }
 
   .management-recruiting-panel .workload-daily-note {

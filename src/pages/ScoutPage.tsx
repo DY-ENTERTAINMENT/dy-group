@@ -49,7 +49,7 @@ const candidateStatusFilters: CandidateStatusFilter[] = ['pending', 'accepted', 
 type TeamWorkloadView = WorkloadGranularity | 'last-week';
 type WorkloadView = TeamWorkloadView | 'scout-records';
 type ScoutRecordView = Extract<WorkloadGranularity, 'daily' | 'monthly'>;
-type ManagementWorkloadDisplayStat = ManagementWorkloadStat & { onboarded_count: number };
+type ManagementWorkloadDisplayStat = ManagementWorkloadStat & { onboarded_count: number; onboarded_creator_details: string[] };
 const teamWorkloadViews: TeamWorkloadView[] = ['daily', 'weekly', 'last-week', 'monthly'];
 const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
   daily: '每日',
@@ -2141,32 +2141,55 @@ function WorkloadStatsTable({
     return <div className="table-state">暂无星探工作量记录。</div>;
   }
 
+  const teamTableClassName = [
+    'staff-table',
+    'scout-summary-table',
+    !personal ? 'workload-team-table' : '',
+    !personal && granularity === 'daily' ? 'workload-team-table--daily' : '',
+    !personal && showOnboarded ? 'workload-team-table--onboarded' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <>
     <div className={!personal ? 'staff-table-wrap workload-detail-desktop-table' : granularity === 'daily' ? 'staff-table-wrap workload-daily-desktop-table' : 'staff-table-wrap'}>
-      <table className="staff-table scout-summary-table">
+      <table className={teamTableClassName}>
+        {!personal ? <WorkloadTeamTableColumns granularity={granularity} showOnboarded={showOnboarded} /> : null}
         <thead>
           <tr>
+            {showOnboarded && !personal ? <th>星探</th> : null}
             <th>{granularity === 'daily' && personal ? '日期' : granularity === 'monthly' && personal ? '月份' : '周期'}</th>
-            {!personal ? <th>星探</th> : null}
+            {!personal && !showOnboarded ? <th>星探</th> : null}
             {!personal ? <th>区域</th> : null}
             <th>联系人数</th>
             <th>回复人数</th>
             <th>回复率</th>
             {showOnboarded ? <th>新增入公会</th> : null}
+            {showOnboarded ? <th className="workload-new-creators-head">新增主播</th> : null}
             {granularity === 'daily' ? <th>备注 / 今日进度</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={`${row.period_start}-${row.period_end}-${row.scout_employee_id ?? row.scout_profile_id ?? row.scout_name}-${row.region_id ?? 'none'}`}>
+              {showOnboarded && !personal ? <td>{row.scout_name}</td> : null}
               <td>{row.period_label}</td>
-              {!personal ? <td>{row.scout_name}</td> : null}
+              {!personal && !showOnboarded ? <td>{row.scout_name}</td> : null}
               {!personal ? <td>{row.region_code ?? '-'}</td> : null}
               <td>{row.contacted_count}</td>
               <td>{row.replied_count}</td>
               <td>{formatReplyRate(row.contacted_count, row.replied_count)}</td>
               {showOnboarded ? <td>{getWorkloadOnboardedCount(row)}</td> : null}
+              {showOnboarded ? (
+                <td className="workload-new-creators-cell">
+                  <span className="workload-new-creators-list" title={formatWorkloadOnboardedCreatorDetails(row).join('\n')}>
+                    {formatWorkloadOnboardedCreatorDetails(row).map((detail, index) => (
+                      <span className="workload-new-creators-line" key={`${detail}-${index}`}>
+                        {detail}
+                      </span>
+                    ))}
+                  </span>
+                </td>
+              ) : null}
               {granularity === 'daily' ? (
                 <td>
                   <span title={row.note ?? undefined} style={{ display: 'block', maxWidth: 420, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
@@ -2182,6 +2205,35 @@ function WorkloadStatsTable({
     {!personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} showOnboarded={showOnboarded} /> : null}
     {granularity === 'daily' && personal ? <MobileDailyWorkloadCards rows={rows} /> : null}
     </>
+  );
+}
+
+function WorkloadTeamTableColumns({ granularity, showOnboarded }: { granularity: WorkloadGranularity; showOnboarded: boolean }) {
+  if (showOnboarded) {
+    return (
+      <colgroup>
+        <col className="workload-col-scout" />
+        <col className="workload-col-period" />
+        <col className="workload-col-region" />
+        <col className="workload-col-metric" />
+        <col className="workload-col-metric" />
+        <col className="workload-col-metric" />
+        <col className="workload-col-metric" />
+        <col className="workload-col-creators" />
+      </colgroup>
+    );
+  }
+
+  return (
+    <colgroup>
+      <col className="workload-col-period" />
+      <col className="workload-col-scout" />
+      <col className="workload-col-region" />
+      <col className="workload-col-metric" />
+      <col className="workload-col-metric" />
+      <col className="workload-col-metric" />
+      {granularity === 'daily' ? <col className="workload-col-note" /> : null}
+    </colgroup>
   );
 }
 
@@ -2241,13 +2293,25 @@ function MobileWorkloadDetailCards({ rows, granularity, showOnboarded = false }:
               <small>回复率</small>
               <b>{formatReplyRate(row.contacted_count, row.replied_count)}</b>
             </span>
-            {showOnboarded ? (
-              <span>
-                <small>新增入公会</small>
-                <b>{getWorkloadOnboardedCount(row)}</b>
-              </span>
-            ) : null}
           </div>
+          {showOnboarded ? (
+            <>
+              <div className="workload-mobile-onboarded-count">
+                <span>
+                  <small>新增入公会</small>
+                  <b>{getWorkloadOnboardedCount(row)}</b>
+                </span>
+              </div>
+              <section className="workload-mobile-new-creators">
+                <span>新增主播</span>
+                <div>
+                  {formatWorkloadOnboardedCreatorDetails(row).map((detail, index) => (
+                    <b key={`${detail}-${index}`}>{detail}</b>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : null}
           {granularity === 'daily' ? (
             <div className="workload-daily-note">
               <span>备注 / 今日进度</span>
@@ -2318,25 +2382,24 @@ function addOnboardedCountsToWorkloadRows(rows: ManagementWorkloadStat[], creato
   const rowMap = new Map<string, ManagementWorkloadDisplayStat>();
 
   rows.forEach((row) => {
-    rowMap.set(getWorkloadRowKey(row), { ...row, onboarded_count: 0 });
+    rowMap.set(getWorkloadRowKey(row), { ...row, onboarded_count: 0, onboarded_creator_details: [] });
   });
 
-  const people = new Map<string, CreatorProfile>();
+  const people = new Map<string, CreatorProfile[]>();
   creators.forEach((creator) => {
     if (creator.status !== 'active') return;
     if (!isCreatorJoinedInRange(creator, lastWeek)) return;
 
     const personKey = getCreatorPersonKey(creator);
-    const current = people.get(personKey);
-    if (!current || creator.joined_date < current.joined_date || (creator.joined_date === current.joined_date && creator.id < current.id)) {
-      people.set(personKey, creator);
-    }
+    people.set(personKey, [...(people.get(personKey) ?? []), creator]);
   });
 
-  people.forEach((creator) => {
+  people.forEach((personCreators) => {
+    const creator = getWorkloadRepresentativeCreator(personCreators);
     const rowKey = getCreatorWorkloadRowKey(creator);
     const row = rowMap.get(rowKey) ?? createWorkloadRowFromCreator(creator, lastWeek);
     row.onboarded_count += 1;
+    row.onboarded_creator_details.push(formatWorkloadOnboardedCreatorDetail(personCreators));
     rowMap.set(rowKey, row);
   });
 
@@ -2373,6 +2436,7 @@ function createWorkloadRowFromCreator(creator: CreatorProfile, range: WorkloadDa
     contacted_count: 0,
     replied_count: 0,
     onboarded_count: 0,
+    onboarded_creator_details: [],
     note: null,
   };
 }
@@ -2387,6 +2451,37 @@ function getCreatorPersonKey(creator: CreatorProfile) {
 
 function getWorkloadOnboardedCount(row: ManagementWorkloadStat) {
   return (row as Partial<ManagementWorkloadDisplayStat>).onboarded_count ?? 0;
+}
+
+function getWorkloadOnboardedCreatorDetails(row: ManagementWorkloadStat) {
+  return (row as Partial<ManagementWorkloadDisplayStat>).onboarded_creator_details ?? [];
+}
+
+function getWorkloadRepresentativeCreator(creators: CreatorProfile[]) {
+  return creators.reduce((current, creator) => {
+    if (creator.joined_date < current.joined_date) return creator;
+    if (creator.joined_date === current.joined_date && creator.id < current.id) return creator;
+    return current;
+  });
+}
+
+function formatWorkloadOnboardedCreatorDetails(row: ManagementWorkloadStat) {
+  const details = getWorkloadOnboardedCreatorDetails(row);
+  return details.length > 0 ? details : ['—'];
+}
+
+function formatWorkloadOnboardedCreatorDetail(creators: CreatorProfile[]) {
+  const sortedCreators = sortCreatorProfiles(creators);
+  const creatorName = sortedCreators[0]?.creator_name.trim() || '-';
+  const platformDetails = sortedCreators
+    .map((creator) => `${platformLabels[creator.platform]} · ${getCreatorFiveOneLabel(creator)}`)
+    .join(' / ');
+
+  return `${creatorName} · ${platformDetails}`;
+}
+
+function getCreatorFiveOneLabel(creator: CreatorProfile) {
+  return creator.creator_type === '5+1' ? '5+1' : '非5+1';
 }
 
 function getWorkloadPeriodRowKey(row: ManagementWorkloadStat) {
