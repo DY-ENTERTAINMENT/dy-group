@@ -8387,7 +8387,7 @@ button.leave-chip:disabled {
     min-width: 0;
   }
 
-  .management-recruiting-panel .workload-total-card-grid > .scout-stat-card:nth-child(3) {
+  .management-recruiting-panel .workload-total-card-grid > .scout-stat-card:nth-child(3):last-child {
     grid-column: 1 / -1;
   }
 

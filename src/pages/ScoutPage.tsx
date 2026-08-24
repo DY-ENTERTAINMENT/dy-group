@@ -46,9 +46,11 @@ const today = new Date().toISOString().slice(0, 10);
 type CandidateFollowFilter = 'all' | 'today' | 'overdue';
 type CandidateStatusFilter = Candidate['status'] | 'all';
 const candidateStatusFilters: CandidateStatusFilter[] = ['pending', 'accepted', 'rejected', 'all'];
-const workloadGranularities: WorkloadGranularity[] = ['daily', 'weekly', 'monthly'];
-type WorkloadView = WorkloadGranularity | 'scout-records';
+type TeamWorkloadView = WorkloadGranularity | 'last-week';
+type WorkloadView = TeamWorkloadView | 'scout-records';
 type ScoutRecordView = Extract<WorkloadGranularity, 'daily' | 'monthly'>;
+type ManagementWorkloadDisplayStat = ManagementWorkloadStat & { onboarded_count: number };
+const teamWorkloadViews: TeamWorkloadView[] = ['daily', 'weekly', 'last-week', 'monthly'];
 const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
   daily: '每日',
   weekly: '每周',
@@ -62,6 +64,10 @@ const teamWorkloadViewLabels: Record<WorkloadGranularity, string> = {
   daily: '今日',
   weekly: '本周',
   monthly: '本月',
+};
+const teamWorkloadDisplayLabels: Record<TeamWorkloadView, string> = {
+  ...teamWorkloadViewLabels,
+  'last-week': '上周',
 };
 
 const emptyCandidateForm: CandidateFormValues = {
@@ -166,6 +172,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
   const [candidateUidQuery, setCandidateUidQuery] = useState('');
   const [workloadGranularity, setWorkloadGranularity] = useState<WorkloadGranularity>('daily');
+  const [workloadView, setWorkloadView] = useState<WorkloadView>('daily');
   const [candidateForm, setCandidateForm] = useState<CandidateFormValues>(emptyCandidateForm);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [followUpCandidate, setFollowUpCandidate] = useState<Candidate | null>(null);
@@ -243,7 +250,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
   useEffect(() => {
     void loadData();
-  }, [creatorStatusFilter, mode, month, profile?.id, regionFilter, workloadGranularity]);
+  }, [creatorStatusFilter, mode, month, profile?.id, regionFilter, workloadGranularity, workloadView]);
 
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
@@ -256,7 +263,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
         mode === 'personal-recruiting' ? scoutService.listDailyWorkLogs(month) : Promise.resolve([]),
-        mode === 'management-recruiting' ? scoutService.listManagementWorkloadStats({ month, regionId: regionFilter, granularity: workloadGranularity }) : Promise.resolve([]),
+        mode === 'management-recruiting' ? listManagementWorkloadStatsForView({ month, regionId: regionFilter, granularity: workloadGranularity, view: workloadView }) : Promise.resolve([]),
       ]);
 
       const creatorsWithScoutDisplayNames = mode === 'management-recruiting'
@@ -664,7 +671,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           scoutRecruitRows={scoutRecruitRows}
           regionRecruitRows={regionRecruitRows}
           breakdown={managementBreakdown}
+          creators={filteredCreators}
           workloadStats={managementWorkloadStats}
+          workloadView={workloadView}
+          onWorkloadView={setWorkloadView}
           workloadGranularity={workloadGranularity}
           onWorkloadGranularity={setWorkloadGranularity}
         />
@@ -1828,7 +1838,10 @@ function ManagementRecruitingPanel({
   scoutRecruitRows,
   regionRecruitRows,
   breakdown,
+  creators,
   workloadStats,
+  workloadView,
+  onWorkloadView,
   workloadGranularity,
   onWorkloadGranularity,
 }: {
@@ -1841,11 +1854,13 @@ function ManagementRecruitingPanel({
   scoutRecruitRows: RecruitBreakdownRow[];
   regionRecruitRows: RecruitBreakdownRow[];
   breakdown: ReturnType<typeof createRecruitBreakdown>;
+  creators: CreatorProfile[];
   workloadStats: ManagementWorkloadStat[];
+  workloadView: WorkloadView;
+  onWorkloadView: (value: WorkloadView) => void;
   workloadGranularity: WorkloadGranularity;
   onWorkloadGranularity: (value: WorkloadGranularity) => void;
 }) {
-  const [workloadView, setWorkloadView] = useState<WorkloadView>(workloadGranularity);
   const [selectedWorkloadScout, setSelectedWorkloadScout] = useState<ManagementWorkloadStat | null>(null);
   const [recordGranularity, setRecordGranularity] = useState<ScoutRecordView>('daily');
 
@@ -1874,10 +1889,11 @@ function ManagementRecruitingPanel({
           <ScoutRecruitSummaryTable rows={scoutRecruitRows} />
           <ManagementWorkloadPanel
             stats={workloadStats}
+            creators={creators}
             granularity={workloadGranularity}
             onGranularity={onWorkloadGranularity}
             view={workloadView}
-            onView={setWorkloadView}
+            onView={onWorkloadView}
             selectedScout={selectedWorkloadScout}
             onSelectedScout={setSelectedWorkloadScout}
             recordGranularity={recordGranularity}
@@ -1891,6 +1907,7 @@ function ManagementRecruitingPanel({
 
 function ManagementWorkloadPanel({
   stats,
+  creators,
   granularity,
   onGranularity,
   view,
@@ -1901,6 +1918,7 @@ function ManagementWorkloadPanel({
   onRecordGranularity,
 }: {
   stats: ManagementWorkloadStat[];
+  creators: CreatorProfile[];
   granularity: WorkloadGranularity;
   onGranularity: (value: WorkloadGranularity) => void;
   view: WorkloadView;
@@ -1911,8 +1929,12 @@ function ManagementWorkloadPanel({
   onRecordGranularity: (value: ScoutRecordView) => void;
 }) {
   const malaysiaToday = getMalaysiaDateString();
-  const teamRows = getTeamWorkloadRows(stats, granularity, malaysiaToday);
-  const teamTotal = summarizeWorkloadStats(teamRows);
+  const activeTeamView = view === 'scout-records' ? granularity : view;
+  const activeTeamGranularity: WorkloadGranularity = activeTeamView === 'last-week' ? 'weekly' : activeTeamView;
+  const teamRows = getTeamWorkloadRows(stats, activeTeamView, malaysiaToday);
+  const showOnboarded = activeTeamView === 'last-week';
+  const teamDisplayRows = showOnboarded ? addOnboardedCountsToWorkloadRows(teamRows, creators, malaysiaToday) : teamRows;
+  const teamTotal = summarizeWorkloadStats(teamDisplayRows);
   const scoutRows = getUniqueWorkloadScouts(stats);
   const selectedScoutRows = selectedScout
     ? stats
@@ -1921,12 +1943,18 @@ function ManagementWorkloadPanel({
     : [];
   const selectedScoutTotal = summarizeWorkloadStats(selectedScoutRows);
   const isScoutRecords = view === 'scout-records';
-  const activeLabel = isScoutRecords ? '星探记录' : teamWorkloadViewLabels[granularity];
+  const activeLabel = isScoutRecords ? '星探记录' : teamWorkloadDisplayLabels[activeTeamView];
 
   function openTeamView(nextGranularity: WorkloadGranularity) {
     onView(nextGranularity);
     onSelectedScout(null);
     onGranularity(nextGranularity);
+  }
+
+  function openLastWeekView() {
+    onView('last-week');
+    onSelectedScout(null);
+    onGranularity('weekly');
   }
 
   function openScoutRecords() {
@@ -1953,9 +1981,14 @@ function ManagementWorkloadPanel({
           <h3>{activeLabel}</h3>
         </div>
         <div className="segmented-control" role="group" aria-label="星探工作量统计视图">
-          {workloadGranularities.map((item) => (
-            <button key={item} className={!isScoutRecords && granularity === item ? 'active' : ''} type="button" onClick={() => openTeamView(item)}>
-              {teamWorkloadViewLabels[item]}
+          {teamWorkloadViews.map((item) => (
+            <button
+              key={item}
+              className={!isScoutRecords && activeTeamView === item ? 'active' : ''}
+              type="button"
+              onClick={item === 'last-week' ? openLastWeekView : () => openTeamView(item)}
+            >
+              {teamWorkloadDisplayLabels[item]}
             </button>
           ))}
           <button className={isScoutRecords ? 'active' : ''} type="button" onClick={openScoutRecords}>
@@ -1994,24 +2027,33 @@ function ManagementWorkloadPanel({
         )
       ) : (
         <>
-          <WorkloadTotalCards granularity={granularity} total={teamTotal} />
-          <WorkloadStatsTable rows={teamRows} granularity={granularity} />
+          <WorkloadTotalCards view={activeTeamView} total={teamTotal} showOnboarded={showOnboarded} />
+          <WorkloadStatsTable rows={teamDisplayRows} granularity={activeTeamGranularity} showOnboarded={showOnboarded} />
         </>
       )}
     </section>
   );
 }
 
-function WorkloadTotalCards({ granularity, total }: { granularity: WorkloadGranularity; total: { contacted_count: number; replied_count: number } }) {
-  const prefix = granularity === 'daily' ? '今日' : granularity === 'weekly' ? '本周' : '本月';
+function WorkloadTotalCards({
+  view,
+  total,
+  showOnboarded = false,
+}: {
+  view: TeamWorkloadView;
+  total: { contacted_count: number; replied_count: number; onboarded_count?: number };
+  showOnboarded?: boolean;
+}) {
+  const prefix = teamWorkloadDisplayLabels[view];
 
   return (
     <div className="scout-total-panel">
       <h4>{prefix}团队总计</h4>
-      <div className="workload-total-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', gap: 10 }}>
+      <div className="workload-total-card-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${showOnboarded ? 4 : 3}, minmax(140px, 1fr))`, gap: 10 }}>
         <WorkloadTotalCard title={`${prefix}联系人数`} value={total.contacted_count} />
         <WorkloadTotalCard title={`${prefix}回复人数`} value={total.replied_count} />
         <WorkloadTotalCard title={`${prefix}回复率`} value={formatReplyRate(total.contacted_count, total.replied_count)} />
+        {showOnboarded ? <WorkloadTotalCard title={`${prefix}新增入公会主播人数`} value={total.onboarded_count ?? 0} /> : null}
       </div>
     </div>
   );
@@ -2084,7 +2126,17 @@ function ScoutRecordList({ rows, onOpen }: { rows: ManagementWorkloadStat[]; onO
   );
 }
 
-function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity; personal?: boolean }) {
+function WorkloadStatsTable({
+  rows,
+  granularity,
+  personal = false,
+  showOnboarded = false,
+}: {
+  rows: ManagementWorkloadStat[];
+  granularity: WorkloadGranularity;
+  personal?: boolean;
+  showOnboarded?: boolean;
+}) {
   if (rows.length === 0) {
     return <div className="table-state">暂无星探工作量记录。</div>;
   }
@@ -2101,6 +2153,7 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
             <th>联系人数</th>
             <th>回复人数</th>
             <th>回复率</th>
+            {showOnboarded ? <th>新增入公会</th> : null}
             {granularity === 'daily' ? <th>备注 / 今日进度</th> : null}
           </tr>
         </thead>
@@ -2113,6 +2166,7 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
               <td>{row.contacted_count}</td>
               <td>{row.replied_count}</td>
               <td>{formatReplyRate(row.contacted_count, row.replied_count)}</td>
+              {showOnboarded ? <td>{getWorkloadOnboardedCount(row)}</td> : null}
               {granularity === 'daily' ? (
                 <td>
                   <span title={row.note ?? undefined} style={{ display: 'block', maxWidth: 420, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
@@ -2125,7 +2179,7 @@ function WorkloadStatsTable({ rows, granularity, personal = false }: { rows: Man
         </tbody>
       </table>
     </div>
-    {!personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} /> : null}
+    {!personal ? <MobileWorkloadDetailCards rows={rows} granularity={granularity} showOnboarded={showOnboarded} /> : null}
     {granularity === 'daily' && personal ? <MobileDailyWorkloadCards rows={rows} /> : null}
     </>
   );
@@ -2161,7 +2215,7 @@ function MobileDailyWorkloadCards({ rows }: { rows: ManagementWorkloadStat[] }) 
   );
 }
 
-function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity }) {
+function MobileWorkloadDetailCards({ rows, granularity, showOnboarded = false }: { rows: ManagementWorkloadStat[]; granularity: WorkloadGranularity; showOnboarded?: boolean }) {
   return (
     <div className="workload-mobile-card-list" hidden>
       {rows.map((row) => (
@@ -2172,7 +2226,7 @@ function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWork
           </div>
           <p>
             <span>{granularity === 'daily' ? '日期' : '周期'}</span>
-            <b>{granularity === 'weekly' ? `${row.period_start} - ${row.period_end}` : row.period_label}</b>
+            <b>{row.period_label}</b>
           </p>
           <div className="workload-mobile-metrics">
             <span>
@@ -2187,6 +2241,12 @@ function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWork
               <small>回复率</small>
               <b>{formatReplyRate(row.contacted_count, row.replied_count)}</b>
             </span>
+            {showOnboarded ? (
+              <span>
+                <small>新增入公会</small>
+                <b>{getWorkloadOnboardedCount(row)}</b>
+              </span>
+            ) : null}
           </div>
           {granularity === 'daily' ? (
             <div className="workload-daily-note">
@@ -2200,13 +2260,43 @@ function MobileWorkloadDetailCards({ rows, granularity }: { rows: ManagementWork
   );
 }
 
-function getTeamWorkloadRows(stats: ManagementWorkloadStat[], granularity: WorkloadGranularity, malaysiaToday: string) {
-  if (granularity === 'daily') {
+type WorkloadDateRange = {
+  startIso: string;
+  endIso: string;
+  label: string;
+};
+
+async function listManagementWorkloadStatsForView(input: { month: string; regionId?: string; granularity: WorkloadGranularity; view: WorkloadView }) {
+  if (input.view !== 'last-week') {
+    return scoutService.listManagementWorkloadStats({ month: input.month, regionId: input.regionId, granularity: input.granularity });
+  }
+
+  const lastWeek = getCompleteWeekRange(getMalaysiaDateString(), -1);
+  const monthStats = await Promise.all(
+    getMonthsInDateRange(lastWeek.startIso, lastWeek.endIso).map((targetMonth) =>
+      scoutService.listManagementWorkloadStats({ month: targetMonth, regionId: input.regionId, granularity: 'weekly' }),
+    ),
+  );
+
+  return mergeWorkloadStats(monthStats.flat())
+    .filter((row) => row.period_start === lastWeek.startIso && row.period_end === lastWeek.endIso)
+    .map((row) => ({ ...row, period_label: lastWeek.label }));
+}
+
+function getTeamWorkloadRows(stats: ManagementWorkloadStat[], view: TeamWorkloadView, malaysiaToday: string) {
+  if (view === 'daily') {
     return stats.filter((row) => row.period_start === malaysiaToday);
   }
 
-  if (granularity === 'weekly') {
+  if (view === 'weekly') {
     return stats.filter((row) => row.period_start <= malaysiaToday && malaysiaToday <= row.period_end);
+  }
+
+  if (view === 'last-week') {
+    const lastWeek = getCompleteWeekRange(malaysiaToday, -1);
+    return stats
+      .filter((row) => row.period_start === lastWeek.startIso && row.period_end === lastWeek.endIso)
+      .map((row) => ({ ...row, period_label: lastWeek.label }));
   }
 
   return stats;
@@ -2217,9 +2307,156 @@ function summarizeWorkloadStats(rows: ManagementWorkloadStat[]) {
     (summary, row) => ({
       contacted_count: summary.contacted_count + row.contacted_count,
       replied_count: summary.replied_count + row.replied_count,
+      onboarded_count: summary.onboarded_count + getWorkloadOnboardedCount(row),
     }),
-    { contacted_count: 0, replied_count: 0 },
+    { contacted_count: 0, replied_count: 0, onboarded_count: 0 },
   );
+}
+
+function addOnboardedCountsToWorkloadRows(rows: ManagementWorkloadStat[], creators: CreatorProfile[], malaysiaToday: string): ManagementWorkloadDisplayStat[] {
+  const lastWeek = getCompleteWeekRange(malaysiaToday, -1);
+  const rowMap = new Map<string, ManagementWorkloadDisplayStat>();
+
+  rows.forEach((row) => {
+    rowMap.set(getWorkloadRowKey(row), { ...row, onboarded_count: 0 });
+  });
+
+  const people = new Map<string, CreatorProfile>();
+  creators.forEach((creator) => {
+    if (creator.status !== 'active') return;
+    if (!isCreatorJoinedInRange(creator, lastWeek)) return;
+
+    const personKey = getCreatorPersonKey(creator);
+    const current = people.get(personKey);
+    if (!current || creator.joined_date < current.joined_date || (creator.joined_date === current.joined_date && creator.id < current.id)) {
+      people.set(personKey, creator);
+    }
+  });
+
+  people.forEach((creator) => {
+    const rowKey = getCreatorWorkloadRowKey(creator);
+    const row = rowMap.get(rowKey) ?? createWorkloadRowFromCreator(creator, lastWeek);
+    row.onboarded_count += 1;
+    rowMap.set(rowKey, row);
+  });
+
+  return Array.from(rowMap.values()).sort((first, second) => {
+    const periodOrder = first.period_start.localeCompare(second.period_start);
+    if (periodOrder !== 0) return periodOrder;
+    return first.scout_name.localeCompare(second.scout_name);
+  });
+}
+
+function getWorkloadRowKey(row: ManagementWorkloadStat) {
+  const scoutKey = row.scout_profile_id ?? row.scout_employee_id ?? row.scout_name;
+  return `${scoutKey}|${row.region_id ?? 'none'}`;
+}
+
+function getCreatorWorkloadRowKey(creator: CreatorProfile) {
+  const scoutName = (creator.scout_display_name ?? getEmployeeName(creator.scout)) || '未填写';
+  const scoutKey = creator.scout_profile_id ?? creator.scout_employee_id ?? scoutName;
+  return `${scoutKey}|${creator.region_id ?? 'none'}`;
+}
+
+function createWorkloadRowFromCreator(creator: CreatorProfile, range: WorkloadDateRange): ManagementWorkloadDisplayStat {
+  const scoutName = (creator.scout_display_name ?? getEmployeeName(creator.scout)) || '未填写';
+
+  return {
+    period_start: range.startIso,
+    period_end: range.endIso,
+    period_label: range.label,
+    scout_employee_id: creator.scout_employee_id,
+    scout_profile_id: creator.scout_profile_id,
+    scout_name: scoutName,
+    region_id: creator.region_id,
+    region_code: creator.region?.code ?? null,
+    contacted_count: 0,
+    replied_count: 0,
+    onboarded_count: 0,
+    note: null,
+  };
+}
+
+function isCreatorJoinedInRange(creator: CreatorProfile, range: WorkloadDateRange) {
+  return range.startIso <= creator.joined_date && creator.joined_date <= range.endIso;
+}
+
+function getCreatorPersonKey(creator: CreatorProfile) {
+  return creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
+}
+
+function getWorkloadOnboardedCount(row: ManagementWorkloadStat) {
+  return (row as Partial<ManagementWorkloadDisplayStat>).onboarded_count ?? 0;
+}
+
+function getWorkloadPeriodRowKey(row: ManagementWorkloadStat) {
+  return `${row.period_start}|${row.period_end}|${getWorkloadRowKey(row)}`;
+}
+
+function getCompleteWeekRange(dateIso: string, weekOffset: number): WorkloadDateRange {
+  const date = parseDateOnly(dateIso);
+  const weekday = date.getUTCDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  const start = addUtcDays(date, mondayOffset + weekOffset * 7);
+  const end = addUtcDays(start, 6);
+  const startIso = formatUtcDate(start);
+  const endIso = formatUtcDate(end);
+
+  return {
+    startIso,
+    endIso,
+    label: `${startIso} ～ ${endIso}`,
+  };
+}
+
+function getMonthsInDateRange(startIso: string, endIso: string) {
+  const months: string[] = [];
+  const endMonth = endIso.slice(0, 7);
+  let cursor = parseDateOnly(`${startIso.slice(0, 7)}-01`);
+
+  while (true) {
+    const month = formatUtcDate(cursor).slice(0, 7);
+    months.push(month);
+    if (month === endMonth) return months;
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+  }
+}
+
+function mergeWorkloadStats(rows: ManagementWorkloadStat[]) {
+  const merged = new Map<string, ManagementWorkloadStat>();
+
+  rows.forEach((row) => {
+    const key = getWorkloadPeriodRowKey(row);
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, { ...row });
+      return;
+    }
+
+    merged.set(key, {
+      ...current,
+      contacted_count: current.contacted_count + row.contacted_count,
+      replied_count: current.replied_count + row.replied_count,
+      note: current.note ?? row.note ?? null,
+    });
+  });
+
+  return Array.from(merged.values());
+}
+
+function parseDateOnly(dateIso: string) {
+  const [year, month, day] = dateIso.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addUtcDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setUTCDate(nextDate.getUTCDate() + days);
+  return nextDate;
+}
+
+function formatUtcDate(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function getUniqueWorkloadScouts(rows: ManagementWorkloadStat[]) {
