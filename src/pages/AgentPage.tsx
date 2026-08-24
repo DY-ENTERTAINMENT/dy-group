@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, Plus, RefreshCw, Send, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
@@ -27,6 +27,7 @@ import {
   type DesignRequest,
   type DesignRequestType,
   type RevenueRecord,
+  type WeeklyRevenueRecord,
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
 
@@ -106,6 +107,10 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const inProgressDesigns = designRequests.filter((item) => item.status === 'in_progress' || item.status === 'revision').length;
   const canReviewAdjustments = permissions.canUse('management-streamer-stats');
 
+  useLayoutEffect(() => {
+    if (mode === 'revenue') setMonth(currentMonth);
+  }, [mode]);
+
   useEffect(() => {
     void loadData();
   }, [mode, profile?.id, month, platform, regionId]);
@@ -118,12 +123,12 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       const nextOptions = await agentService.getOptions(profile?.id);
       setOptions(nextOptions);
       const defaultRegion = regionId || nextOptions.currentEmployee?.region_id || '';
-      if (!regionId && nextOptions.currentEmployee?.region_id && mode === 'creators') setRegionId(nextOptions.currentEmployee.region_id);
+      if (!regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
 
-      if (mode === 'revenue' || mode === 'management-revenue') {
+      if (mode === 'management-revenue') {
         setRevenues(await agentService.listRevenueData({ profileId: profile?.id, month, platform, regionId: defaultRegion, management: isManagement }));
       }
-      if (mode === 'creators' && profile?.id) {
+      if ((mode === 'revenue' || mode === 'creators') && profile?.id) {
         setCreators(await agentService.listManagedCreators(profile.id, { regionId: defaultRegion }));
       }
       if (mode === 'adjustments' && profile?.id) {
@@ -259,7 +264,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         {mode === 'design-requests' ? (
           <button className="secondary-action" type="button" onClick={() => setDesignModalOpen(true)}><Plus size={17} /><span>添加新申请</span></button>
         ) : null}
-        <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>
+        {mode === 'revenue' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
       </div>
 
       {error ? <p className="form-alert">{error}</p> : null}
@@ -1099,8 +1104,642 @@ function DesignModal({ values, saving, onChange, onClose, onSubmit }: { values: 
   return <SystemModal title="添加新申请" ariaLabel="美工申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="design-form" disabled={saving}>提交</button></>}><form id="design-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="申请类型" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as DesignRequestType })}>{designTypes.map((type) => <option key={type} value={type}>{designTypeLabels[type]}</option>)}</SelectField>{!isSpecial ? <><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字'} value={values.creator_name} onChange={(value) => onChange({ ...values, creator_name: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音号'} value={values.platform_account} onChange={(value) => onChange({ ...values, platform_account: value })} /></> : null}{!isSpecial && !isPoster ? <><TextField label="粉丝昵称" value={values.fan_nickname} onChange={(value) => onChange({ ...values, fan_nickname: value })} /><TextField label="粉丝灯牌等级 / 财富等级" value={values.fan_level} onChange={(value) => onChange({ ...values, fan_level: value })} /><SelectField label="打印方式" value={values.print_method} onChange={(value) => onChange({ ...values, print_method: value as DesignFormValues['print_method'] })}>{Object.entries(printMethodLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</SelectField></> : null}{!isSpecial ? <TextField label={isPoster ? '海报内容' : '设计内容'} value={values.design_content} onChange={(value) => onChange({ ...values, design_content: value })} /> : null}{isPoster ? <TextField label="设计元素" value={values.design_elements} onChange={(value) => onChange({ ...values, design_elements: value })} /> : null}{isSpecial ? <label className="form-field form-field-wide"><span>自由需求说明</span><textarea value={values.special_content} onChange={(event) => onChange({ ...values, special_content: event.target.value })} /></label> : null}<label className="form-field form-field-wide"><span>参考图片链接（每行一个，未来可接文件上传）</span><textarea value={values.reference_urls} onChange={(event) => onChange({ ...values, reference_urls: event.target.value })} /></label></div></form></SystemModal>;
 }
 
-function TextField({ label, value, onChange, type = 'text', required }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
-  return <label className="form-field"><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} /></label>;
+type OperationStatus = 'missing' | 'filled';
+type OperationCellStatus = OperationStatus | 'future';
+type OperationPlatformFilter = '' | CreatorPlatform | 'dual_platform';
+type OperationQuickRange = 'previous' | 'month' | 'last30' | 'custom' | 'year';
+type RevenuePeriodRange = {
+  startIso: string;
+  endIso: string;
+  label: string;
+  shortLabel: string;
+};
+type OperationDateRange = {
+  startIso: string;
+  endIso: string;
+};
+type OperationFilters = {
+  quickRange: OperationQuickRange;
+  status: '' | OperationStatus;
+  platform: OperationPlatformFilter;
+  creatorType: '' | '5+1' | 'non_5_1';
+  search: string;
+  periodStart: string;
+  customStart: string;
+  customEnd: string;
+};
+type OperationRow = {
+  creator: CreatorProfile;
+  record: WeeklyRevenueRecord | null;
+  status: OperationStatus;
+  period: RevenuePeriodRange;
+};
+type OperationCellProfile = {
+  creator: CreatorProfile;
+  record: WeeklyRevenueRecord | null;
+  status: OperationCellStatus;
+  period: RevenuePeriodRange;
+};
+type OperationPeriodCell = {
+  period: RevenuePeriodRange;
+  profiles: OperationCellProfile[];
+  status: OperationCellStatus;
+};
+type OperationMonthSummaryEntry = {
+  platform: CreatorPlatform;
+  total: number;
+  hasRecord: boolean;
+};
+type OperationStreamerRow = {
+  id: string;
+  displayName: string;
+  regionLabel: string;
+  profiles: CreatorProfile[];
+  periods: OperationPeriodCell[];
+  status: OperationStatus;
+  latestNote: string;
+  monthSummary: OperationMonthSummaryEntry[];
+};
+
+const operationQuickRangeOptions: { value: OperationQuickRange; label: string }[] = [
+  { value: 'previous', label: '上周期' },
+  { value: 'month', label: '本月' },
+  { value: 'last30', label: '近30天' },
+  { value: 'custom', label: '自定义' },
+  { value: 'year', label: '本年' },
+];
+
+function AgentPeriodRevenuePanel(props: {
+  loading: boolean;
+  month: string;
+  regionId: string;
+  options: AgentOptions;
+  creators: CreatorProfile[];
+  onMonth: (value: string) => void;
+  onRegion: (value: string) => void;
+  onRefresh: () => void;
+}) {
+  const currentPeriod = useMemo(() => getRevenuePeriodForDate(new Date()), []);
+  const todayIso = useMemo(() => formatLocalDate(new Date()), []);
+  const defaultPeriodStart = useMemo(() => getDefaultPeriodStartForMonth(props.month, currentPeriod.startIso), [currentPeriod.startIso, props.month]);
+  const monthDateRange = useMemo(() => getMonthDateRange(props.month), [props.month]);
+  const currentPreviousPeriod = useMemo(() => getPreviousRevenuePeriod(currentPeriod.startIso), [currentPeriod.startIso]);
+  const [filters, setFilters] = useState<OperationFilters>({
+    quickRange: 'month',
+    status: '',
+    platform: '',
+    creatorType: '',
+    search: '',
+    periodStart: defaultPeriodStart,
+    customStart: monthDateRange.startIso,
+    customEnd: monthDateRange.endIso,
+  });
+  const [recordsByPeriod, setRecordsByPeriod] = useState<Record<string, Record<string, WeeklyRevenueRecord>>>({});
+  const [previousRecords, setPreviousRecords] = useState<Record<string, WeeklyRevenueRecord>>({});
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [featureUnavailable, setFeatureUnavailable] = useState(false);
+  const [message, setMessage] = useState('');
+  const [activeRow, setActiveRow] = useState<OperationRow | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const sortedCreators = useMemo(() => sortOperationCreators(props.creators), [props.creators]);
+  const effectiveDateRange = useMemo(() => getOperationEffectiveDateRange(filters.quickRange, {
+    monthDateRange,
+    previousPeriod: currentPreviousPeriod,
+    customStart: filters.customStart,
+    customEnd: filters.customEnd,
+    todayIso,
+  }), [currentPreviousPeriod, filters.customEnd, filters.customStart, filters.quickRange, monthDateRange, todayIso]);
+  const effectivePeriodOptions = useMemo(() => getRevenuePeriodsForDateRange(effectiveDateRange), [effectiveDateRange]);
+  const selectedPeriod = useMemo(() => effectivePeriodOptions.find((period) => period.startIso === filters.periodStart) ?? effectivePeriodOptions[0], [effectivePeriodOptions, filters.periodStart]);
+
+  useEffect(() => {
+    if (effectivePeriodOptions.length === 0) return;
+    setFilters((current) => effectivePeriodOptions.some((period) => period.startIso === current.periodStart) ? current : { ...current, periodStart: effectivePeriodOptions[0].startIso });
+  }, [effectivePeriodOptions]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [effectiveDateRange, filters, pageSize, props.month, props.regionId]);
+
+  useEffect(() => {
+    let active = true;
+    const creatorProfileIds = sortedCreators.map((creator) => creator.id);
+    setMessage('');
+    setRecordsByPeriod({});
+    setPreviousRecords({});
+    if (creatorProfileIds.length === 0 || effectivePeriodOptions.length === 0) return;
+
+    setWeeklyLoading(true);
+    setFeatureUnavailable(false);
+    Promise.all([
+      Promise.all(effectivePeriodOptions.map((period) => agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: period.startIso }))),
+      agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: currentPreviousPeriod.startIso }),
+    ])
+      .then(([periodItems, previousItems]) => {
+        if (!active) return;
+        setRecordsByPeriod(Object.fromEntries(effectivePeriodOptions.map((period, index) => [
+          period.startIso,
+          Object.fromEntries((periodItems[index] ?? []).map((item) => [item.creator_profile_id, item])),
+        ])));
+        setPreviousRecords(Object.fromEntries(previousItems.map((item) => [item.creator_profile_id, item])));
+      })
+      .catch(() => {
+        if (!active) return;
+        setFeatureUnavailable(true);
+      })
+      .finally(() => {
+        if (active) setWeeklyLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentPreviousPeriod.startIso, effectivePeriodOptions, sortedCreators]);
+
+  const currentRows = useMemo(
+    () => buildOperationStreamerRows(sortedCreators, effectivePeriodOptions, recordsByPeriod, filters, todayIso),
+    [effectivePeriodOptions, filters, recordsByPeriod, sortedCreators, todayIso],
+  );
+  const filteredCurrentRows = useMemo(() => filterOperationStreamerRows(currentRows, filters).sort(sortOperationStreamerRows), [currentRows, filters]);
+  const summary = useMemo(() => summarizeOperationStreamerRows(currentRows), [currentRows]);
+  const previousMissingCount = useMemo(() => sortedCreators.filter((creator) => !previousRecords[creator.id]).length, [previousRecords, sortedCreators]);
+  const pageCount = Math.max(1, Math.ceil(filteredCurrentRows.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paginatedCurrentRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredCurrentRows.slice(start, start + pageSize);
+  }, [filteredCurrentRows, pageSize, safePage]);
+
+  function updateFilter<Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateMonth(value: string) {
+    props.onMonth(value);
+    setFilters((current) => ({ ...current, periodStart: getDefaultPeriodStartForMonth(value, currentPeriod.startIso) }));
+  }
+
+  function updateQuickRange(value: OperationQuickRange) {
+    if (value === 'previous') {
+      const previousMonth = currentPreviousPeriod.startIso.slice(0, 7);
+      props.onMonth(previousMonth);
+      setFilters((current) => ({ ...current, quickRange: value, status: 'missing', periodStart: currentPreviousPeriod.startIso }));
+      return;
+    }
+    if (value === 'month') {
+      const currentMonth = currentPeriod.startIso.slice(0, 7);
+      props.onMonth(currentMonth);
+      setFilters((current) => ({ ...current, quickRange: value, periodStart: getDefaultPeriodStartForMonth(currentMonth, currentPeriod.startIso) }));
+      return;
+    }
+    if (value === 'custom') {
+      setFilters((current) => ({
+        ...current,
+        quickRange: value,
+        customStart: current.customStart || monthDateRange.startIso,
+        customEnd: current.customEnd || monthDateRange.endIso,
+      }));
+      return;
+    }
+    setFilters((current) => ({ ...current, quickRange: value }));
+  }
+
+  function viewPreviousMissing() {
+    updateQuickRange('previous');
+  }
+
+  function updateRecord(record: WeeklyRevenueRecord) {
+    setRecordsByPeriod((current) => ({
+      ...current,
+      [record.week_start_date]: {
+        ...(current[record.week_start_date] ?? {}),
+        [record.creator_profile_id]: record,
+      },
+    }));
+    setMessage('周期流水已保存。');
+    setActiveRow(null);
+  }
+
+  return (
+    <div className="staff-list-panel agent-operation-page agent-period-workbench">
+      {message ? <p className="form-success agent-operation-alert">{message}</p> : null}
+      {featureUnavailable ? <p className="form-alert agent-operation-alert">周期流水数据库 003 尚未启用，暂不能保存新周期流水。</p> : null}
+
+      {featureUnavailable ? null : (
+        <>
+          <div className="agent-operation-kpi-grid">
+            <OperationKpiCard label="流水概览" value={<KpiOverview tiktokTotal={summary.tiktokTotal} douyinTotal={summary.douyinTotal} />} detail={`${summary.rows} 位主播`} tone="overview" />
+            <OperationKpiCard label="TikTok 总钻石" value={formatRevenueAmount(summary.tiktokTotal)} detail="钻石" tone="tiktok" icon={<img src={tiktokLogoUrl} alt="" aria-hidden="true" />} />
+            <OperationKpiCard label="抖音总音浪" value={formatRevenueAmount(summary.douyinTotal)} detail="音浪" tone="douyin" icon={<img src={douyinLogoUrl} alt="" aria-hidden="true" />} />
+            <OperationKpiCard label="已填写" value={summary.filled} detail="可填写周期" tone="filled" />
+            <OperationKpiCard label="未填写" value={summary.missing} detail="可填写周期" tone="missing" />
+          </div>
+
+          <div className={`agent-period-previous-alert agent-period-previous-alert--${previousMissingCount > 0 ? 'missing' : 'filled'}`}>
+            <div>
+              <i aria-hidden="true">!</i>
+              <span>{previousMissingCount > 0 ? `上周期 ${currentPreviousPeriod.label} 还有 ${previousMissingCount} 个平台账号未填写流水` : '上周期流水已全部填写'}</span>
+            </div>
+            {previousMissingCount > 0 ? <button className="secondary-button compact-button" type="button" onClick={viewPreviousMissing}>查看未填写</button> : null}
+          </div>
+
+          <OperationFilterBar
+            filters={filters}
+            effectiveDateRange={effectiveDateRange}
+            regionId={props.regionId}
+            regions={props.options.regions}
+            onQuickRange={updateQuickRange}
+            onFilter={updateFilter}
+            onRegion={props.onRegion}
+            onRefresh={props.onRefresh}
+            refreshing={props.loading || weeklyLoading}
+          />
+
+          <CurrentOperationTable
+            loading={props.loading || weeklyLoading}
+            rows={paginatedCurrentRows}
+            allRows={filteredCurrentRows}
+            periods={effectivePeriodOptions}
+            selectedPeriodStart={selectedPeriod?.startIso ?? ''}
+            page={safePage}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            total={filteredCurrentRows.length}
+            onOpen={setActiveRow}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
+        </>
+      )}
+
+      {!featureUnavailable && activeRow ? (
+        <WeeklyRevenueModal
+          row={activeRow}
+          onClose={() => setActiveRow(null)}
+          onSubmitted={updateRecord}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function KpiOverview({ tiktokTotal, douyinTotal }: { tiktokTotal: number; douyinTotal: number }) {
+  return (
+    <span className="agent-period-kpi-overview">
+      <span><em>TikTok</em><b>{formatRevenueAmount(tiktokTotal)}</b><small>钻石</small></span>
+      <span><em>抖音</em><b>{formatRevenueAmount(douyinTotal)}</b><small>音浪</small></span>
+    </span>
+  );
+}
+
+function OperationKpiCard({ label, value, detail, tone, icon }: { label: string; value: ReactNode; detail?: string; tone?: OperationStatus | 'overview' | 'tiktok' | 'douyin'; icon?: ReactNode }) {
+  return <article className={`agent-operation-kpi-card ${tone ? `agent-operation-kpi-card--${tone}` : ''}`}><div className="agent-period-kpi-head"><span>{label}</span>{icon ? <i>{icon}</i> : null}</div><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</article>;
+}
+
+function OperationFilterBar(props: {
+  filters: OperationFilters;
+  effectiveDateRange: OperationDateRange;
+  regionId: string;
+  regions: AgentOptions['regions'];
+  onQuickRange: (value: OperationQuickRange) => void;
+  onFilter: <Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) => void;
+  onRegion: (value: string) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const dateRangeLabel = formatDateRangeText(props.effectiveDateRange.startIso, props.effectiveDateRange.endIso);
+
+  return (
+    <div className="agent-operation-filter-panel">
+      <div className="agent-operation-filter-row agent-operation-filter-row--primary">
+        <div className="agent-operation-quick-range" role="group" aria-label="时间范围">
+          <span>时间范围</span>
+          <div>
+            {operationQuickRangeOptions.map((option) => (
+              <button
+                key={option.value}
+                className={props.filters.quickRange === option.value ? 'active' : ''}
+                type="button"
+                onClick={() => props.onQuickRange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className={`form-field agent-operation-date-range ${props.filters.quickRange === 'custom' ? 'agent-operation-date-range--custom' : ''}`}>
+          <span>日期范围</span>
+          {props.filters.quickRange === 'custom' ? (
+            <div>
+              <input type="date" value={props.filters.customStart} onChange={(event) => props.onFilter('customStart', event.target.value)} />
+              <b>~</b>
+              <input type="date" value={props.filters.customEnd} onChange={(event) => props.onFilter('customEnd', event.target.value)} />
+            </div>
+          ) : (
+            <input readOnly value={dateRangeLabel} aria-label="日期范围" />
+          )}
+        </label>
+        <SelectField label="平台" value={props.filters.platform} onChange={(value) => props.onFilter('platform', value as OperationFilters['platform'])}>
+          <option value="">全部平台</option>
+          <option value="tiktok">TikTok</option>
+          <option value="douyin">抖音</option>
+          <option value="dual_platform">双平台</option>
+        </SelectField>
+        <SelectField label="类型" value={props.filters.creatorType} onChange={(value) => props.onFilter('creatorType', value as OperationFilters['creatorType'])}>
+          <option value="">全部类型</option>
+          <option value="5+1">5+1</option>
+          <option value="non_5_1">非5+1</option>
+        </SelectField>
+        <SelectField label="区域" value={props.regionId} onChange={props.onRegion}>
+          <option value="">全部</option>
+          {props.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
+        </SelectField>
+        <SelectField label="状态" value={props.filters.status} onChange={(value) => props.onFilter('status', value as OperationFilters['status'])}>
+          <option value="">全部</option>
+          <option value="missing">未填写</option>
+          <option value="filled">已填写</option>
+        </SelectField>
+      </div>
+      <div className="agent-operation-filter-row agent-operation-filter-row--secondary">
+        <TextField label="搜索" value={props.filters.search} onChange={(value) => props.onFilter('search', value)} placeholder="搜索主播名 / 平台 UID / 平台账号" />
+        <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onRefresh} disabled={props.refreshing}><RefreshCw size={15} /><span>刷新</span></button>
+      </div>
+    </div>
+  );
+}
+
+function CurrentOperationTable(props: {
+  loading: boolean;
+  rows: OperationStreamerRow[];
+  allRows: OperationStreamerRow[];
+  periods: RevenuePeriodRange[];
+  selectedPeriodStart: string;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onOpen: (row: OperationRow) => void;
+  onPage: (page: number) => void;
+  onPageSize: (pageSize: number) => void;
+}) {
+  const { loading, rows, allRows, periods, selectedPeriodStart, page, pageCount, pageSize, total, onOpen, onPage, onPageSize } = props;
+  if (loading) return <div className="table-state agent-operation-state">正在读取周期流水...</div>;
+  if (allRows.length === 0) return <div className="table-state agent-operation-state">没有符合条件的主播。</div>;
+
+  return (
+    <>
+      <div className="staff-table-wrap agent-operation-table-wrap">
+        <table className="staff-table agent-table agent-period-table">
+          <colgroup>
+            <col className="agent-period-col-creator" />
+            <col className="agent-period-col-platform" />
+            <col className="agent-period-col-type" />
+            {periods.map((period) => <col key={period.startIso} className="agent-period-col-period" />)}
+            <col className="agent-period-col-month" />
+            <col className="agent-period-col-status" />
+            <col className="agent-period-col-note" />
+            <col className="agent-period-col-action" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>主播</th>
+              <th>平台</th>
+              <th>类型</th>
+              {periods.map((period) => <th key={period.startIso} className={period.startIso === selectedPeriodStart ? 'agent-period-head-selected' : ''}>{formatOperationPeriodHeader(period, periods)}</th>)}
+              <th>本月情况</th>
+              <th>状态</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>{rows.map((row) => <OperationTableRow key={row.id} row={row} selectedPeriodStart={selectedPeriodStart} onOpen={onOpen} />)}</tbody>
+        </table>
+      </div>
+      <div className="agent-operation-mobile-list">
+        {rows.map((row) => <OperationMobileCard key={row.id} row={row} selectedPeriodStart={selectedPeriodStart} onOpen={onOpen} />)}
+      </div>
+      <OperationPagination page={page} pageCount={pageCount} pageSize={pageSize} total={total} onPage={onPage} onPageSize={onPageSize} />
+    </>
+  );
+}
+
+function OperationTableRow({ row, selectedPeriodStart, onOpen }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
+  const actionRow = getOperationRowAction(row);
+  return (
+    <tr>
+      <td><strong className="agent-period-creator-name">{row.displayName}</strong><small>{row.regionLabel}</small></td>
+      <td><OperationPlatformList profiles={row.profiles} /></td>
+      <td><OperationTypeList profiles={row.profiles} /></td>
+      {row.periods.map((cell) => <PeriodRevenueCell key={cell.period.startIso} cell={cell} selected={cell.period.startIso === selectedPeriodStart} onOpen={onOpen} />)}
+      <td><OperationMonthSummary entries={row.monthSummary} /></td>
+      <td><OperationRowStatusBadge status={row.status} /></td>
+      <td className="agent-period-note">{row.latestNote || '-'}</td>
+      <td>{actionRow ? <button className="secondary-button compact-button" type="button" onClick={() => onOpen(actionRow)}>{row.status === 'missing' ? '填写' : '查看'}</button> : '-'}</td>
+    </tr>
+  );
+}
+
+function OperationMobileCard({ row, selectedPeriodStart, onOpen }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
+  const actionRow = getOperationRowAction(row);
+  return (
+    <article className="agent-operation-mobile-card agent-period-mobile-card">
+      <div className="agent-operation-mobile-head">
+        <div><strong>{row.displayName}</strong><span>{row.regionLabel}</span></div>
+        <OperationStatusBadge status={row.status} />
+      </div>
+      <div className="agent-period-mobile-meta">
+        <OperationPlatformList profiles={row.profiles} />
+        <OperationTypeList profiles={row.profiles} />
+      </div>
+      <div className="agent-period-mobile-periods">
+        {row.periods.map((cell) => (
+          <section key={cell.period.startIso} className={`agent-period-mobile-period agent-period-mobile-period--${cell.status} ${cell.period.startIso === selectedPeriodStart ? 'agent-period-mobile-period--selected' : ''}`}>
+            <span>{formatOperationPeriodHeader(cell.period, row.periods.map((period) => period.period))}</span>
+            <div>{cell.profiles.map((profile) => <PeriodRevenueEntry key={`${profile.creator.id}-${profile.period.startIso}`} item={profile} onOpen={onOpen} />)}</div>
+          </section>
+        ))}
+      </div>
+      <div className="agent-period-mobile-summary">
+        <span>本月情况</span>
+        <OperationMonthSummary entries={row.monthSummary} />
+      </div>
+      <p>备注：{row.latestNote || '-'}</p>
+      {actionRow ? <button className="secondary-button compact-button" type="button" onClick={() => onOpen(actionRow)}>{row.status === 'missing' ? '填写' : '查看'}</button> : null}
+    </article>
+  );
+}
+
+function PeriodRevenueCell({ cell, selected, onOpen }: { cell: OperationPeriodCell; selected: boolean; onOpen: (row: OperationRow) => void }) {
+  return (
+    <td className={`agent-period-cell agent-period-cell--${cell.status} ${selected ? 'agent-period-cell--selected' : ''}`}>
+      <div className="agent-period-cell-stack">
+        {cell.profiles.map((item) => <PeriodRevenueEntry key={`${item.creator.id}-${item.period.startIso}`} item={item} onOpen={onOpen} />)}
+      </div>
+    </td>
+  );
+}
+
+function PeriodRevenueEntry({ item, onOpen }: { item: OperationCellProfile; onOpen: (row: OperationRow) => void }) {
+  const content = (
+    <>
+      <span>{platformLabels[item.creator.platform]}</span>
+      <strong className="agent-period-revenue-amount"><b>{item.record ? formatRevenueAmount(item.record.revenue_amount) : '-'}</b>{item.record ? <em>{getRecordRevenueUnitLabel(item.record)}</em> : null}</strong>
+      <small>{getOperationCellStatusLabel(item.status)}</small>
+      {item.status === 'future' ? <em>{formatFutureStartHint(item.period.startIso)}</em> : null}
+    </>
+  );
+  if (item.status === 'future') return <div className={`agent-period-entry agent-period-entry--future agent-period-entry--${item.creator.platform}`}>{content}</div>;
+  return (
+    <button
+      className={`agent-period-entry agent-period-entry--${item.status} agent-period-entry--${item.creator.platform}`}
+      type="button"
+      onClick={() => onOpen({ creator: item.creator, record: item.record, status: item.status === 'filled' ? 'filled' : 'missing', period: item.period })}
+    >
+      {content}
+    </button>
+  );
+}
+
+function OperationPlatformList({ profiles }: { profiles: CreatorProfile[] }) {
+  return <div className="agent-period-platform-list">{profiles.map((creator) => <PlatformPill key={creator.id} platform={creator.platform} />)}</div>;
+}
+
+function OperationTypeList({ profiles }: { profiles: CreatorProfile[] }) {
+  return <div className="agent-period-type-list">{profiles.map((creator) => <CreatorTypeBadge key={creator.id} type={creator.creator_type} />)}</div>;
+}
+
+function OperationMonthSummary({ entries }: { entries: OperationMonthSummaryEntry[] }) {
+  const filledEntries = entries.filter((entry) => entry.hasRecord);
+  if (filledEntries.length === 0) return <span className="agent-period-empty">-</span>;
+  return (
+    <div className="agent-period-month-summary">
+      {filledEntries.map((entry) => (
+        <span key={entry.platform} className={`agent-period-month-summary-line agent-period-month-summary-line--${entry.platform}`}>
+          {filledEntries.length > 1 ? <em>{platformLabels[entry.platform]}</em> : null}
+          <b>{formatRevenueAmount(entry.total)}</b>
+          <small>{getCreatorRevenueUnitLabel(entry.platform)}</small>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function OperationPagination({ page, pageCount, pageSize, total, onPage, onPageSize }: { page: number; pageCount: number; pageSize: number; total: number; onPage: (page: number) => void; onPageSize: (pageSize: number) => void }) {
+  return (
+    <div className="agent-period-pagination">
+      <span>共 {total} 位主播</span>
+      <label>
+        每页
+        <select value={pageSize} onChange={(event) => onPageSize(Number(event.target.value))}>
+          <option value={10}>10</option>
+          <option value={20}>20</option>
+        </select>
+      </label>
+      <div>
+        <button className="secondary-button compact-button" type="button" disabled={page <= 1} onClick={() => onPage(page - 1)}>上一页</button>
+        <span>{page} / {pageCount}</span>
+        <button className="secondary-button compact-button" type="button" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>下一页</button>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
+  const [amount, setAmount] = useState(row.record && row.status !== 'missing' ? formatAmountInput(row.record.revenue_amount) : '');
+  const [agentNote, setAgentNote] = useState(row.record?.agent_note ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const readOnly = row.status === 'filled';
+  const unitLabel = getCreatorRevenueUnitLabel(row.creator.platform);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (readOnly) return;
+    const parsedAmount = parseWeeklyAmount(amount);
+    if (parsedAmount.error) {
+      setError(parsedAmount.error);
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const record = await agentService.submitWeeklyRevenue({
+        recordId: row.record?.id,
+        creatorProfileId: row.creator.id,
+        weekStartDate: row.period.startIso,
+        weekEndDate: row.period.endIso,
+        revenueAmount: parsedAmount.value,
+        agentNote,
+      });
+      onSubmitted(record);
+    } catch (saveError) {
+      setError(`提交失败：${getErrorMessage(saveError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SystemModal
+      title={readOnly ? '查看周期流水' : '填写周期流水'}
+      ariaLabel="周期流水"
+      onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>{readOnly ? null : <button className="primary-button compact-button" type="submit" form="weekly-operation-form" disabled={saving}>保存</button>}</>}
+    >
+      <form id="weekly-operation-form" className="weekly-operation-form" onSubmit={submit}>
+        <div className="agent-operation-modal-head">
+          <PlatformPill platform={row.creator.platform} />
+          <OperationStatusBadge status={row.status} />
+        </div>
+        <div className="agent-operation-detail-grid">
+          <DrawerField label="主播" value={row.creator.creator_name || '-'} />
+          <DrawerField label="平台" value={platformLabels[row.creator.platform]} />
+          <DrawerField label="UID" value={row.creator.platform_user_id} />
+          <DrawerField label="平台账号" value={row.creator.platform_account || '-'} />
+          <DrawerField label="周期" value={row.period.label} />
+          <DrawerField label="单位" value={unitLabel} />
+        </div>
+        <label className="form-field agent-weekly-revenue-field">
+          <span>流水</span>
+          <div className="agent-weekly-revenue-input-row">
+            <input inputMode="decimal" min="0" readOnly={readOnly} type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="尚未填写" />
+            <b>{unitLabel}</b>
+          </div>
+        </label>
+        <label className="form-field agent-weekly-revenue-note">
+          <span>备注</span>
+          <textarea readOnly={readOnly} value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" />
+        </label>
+        {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
+      </form>
+    </SystemModal>
+  );
+}
+
+function PlatformPill({ platform }: { platform: CreatorPlatform }) {
+  return (
+    <span className="agent-operation-platform-pill">
+      <img src={platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" aria-hidden="true" />
+      <span>{platformLabels[platform]}</span>
+    </span>
+  );
+}
+
+function OperationStatusBadge({ status }: { status: OperationCellStatus }) {
+  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始' };
+  return <span className={`agent-weekly-status-badge agent-weekly-status-badge--${status}`}>{labels[status]}</span>;
+}
+
+function OperationRowStatusBadge({ status }: { status: OperationStatus }) {
+  const labels: Record<OperationStatus, string> = { missing: '未完成', filled: '已完成' };
+  return <span className={`agent-weekly-status-badge agent-weekly-status-badge--${status}`}>{labels[status]}</span>;
+}
+
+
+function TextField({ label, value, onChange, type = 'text', required, placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
+  return <label className="form-field"><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></label>;
 }
 
 function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
@@ -1290,8 +1929,377 @@ function getMissingTargetEmailReviewMessage(request: AdjustmentReviewRequest) {
   return request.request_type === 'change_manager' ? '目标经纪人 Email 缺失，请申请人重新提交。' : '目标星探 Email 缺失，请申请人重新提交。';
 }
 
+function getRevenuePeriodForDate(date: Date): RevenuePeriodRange {
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const day = target.getDate();
+  const startDay = day >= 29 ? 29 : Math.floor((day - 1) / 7) * 7 + 1;
+  return createRevenuePeriod(target.getFullYear(), target.getMonth(), startDay);
+}
+
+function getRevenuePeriodOptions(month: string): RevenuePeriodRange[] {
+  const [yearText, monthText] = month.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return [];
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return [1, 8, 15, 22, 29].filter((startDay) => startDay <= lastDay).map((startDay) => createRevenuePeriod(year, monthIndex, startDay));
+}
+
+function getDefaultPeriodStartForMonth(month: string, currentPeriodStartIso: string) {
+  const options = getRevenuePeriodOptions(month);
+  return options.find((period) => period.startIso === currentPeriodStartIso)?.startIso ?? options[0]?.startIso ?? '';
+}
+
+function getMonthDateRange(month: string) {
+  const [yearText, monthText] = month.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return { startIso: '', endIso: '' };
+  return {
+    startIso: formatLocalDate(new Date(year, monthIndex, 1)),
+    endIso: formatLocalDate(new Date(year, monthIndex + 1, 0)),
+  };
+}
+
+function getOperationEffectiveDateRange(quickRange: OperationQuickRange, input: {
+  monthDateRange: { startIso: string; endIso: string };
+  previousPeriod: RevenuePeriodRange;
+  customStart: string;
+  customEnd: string;
+  todayIso: string;
+}): OperationDateRange {
+  if (quickRange === 'previous') return { startIso: input.previousPeriod.startIso, endIso: input.previousPeriod.endIso };
+  if (quickRange === 'last30') {
+    const endDate = parseIsoDate(input.todayIso);
+    const startDate = parseIsoDate(input.todayIso);
+    startDate.setDate(startDate.getDate() - 29);
+    return { startIso: formatLocalDate(startDate), endIso: formatLocalDate(endDate) };
+  }
+  if (quickRange === 'year') {
+    const year = parseIsoDate(input.todayIso).getFullYear();
+    return { startIso: `${year}-01-01`, endIso: `${year}-12-31` };
+  }
+  if (quickRange === 'custom') return normalizeOperationDateRange(input.customStart, input.customEnd, input.monthDateRange);
+  return input.monthDateRange;
+}
+
+function normalizeOperationDateRange(startIso: string, endIso: string, fallback: OperationDateRange): OperationDateRange {
+  if (!isValidIsoDate(startIso) || !isValidIsoDate(endIso)) return fallback;
+  return startIso <= endIso ? { startIso, endIso } : { startIso: endIso, endIso: startIso };
+}
+
+function getRevenuePeriodsForDateRange(range: OperationDateRange): RevenuePeriodRange[] {
+  if (!isValidIsoDate(range.startIso) || !isValidIsoDate(range.endIso)) return [];
+  const normalizedRange = normalizeOperationDateRange(range.startIso, range.endIso, range);
+  const periods = new Map<string, RevenuePeriodRange>();
+  const cursor = parseIsoDate(normalizedRange.startIso);
+  cursor.setDate(1);
+  const end = parseIsoDate(normalizedRange.endIso);
+  end.setDate(1);
+
+  while (cursor <= end) {
+    const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+    getRevenuePeriodOptions(month)
+      .filter((period) => doDateRangesOverlap(period.startIso, period.endIso, normalizedRange.startIso, normalizedRange.endIso))
+      .forEach((period) => periods.set(period.startIso, period));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return Array.from(periods.values()).sort((first, second) => first.startIso.localeCompare(second.startIso));
+}
+
+function doDateRangesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
+  return firstStart <= secondEnd && firstEnd >= secondStart;
+}
+
+function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = parseIsoDate(value);
+  return !Number.isNaN(date.getTime()) && formatLocalDate(date) === value;
+}
+
+function getPreviousRevenuePeriod(periodStartIso: string): RevenuePeriodRange {
+  const startDate = parseIsoDate(periodStartIso);
+  startDate.setDate(startDate.getDate() - 1);
+  return getRevenuePeriodForDate(startDate);
+}
+
+function createRevenuePeriod(year: number, monthIndex: number, startDay: number): RevenuePeriodRange {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const safeStartDay = Math.min(startDay, lastDay);
+  const endDay = safeStartDay === 29 ? lastDay : Math.min(safeStartDay + 6, lastDay);
+  const start = new Date(year, monthIndex, safeStartDay);
+  const end = new Date(year, monthIndex, endDay);
+  return {
+    startIso: formatLocalDate(start),
+    endIso: formatLocalDate(end),
+    label: `${formatDateForPeriod(start)} - ${formatDateForPeriod(end)}`,
+    shortLabel: safeStartDay === endDay ? String(safeStartDay).padStart(2, '0') : `${String(safeStartDay).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`,
+  };
+}
+
+function parseIsoDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatAmountInput(value: number) {
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function parseWeeklyAmount(value: string): { value: number; error: '' } | { value: 0; error: string } {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return { value: 0, error: '流水必须填写；如果确认没有流水，请填写 0。' };
+  const parsedValue = Number(trimmedValue);
+  if (!Number.isFinite(parsedValue)) return { value: 0, error: '流水必须是有效数字。' };
+  if (parsedValue < 0) return { value: 0, error: '流水不能小于 0。' };
+  return { value: parsedValue, error: '' };
+}
+
+function sortOperationCreators(creators: CreatorProfile[]) {
+  const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
+  return [...creators].sort((first, second) => {
+    if (first.creator_entity_id && first.creator_entity_id === second.creator_entity_id) {
+      return platformOrder[first.platform] - platformOrder[second.platform];
+    }
+    const firstName = first.creator_name || first.platform_user_id || '';
+    const secondName = second.creator_name || second.platform_user_id || '';
+    const nameCompare = firstName.localeCompare(secondName, 'zh-Hans');
+    if (nameCompare !== 0) return nameCompare;
+    return platformOrder[first.platform] - platformOrder[second.platform];
+  });
+}
+
+function getOperationStatus(record: WeeklyRevenueRecord | null): OperationStatus {
+  return record ? 'filled' : 'missing';
+}
+
+function buildOperationStreamerRows(
+  creators: CreatorProfile[],
+  periods: RevenuePeriodRange[],
+  recordsByPeriod: Record<string, Record<string, WeeklyRevenueRecord>>,
+  filters: OperationFilters,
+  todayIso: string,
+): OperationStreamerRow[] {
+  const groups = groupOperationProfiles(creators);
+  const normalizedSearch = filters.search.trim().toLowerCase();
+  return groups.flatMap((profiles) => {
+    const hasTikTok = profiles.some((profile) => profile.platform === 'tiktok');
+    const hasDouyin = profiles.some((profile) => profile.platform === 'douyin');
+    if (filters.platform === 'dual_platform' && (!hasTikTok || !hasDouyin)) return [];
+
+    let visibleProfiles = profiles;
+    if (filters.platform && filters.platform !== 'dual_platform') {
+      visibleProfiles = visibleProfiles.filter((profile) => profile.platform === filters.platform);
+    }
+    if (filters.creatorType === '5+1') {
+      visibleProfiles = visibleProfiles.filter((profile) => profile.creator_type === '5+1');
+    }
+    if (filters.creatorType === 'non_5_1') {
+      visibleProfiles = visibleProfiles.filter((profile) => profile.creator_type !== '5+1');
+    }
+    if (visibleProfiles.length === 0) return [];
+
+    if (normalizedSearch && !matchesOperationSearch(visibleProfiles, normalizedSearch)) return [];
+
+    const rowPeriods = periods.map((period) => {
+      const isFuture = isRevenuePeriodFuture(period, todayIso);
+      const cellProfiles = visibleProfiles.map((creator) => {
+        const record = recordsByPeriod[period.startIso]?.[creator.id] ?? null;
+        const status: OperationCellStatus = record ? 'filled' : isFuture ? 'future' : 'missing';
+        return { creator, record, status, period };
+      });
+      return {
+        period,
+        profiles: cellProfiles,
+        status: getOperationCellStatus(cellProfiles),
+      };
+    });
+    const rowStatus: OperationStatus = rowPeriods.some((period) => period.profiles.some((profile) => profile.status === 'missing')) ? 'missing' : 'filled';
+    return [{
+      id: getOperationGroupKey(visibleProfiles[0]),
+      displayName: getOperationDisplayName(visibleProfiles),
+      regionLabel: getOperationRegionLabel(visibleProfiles),
+      profiles: visibleProfiles,
+      periods: rowPeriods,
+      status: rowStatus,
+      latestNote: getOperationLatestNote(rowPeriods),
+      monthSummary: summarizeOperationMonth(rowPeriods),
+    }];
+  });
+}
+
+function groupOperationProfiles(creators: CreatorProfile[]) {
+  const groups = new Map<string, CreatorProfile[]>();
+  creators.forEach((creator) => {
+    const key = getOperationGroupKey(creator);
+    groups.set(key, [...(groups.get(key) ?? []), creator]);
+  });
+  return Array.from(groups.values()).map(sortOperationCreators);
+}
+
+function getOperationGroupKey(creator: CreatorProfile) {
+  return creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
+}
+
+function matchesOperationSearch(profiles: CreatorProfile[], normalizedSearch: string) {
+  return profiles.some((profile) => [
+    profile.creator_name,
+    profile.platform_user_id,
+    profile.platform_account,
+    profile.region?.code,
+    profile.region?.name,
+  ].join(' ').toLowerCase().includes(normalizedSearch));
+}
+
+function isRevenuePeriodFuture(period: RevenuePeriodRange, todayIso: string) {
+  return period.startIso > todayIso;
+}
+
+function getOperationCellStatus(profiles: OperationCellProfile[]): OperationCellStatus {
+  if (profiles.every((profile) => profile.status === 'future')) return 'future';
+  if (profiles.some((profile) => profile.status === 'missing')) return 'missing';
+  return 'filled';
+}
+
+function getOperationCellStatusLabel(status: OperationCellStatus) {
+  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始' };
+  return labels[status];
+}
+
+function formatFutureStartHint(startIso: string) {
+  return `${parseIsoDate(startIso).getDate()}号开始可填写`;
+}
+
+function getOperationDisplayName(profiles: CreatorProfile[]) {
+  return profiles.find((profile) => profile.creator_name)?.creator_name || profiles[0]?.platform_user_id || '-';
+}
+
+function getOperationRegionLabel(profiles: CreatorProfile[]) {
+  const labels = uniqueValues(profiles.map((profile) => profile.region?.code ?? profile.region?.name ?? '').filter(Boolean));
+  return labels.length > 0 ? labels.join(' / ') : '-';
+}
+
+function getOperationLatestNote(periods: OperationPeriodCell[]) {
+  const records = periods.flatMap((period) => period.profiles.map((profile) => profile.record).filter((record): record is WeeklyRevenueRecord => Boolean(record?.agent_note)));
+  const latestRecord = records.sort((first, second) => getOperationRecordTime(second) - getOperationRecordTime(first))[0];
+  return latestRecord?.agent_note ?? '';
+}
+
+function getOperationRecordTime(record: WeeklyRevenueRecord) {
+  return new Date(record.submitted_at ?? record.created_at).getTime();
+}
+
+function summarizeOperationMonth(periods: OperationPeriodCell[]): OperationMonthSummaryEntry[] {
+  const summary: Record<CreatorPlatform, OperationMonthSummaryEntry> = {
+    tiktok: { platform: 'tiktok', total: 0, hasRecord: false },
+    douyin: { platform: 'douyin', total: 0, hasRecord: false },
+  };
+  periods.forEach((period) => {
+    period.profiles.forEach((profile) => {
+      if (!profile.record) return;
+      summary[profile.creator.platform].total += profile.record.revenue_amount;
+      summary[profile.creator.platform].hasRecord = true;
+    });
+  });
+  return [summary.tiktok, summary.douyin];
+}
+
+function summarizeOperationStreamerRows(rows: OperationStreamerRow[]) {
+  return rows.reduce(
+    (summary, row) => {
+      summary.rows += 1;
+      row.periods.forEach((period) => {
+        period.profiles.forEach((profile) => {
+          if (profile.status === 'future') return;
+          if (profile.status === 'filled') {
+            summary.filled += 1;
+            if (profile.record) {
+              if (profile.creator.platform === 'tiktok') summary.tiktokTotal += profile.record.revenue_amount;
+              if (profile.creator.platform === 'douyin') summary.douyinTotal += profile.record.revenue_amount;
+            }
+            return;
+          }
+          summary.missing += 1;
+        });
+      });
+      return summary;
+    },
+    { rows: 0, missing: 0, filled: 0, tiktokTotal: 0, douyinTotal: 0 },
+  );
+}
+
+function filterOperationStreamerRows(rows: OperationStreamerRow[], filters: OperationFilters) {
+  if (!filters.status) return rows;
+  return rows.filter((row) => row.status === filters.status);
+}
+
+
+function sortOperationStreamerRows(first: OperationStreamerRow, second: OperationStreamerRow) {
+  const statusOrder: Record<OperationStatus, number> = { missing: 0, filled: 1 };
+  if (statusOrder[first.status] !== statusOrder[second.status]) return statusOrder[first.status] - statusOrder[second.status];
+  return first.displayName.localeCompare(second.displayName, 'zh-Hans');
+}
+
+
+function getOperationRowAction(row: OperationStreamerRow): OperationRow | null {
+  const missingProfile = row.periods.flatMap((period) => period.profiles).find((profile) => profile.status === 'missing');
+  if (missingProfile) return { creator: missingProfile.creator, record: null, status: 'missing', period: missingProfile.period };
+  const filledProfile = row.periods.flatMap((period) => period.profiles).find((profile) => profile.status === 'filled');
+  if (filledProfile) return { creator: filledProfile.creator, record: filledProfile.record, status: 'filled', period: filledProfile.period };
+  return null;
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+
+function getCreatorRevenueUnitLabel(platform: CreatorPlatform) {
+  return platform === 'tiktok' ? '钻石' : '音浪';
+}
+
+function getRecordRevenueUnitLabel(record: WeeklyRevenueRecord) {
+  return record.revenue_unit === 'diamond' ? '钻石' : '音浪';
+}
+
+function formatRevenueWithUnit(record: WeeklyRevenueRecord) {
+  return `${formatRevenueAmount(record.revenue_amount)} ${getRecordRevenueUnitLabel(record)}`;
+}
+
+function getWeekLabel(startDate: string, endDate: string) {
+  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+}
+
 function formatDate(value: string) {
   return value ? new Date(value).toLocaleDateString('zh-MY') : '-';
+}
+
+function formatDateForPeriod(date: Date) {
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatDateRangeText(startIso: string, endIso: string) {
+  return `${formatDateForPeriod(parseIsoDate(startIso))} ~ ${formatDateForPeriod(parseIsoDate(endIso))}`;
+}
+
+function formatOperationPeriodHeader(period: RevenuePeriodRange, periods: RevenuePeriodRange[]) {
+  const monthCount = new Set(periods.map((item) => item.startIso.slice(0, 7))).size;
+  if (monthCount <= 1) return period.shortLabel;
+  const date = parseIsoDate(period.startIso);
+  return `${String(date.getMonth() + 1).padStart(2, '0')}月 ${period.shortLabel}`;
+}
+
+function formatDateTime(value: string | null) {
+  return value ? new Date(value).toLocaleString('zh-MY') : '-';
 }
 
 function getErrorMessage(error: unknown) {

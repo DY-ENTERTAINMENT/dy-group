@@ -5181,6 +5181,903 @@ button.leave-chip:disabled {
   width: 22px;
 }
 
+.agent-operation-page {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.agent-period-workbench {
+  background: #ffffff;
+  border-color: #e5e7f3;
+  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.06);
+}
+
+.agent-operation-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.agent-operation-header h3 {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 950;
+  margin: 0;
+}
+
+.agent-operation-header p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  margin: 4px 0 0;
+}
+
+.agent-operation-kpi-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.agent-operation-kpi-card {
+  align-items: center;
+  background: linear-gradient(135deg, #ffffff 0%, #f4f1ff 100%);
+  border: 1px solid #e8e3ff;
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.05);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 142px;
+  padding: 14px;
+  text-align: center;
+}
+
+.agent-period-kpi-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.agent-period-kpi-head i {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.agent-period-kpi-head img {
+  height: 18px;
+  object-fit: contain;
+  width: 18px;
+}
+
+.agent-operation-kpi-card span,
+.agent-period-kpi-head span {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.agent-operation-kpi-card > strong {
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.agent-operation-kpi-card > small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.agent-period-kpi-overview {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  width: 100%;
+}
+
+.agent-period-kpi-overview span {
+  align-items: center;
+  color: #475569;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  min-width: 0;
+}
+
+.agent-period-kpi-overview em {
+  color: #475569;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.agent-period-kpi-overview b {
+  color: #1f1b4d;
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.agent-period-kpi-overview small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-operation-kpi-card--missing {
+  background: linear-gradient(135deg, #fffdfa 0%, #fff3db 100%);
+  border-color: #fde7ba;
+}
+
+.agent-operation-kpi-card--filled {
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf3 100%);
+  border-color: #ccefd8;
+}
+
+.agent-operation-kpi-card--overview {
+  background: linear-gradient(135deg, #ffffff 0%, #f0ecff 100%);
+  border-color: #ded7ff;
+}
+
+.agent-operation-kpi-card--tiktok {
+  background: linear-gradient(135deg, #eff6ff 0%, #f2edff 100%);
+  border-color: #dbe5ff;
+}
+
+.agent-operation-kpi-card--douyin {
+  background: linear-gradient(135deg, #fff1f7 0%, #f9f0ff 100%);
+  border-color: #f8dce9;
+}
+
+.agent-operation-kpi-card--submitted {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.agent-operation-kpi-card--confirmed {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.agent-operation-filter-panel {
+  background: #fbfcff;
+  border: 1px solid #e6e8f2;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.agent-operation-filter-row {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.agent-operation-filter-row--primary {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.agent-operation-filter-row--secondary {
+  justify-content: flex-start;
+}
+
+.agent-period-workbench .form-field {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.agent-period-workbench .form-field span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.agent-period-workbench .form-field input,
+.agent-period-workbench .form-field select {
+  background: #ffffff;
+  border-color: #dbe1ee;
+  color: #1e293b;
+  min-height: 38px;
+}
+
+.agent-period-workbench .form-field input:focus,
+.agent-period-workbench .form-field select:focus {
+  border-color: rgba(124, 58, 237, 0.48);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  outline: none;
+}
+
+.agent-operation-quick-range {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.agent-operation-quick-range > span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.agent-operation-quick-range > div {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.agent-operation-quick-range button {
+  background: #ffffff;
+  border: 1px solid #dbe1ee;
+  border-radius: 7px;
+  color: #475569;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 38px;
+  min-width: 68px;
+  padding: 0 8px;
+}
+
+.agent-operation-quick-range button.active {
+  background: #f0ebff;
+  border-color: #ddd6fe;
+  color: #6d28d9;
+}
+
+.agent-operation-quick-range button:hover {
+  background: #f6f2ff;
+  border-color: #ddd6fe;
+}
+
+.agent-operation-date-range {
+  flex: 1.4 1 250px;
+  max-width: 340px;
+  min-width: 250px;
+  width: auto;
+}
+
+.agent-operation-date-range input[readonly] {
+  cursor: default;
+}
+
+.agent-operation-date-range--custom {
+  max-width: 340px;
+  min-width: 280px;
+  width: auto;
+}
+
+.agent-operation-date-range > div {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.agent-operation-date-range b {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-operation-filter-row--primary > .form-field:nth-of-type(2),
+.agent-operation-filter-row--primary > .form-field:nth-of-type(3) {
+  flex: 1 1 128px;
+  max-width: 170px;
+  min-width: 124px;
+  width: auto;
+}
+
+.agent-operation-filter-row--primary > .form-field:nth-of-type(4),
+.agent-operation-filter-row--primary > .form-field:nth-of-type(5) {
+  flex: 0.8 1 112px;
+  max-width: 145px;
+  min-width: 104px;
+  width: auto;
+}
+
+.agent-operation-filter-row--secondary > .form-field {
+  width: 320px;
+}
+
+.agent-operation-refresh-button {
+  align-items: center;
+  background: #ffffff;
+  border-color: #dbe1ee;
+  color: #334155;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  justify-content: center;
+  min-height: 38px;
+  padding-inline: 12px;
+  width: auto;
+  min-width: 86px;
+}
+
+.agent-operation-refresh-button:hover {
+  background: #f6f2ff;
+  border-color: #ddd6fe;
+}
+
+.agent-operation-state {
+  padding: 12px;
+}
+
+.agent-operation-alert {
+  margin: 0;
+}
+
+.agent-period-previous-alert {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.agent-period-previous-alert > div {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-period-previous-alert i {
+  align-items: center;
+  background: rgba(251, 146, 60, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-style: normal;
+  font-weight: 950;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.agent-period-previous-alert span {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.agent-period-previous-alert--missing {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.agent-period-previous-alert--filled {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.agent-period-previous-alert .secondary-button {
+  background: #ffffff;
+  border-color: #fed7aa;
+  color: #334155;
+  flex: 0 0 auto;
+  min-height: 34px;
+  min-width: 104px;
+  padding-inline: 12px;
+  width: auto;
+}
+
+.agent-period-previous-alert .secondary-button:hover {
+  background: #ffedd5;
+}
+
+.agent-operation-platform-pill {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 950;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.agent-operation-platform-pill img {
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
+}
+
+.agent-operation-uid {
+  color: var(--text);
+  display: block;
+  font-weight: 900;
+}
+
+.agent-operation-table-wrap small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.agent-period-table {
+  min-width: 1160px;
+  table-layout: fixed;
+}
+
+.agent-period-table thead th {
+  background: #f6f8fc;
+  border-bottom-color: #e5e7f3;
+  color: #344054;
+}
+
+.agent-period-table th,
+.agent-period-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.agent-period-table tbody tr:hover td {
+  background: #fbf9ff;
+}
+
+.agent-period-head-selected {
+  background: #f0ebff !important;
+  color: #6d28d9 !important;
+}
+
+.agent-period-col-creator {
+  width: 150px;
+}
+
+.agent-period-col-platform {
+  width: 118px;
+}
+
+.agent-period-col-type {
+  width: 88px;
+}
+
+.agent-period-col-period {
+  width: 116px;
+}
+
+.agent-period-col-month {
+  width: 145px;
+}
+
+.agent-period-col-status {
+  width: 92px;
+}
+
+.agent-period-col-note {
+  width: 128px;
+}
+
+.agent-period-col-action {
+  width: 86px;
+}
+
+.agent-period-creator-name {
+  color: var(--text);
+  display: block;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.agent-period-platform-list,
+.agent-period-type-list,
+.agent-period-month-summary,
+.agent-period-cell-stack {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+
+.agent-period-cell {
+  padding: 10px 8px;
+}
+
+.agent-period-cell--selected {
+  background: #fbf8ff;
+}
+
+.agent-period-entry {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+  padding: 7px 4px;
+  text-align: center;
+  width: 100%;
+}
+
+.agent-period-entry:hover {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.agent-period-entry span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-period-entry small {
+  align-items: center;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 950;
+  gap: 4px;
+}
+
+.agent-period-entry small::before {
+  border-radius: 999px;
+  content: "";
+  height: 6px;
+  width: 6px;
+}
+
+.agent-period-entry .agent-period-revenue-amount {
+  align-items: baseline;
+  color: var(--text);
+  display: inline-flex;
+  gap: 4px;
+  justify-content: center;
+  overflow-wrap: anywhere;
+}
+
+.agent-period-entry .agent-period-revenue-amount b {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.agent-period-entry .agent-period-revenue-amount em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.agent-period-entry--tiktok .agent-period-revenue-amount b {
+  color: #5b45d6;
+}
+
+.agent-period-entry--douyin .agent-period-revenue-amount b {
+  color: #d9468d;
+}
+
+.agent-period-entry--filled small {
+  color: #15803d;
+}
+
+.agent-period-entry--filled small::before {
+  background: #22c55e;
+}
+
+.agent-period-entry--missing {
+  background: #fffaf1;
+  border: 1px solid #fdecc8;
+}
+
+.agent-period-entry--missing small {
+  color: #c2410c;
+}
+
+.agent-period-entry--missing small::before {
+  background: #f97316;
+}
+
+.agent-period-entry--future {
+  cursor: default;
+  color: #94a3b8;
+}
+
+.agent-period-entry--future:hover {
+  background: transparent;
+}
+
+.agent-period-entry--future .agent-period-revenue-amount b,
+.agent-period-entry--future .agent-period-revenue-amount em,
+.agent-period-entry--future span,
+.agent-period-entry--future small,
+.agent-period-entry--future em {
+  color: #94a3b8;
+}
+
+.agent-period-entry--future small::before {
+  background: #cbd5e1;
+}
+
+.agent-period-entry em {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.agent-period-month-summary-line {
+  align-items: baseline;
+  color: var(--text);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 4px;
+  justify-content: center;
+  line-height: 1.35;
+}
+
+.agent-period-month-summary-line em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.agent-period-month-summary-line b {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.agent-period-month-summary-line small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-period-month-summary-line--tiktok b {
+  color: #5b45d6;
+}
+
+.agent-period-month-summary-line--douyin b {
+  color: #d9468d;
+}
+
+.agent-period-empty {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.agent-period-note {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agent-period-pagination {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.agent-period-pagination label,
+.agent-period-pagination div {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.agent-period-pagination select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-weight: 900;
+  padding: 6px 8px;
+}
+
+.agent-period-pagination .secondary-button {
+  background: #ffffff;
+  border-color: #dbe1ee;
+  color: #334155;
+}
+
+.agent-period-pagination > div > span {
+  align-items: center;
+  background: #f0ebff;
+  border: 1px solid #ddd6fe;
+  border-radius: 6px;
+  color: #6d28d9;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 48px;
+  padding: 6px 9px;
+  white-space: nowrap;
+}
+
+.agent-period-workbench .agent-creator-type-badge--plus {
+  background: #f0ebff;
+  color: #6d28d9;
+}
+
+.agent-period-workbench .agent-creator-type-badge--standard {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.agent-operation-mobile-list {
+  display: none;
+  gap: 12px;
+}
+
+.agent-operation-mobile-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.agent-operation-mobile-card--tiktok {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.agent-operation-mobile-card--douyin {
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.agent-operation-mobile-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.agent-operation-mobile-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-operation-mobile-head strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.agent-operation-mobile-head span,
+.agent-operation-mobile-card p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  margin: 0;
+}
+
+.weekly-operation-form {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-operation-modal-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.agent-operation-detail-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-weekly-status-badge {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.agent-weekly-status-badge--empty {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--muted);
+}
+
+.agent-weekly-status-badge--missing {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
+}
+
+.agent-weekly-status-badge--filled {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.agent-weekly-status-badge--future {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--muted);
+}
+
+.agent-weekly-status-badge--draft {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
+}
+
+.agent-weekly-status-badge--submitted {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+.agent-weekly-status-badge--confirmed {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.agent-weekly-revenue-meta {
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.agent-weekly-revenue-field,
+.agent-weekly-revenue-note {
+  margin: 0;
+}
+
+.agent-weekly-revenue-input-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.agent-weekly-revenue-input-row input[readonly],
+.agent-weekly-revenue-note textarea[readonly] {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+  cursor: default;
+}
+
+.agent-weekly-revenue-input-row b {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.agent-weekly-revenue-note textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.agent-weekly-revenue-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .adjustment-review-panel {
   display: grid;
   gap: 16px;
@@ -8040,6 +8937,163 @@ button.leave-chip:disabled {
   }
 
   .agent-creator-drawer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-operation-header {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .agent-operation-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-operation-kpi-card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .agent-period-previous-alert {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .agent-period-previous-alert .secondary-button {
+    justify-self: start;
+    min-width: 104px;
+  }
+
+  .agent-operation-filter-row {
+    align-items: stretch;
+  }
+
+  .agent-operation-filter-row--primary,
+  .agent-operation-filter-row--secondary {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .agent-operation-quick-range,
+  .agent-operation-date-range,
+  .agent-operation-date-range--custom,
+  .agent-operation-filter-row--secondary > .form-field {
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .agent-operation-quick-range > div {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .agent-operation-quick-range button {
+    flex: 1 1 86px;
+    min-width: 0;
+  }
+
+  .agent-operation-filter-row--primary > .form-field:nth-of-type(2),
+  .agent-operation-filter-row--primary > .form-field:nth-of-type(3),
+  .agent-operation-filter-row--primary > .form-field:nth-of-type(4),
+  .agent-operation-filter-row--primary > .form-field:nth-of-type(5) {
+    flex: 1 1 calc(50% - 6px);
+    width: auto;
+  }
+
+  .agent-operation-refresh-button {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .agent-operation-table-wrap {
+    display: none;
+  }
+
+  .agent-operation-mobile-list {
+    display: grid;
+  }
+
+  .agent-period-mobile-card {
+    gap: 12px;
+  }
+
+  .agent-period-mobile-meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .agent-period-mobile-periods {
+    display: grid;
+    gap: 8px;
+  }
+
+  .agent-period-mobile-period {
+    background: rgba(124, 58, 237, 0.06);
+    border: 1px solid rgba(124, 58, 237, 0.1);
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .agent-period-mobile-period > span,
+  .agent-period-mobile-summary > span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 950;
+    text-align: center;
+  }
+
+  .agent-period-mobile-period > div {
+    display: grid;
+    gap: 6px;
+  }
+
+  .agent-period-mobile-summary {
+    background: var(--panel-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .agent-period-entry {
+    min-height: 42px;
+  }
+
+  .agent-period-entry strong {
+    font-size: 14px;
+  }
+
+  .agent-period-entry .agent-period-revenue-amount b {
+    font-size: 20px;
+  }
+
+  .agent-period-pagination {
+    justify-content: center;
+  }
+
+  .agent-period-pagination,
+  .agent-period-pagination div {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+  }
+
+  .agent-period-pagination {
+    flex-wrap: wrap;
+  }
+
+  .agent-period-pagination div {
+    flex-wrap: nowrap;
+  }
+
+  .agent-operation-detail-grid {
     grid-template-columns: 1fr;
   }
 

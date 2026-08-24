@@ -122,6 +122,41 @@ export type RevenueSummary = {
   nonFiveOne: number;
 };
 
+export type WeeklyRevenueStatus = 'draft' | 'submitted' | 'confirmed';
+
+export type WeeklyRevenueRecord = {
+  id: string;
+  creator_entity_id: string | null;
+  creator_profile_id: string;
+  platform: CreatorPlatform;
+  platform_uid: string;
+  week_start_date: string;
+  week_end_date: string;
+  revenue_amount: number;
+  revenue_unit: 'diamond' | 'yinlang';
+  source: 'manual' | 'csv' | 'api';
+  source_reference: string | null;
+  agent_note: string | null;
+  status: WeeklyRevenueStatus;
+  submitted_by_employee_id: string | null;
+  submitted_at: string | null;
+  confirmed_by_employee_id: string | null;
+  confirmed_at: string | null;
+  created_by_employee_id: string | null;
+  updated_by_employee_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WeeklyRevenueSaveInput = {
+  recordId?: string;
+  creatorProfileId: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  revenueAmount: number;
+  agentNote: string;
+};
+
 const db = supabase as any;
 
 const creatorSelect = `
@@ -160,6 +195,30 @@ const revenueSelect = `
   achieved_hours,
   achieved_revenue,
   creator:creator_profiles!creator_revenue_records_creator_profile_id_fkey(${creatorSelect})
+`;
+
+const weeklyRevenueSelect = `
+  id,
+  creator_entity_id,
+  creator_profile_id,
+  platform,
+  platform_uid,
+  week_start_date,
+  week_end_date,
+  revenue_amount,
+  revenue_unit,
+  source,
+  source_reference,
+  agent_note,
+  status,
+  submitted_by_employee_id,
+  submitted_at,
+  confirmed_by_employee_id,
+  confirmed_at,
+  created_by_employee_id,
+  updated_by_employee_id,
+  created_at,
+  updated_at
 `;
 
 const designSelect = `
@@ -273,6 +332,22 @@ export const agentService = {
       .map(mapRevenueRow)
       .filter((row: RevenueRecord) => !input.platform || row.creator?.platform === input.platform)
       .filter((row: RevenueRecord) => !input.regionId || row.creator?.region_id === input.regionId);
+  },
+
+  async listWeeklyRevenueRecords(input: { creatorProfileIds: string[]; weekStartDate: string }): Promise<WeeklyRevenueRecord[]> {
+    if (input.creatorProfileIds.length === 0) return [];
+
+    const { data, error } = await db
+      .from('creator_weekly_revenue_records')
+      .select(weeklyRevenueSelect)
+      .in('creator_profile_id', input.creatorProfileIds)
+      .eq('week_start_date', input.weekStartDate);
+    if (error) throw error;
+    return (data ?? []).map(mapWeeklyRevenueRow);
+  },
+
+  async submitWeeklyRevenue(input: WeeklyRevenueSaveInput): Promise<WeeklyRevenueRecord> {
+    return saveWeeklyRevenueRecord(input, 'submitted');
   },
 
   async listAdjustments(profileId: string): Promise<AdjustmentRequest[]> {
@@ -446,6 +521,47 @@ function splitLines(value: string) {
   return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
 
+async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput, status: Extract<WeeklyRevenueStatus, 'submitted'>) {
+  await ensureWeeklyRevenuePeriodFlow(input.weekStartDate, input.weekEndDate);
+
+  const payload = {
+    creator_profile_id: input.creatorProfileId,
+    week_start_date: input.weekStartDate,
+    week_end_date: input.weekEndDate,
+    revenue_amount: input.revenueAmount,
+    agent_note: input.agentNote.trim() || null,
+    status,
+    source: 'manual',
+  };
+
+  const query = input.recordId
+    ? db
+        .from('creator_weekly_revenue_records')
+        .update(payload)
+        .eq('id', input.recordId)
+        .select(weeklyRevenueSelect)
+        .single()
+    : db
+        .from('creator_weekly_revenue_records')
+        .insert(payload)
+        .select(weeklyRevenueSelect)
+        .single();
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return mapWeeklyRevenueRow(data);
+}
+
+async function ensureWeeklyRevenuePeriodFlow(weekStartDate: string, weekEndDate: string) {
+  const { data, error } = await db.rpc('creator_weekly_revenue_period_end', { p_period_start: weekStartDate });
+  if (error) {
+    throw new Error('周期流水数据库 003 尚未启用，暂不能保存新周期流水。');
+  }
+  if (data && String(data) !== weekEndDate) {
+    throw new Error('前端周期与数据库周期规则不一致，暂不能保存。');
+  }
+}
+
 function mapCreatorRow(row: any): CreatorProfile {
   return {
     id: row.id,
@@ -472,6 +588,13 @@ function mapCreatorRow(row: any): CreatorProfile {
 
 function mapRevenueRow(row: any): RevenueRecord {
   return { ...row, creator: row.creator ? mapCreatorRow(row.creator) : null };
+}
+
+function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
+  return {
+    ...row,
+    revenue_amount: Number(row.revenue_amount),
+  };
 }
 
 function mapDesignRow(row: any): DesignRequest {
