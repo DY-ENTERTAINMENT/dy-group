@@ -133,6 +133,7 @@ export type CreatorProfile = {
   updated_at: string;
   region: Pick<Region, 'id' | 'code' | 'name'> | null;
   scout: Pick<Employee, 'id' | 'full_name' | 'nickname'> | null;
+  scout_display_name?: string | null;
   manager: Pick<Employee, 'id' | 'full_name' | 'nickname'> | null;
 };
 
@@ -150,6 +151,13 @@ export type CreatorManagerDisplayName = {
   creator_id: string;
   manager_employee_id: string;
   manager_display_name: string;
+};
+
+export type CreatorScoutDisplayName = {
+  creator_profile_id: string;
+  scout_employee_id: string | null;
+  scout_profile_id: string | null;
+  display_name: string | null;
 };
 
 export type RecruitSummary = {
@@ -363,6 +371,18 @@ export const scoutService = {
     return (data ?? []).map(mapCreatorRow);
   },
 
+  async listCreatorScoutDisplayNames(creatorProfileIds: string[]): Promise<CreatorScoutDisplayName[]> {
+    const uniqueCreatorProfileIds = Array.from(new Set(creatorProfileIds.filter(Boolean)));
+    if (uniqueCreatorProfileIds.length === 0) return [];
+
+    const { data, error } = await db.rpc('get_management_recruiting_scout_display_names', {
+      p_creator_profile_ids: uniqueCreatorProfileIds,
+    });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async createCreator(values: CreatorFormValues) {
     const { error } = await db.from('creator_profiles').insert(await normalizeCreator(values));
     if (error) throw error;
@@ -568,6 +588,7 @@ function mapCreatorRow(row: any): CreatorProfile {
     updated_at: row.updated_at,
     region: row.regions,
     scout: row.scout,
+    scout_display_name: row.scout_display_name ?? null,
     manager: row.manager,
   };
 }

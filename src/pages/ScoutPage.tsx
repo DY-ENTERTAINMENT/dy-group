@@ -259,8 +259,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         mode === 'management-recruiting' ? scoutService.listManagementWorkloadStats({ month, regionId: regionFilter, granularity: workloadGranularity }) : Promise.resolve([]),
       ]);
 
+      const creatorsWithScoutDisplayNames = mode === 'management-recruiting'
+        ? await attachScoutDisplayNames(nextCreators)
+        : nextCreators;
+
       setOptions(nextOptions);
-      setCreators(nextCreators);
+      setCreators(creatorsWithScoutDisplayNames);
       setCandidates(nextCandidates);
       setDailyWorkLogs(nextDailyWorkLogs);
       setManagementWorkloadStats(nextManagementWorkloadStats);
@@ -293,6 +297,23 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       setError(`读取星探资料失败：${getErrorMessage(loadError)}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function attachScoutDisplayNames(nextCreators: CreatorProfile[]) {
+    try {
+      const scoutDisplayNames = await scoutService.listCreatorScoutDisplayNames(nextCreators.map((creator) => creator.id));
+      const displayNameByCreatorId = new Map(
+        scoutDisplayNames.map((scout) => [scout.creator_profile_id, scout.display_name]),
+      );
+
+      return nextCreators.map((creator) => ({
+        ...creator,
+        scout_display_name: displayNameByCreatorId.get(creator.id) ?? creator.scout_display_name ?? null,
+      }));
+    } catch (displayNameError) {
+      console.error('Failed to load scout display names', displayNameError);
+      return nextCreators;
     }
   }
 
@@ -2258,10 +2279,11 @@ function createScoutRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow
 
   creators.forEach((creator) => {
     const key = creator.scout_employee_id ?? creator.scout_profile_id ?? 'none';
-    const label = getEmployeeName(creator.scout) || '未分配星探';
+    const label = creator.scout_display_name || getEmployeeName(creator.scout) || '未分配星探';
     const group = groups.get(key);
 
     if (group) {
+      if (group.label === '未分配星探' && label !== '未分配星探') group.label = label;
       group.creators.push(creator);
       return;
     }
