@@ -13,7 +13,7 @@ import {
   regionPermissionSettingsService,
 } from '../services/region-permission-settings.service';
 import type { RegionFeaturePermissionKey } from '../services/permission-runtime.service';
-import { menuItems } from '../routes/menu';
+import { menuItems, type MenuItem } from '../routes/menu';
 
 type SettingsModule = {
   key: SettingsModuleKey | 'permissions' | 'region_permissions';
@@ -852,6 +852,8 @@ function PermissionManagementPanel() {
     setMessage('');
 
     try {
+      assertKnownPermissionKeys(modalPermissions, permissionItems);
+
       if (modalTarget.type === 'jobTitle') {
         await permissionManagementService.saveJobTitlePermissions(modalTarget.id, modalPermissions);
       }
@@ -1306,7 +1308,10 @@ function buildPermissionItems(): PermissionItem[] {
     if (reservedPermissionKeys.has(item.key) || !item.section || !item.group) return;
     const groupKey = getPermissionGroupKey(item);
     const currentItems = groups.get(groupKey) ?? [];
-    currentItems.push({ key: item.key, name: item.label, parentKey: groupKey, level: 1, disabled: item.disabled });
+    const permissionKey = getMenuPermissionKey(item);
+    if (!currentItems.some((permissionItem) => permissionItem.key === permissionKey)) {
+      currentItems.push({ key: permissionKey, name: item.label, parentKey: groupKey, level: 1, disabled: item.disabled });
+    }
     groups.set(groupKey, currentItems);
   });
 
@@ -1319,9 +1324,13 @@ function buildPermissionItems(): PermissionItem[] {
   });
 }
 
-function getPermissionGroupKey(item: (typeof menuItems)[number]) {
+function getMenuPermissionKey(item: MenuItem) {
+  return item.permissionKey ?? item.key;
+}
+
+function getPermissionGroupKey(item: MenuItem) {
   if (item.group && permissionGroupKeys[item.group]) return permissionGroupKeys[item.group];
-  return item.key;
+  return getMenuPermissionKey(item);
 }
 
 function getPermissionGroupName(groupKey: string) {
@@ -1363,6 +1372,15 @@ function mergePermissionState(defaultState: PermissionState, savedState: Permiss
     state[key] = savedState[key] ?? defaultState[key];
     return state;
   }, {});
+}
+
+function assertKnownPermissionKeys(permissions: PermissionState, items: PermissionItem[]) {
+  const knownKeys = new Set(items.map((item) => item.key));
+  const unknownKeys = Object.keys(permissions).filter((key) => !knownKeys.has(key));
+
+  if (unknownKeys.length > 0) {
+    throw new Error(`权限项配置异常，无法保存：${unknownKeys.join('、')}`);
+  }
 }
 
 function createPermissionSnapshot(input: {
