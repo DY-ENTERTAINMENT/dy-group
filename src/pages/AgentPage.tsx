@@ -270,7 +270,11 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       {error ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
 
-      {mode === 'revenue' || mode === 'management-revenue' ? (
+      {mode === 'revenue' ? (
+        <AgentPeriodRevenuePanel loading={loading} month={month} regionId={regionId} options={options} creators={creators} onMonth={setMonth} onRegion={setRegionId} onRefresh={loadData} />
+      ) : null}
+
+      {mode === 'management-revenue' ? (
         <RevenuePanel isManagement={isManagement} loading={loading} month={month} platform={platform} regionId={regionId} options={options} breakdown={revenueBreakdown} onMonth={setMonth} onPlatform={setPlatform} onRegion={setRegionId} />
       ) : null}
 
