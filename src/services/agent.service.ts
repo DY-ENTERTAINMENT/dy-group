@@ -137,6 +137,7 @@ export type WeeklyRevenueRecord = {
   source: 'manual' | 'csv' | 'api';
   source_reference: string | null;
   agent_note: string | null;
+  manager_note: string | null;
   status: WeeklyRevenueStatus;
   submitted_by_employee_id: string | null;
   submitted_at: string | null;
@@ -146,6 +147,25 @@ export type WeeklyRevenueRecord = {
   updated_by_employee_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ManagementRevenueStatusFilter = '' | 'pending' | 'confirmed';
+
+export type ManagementRevenueRecord = WeeklyRevenueRecord & {
+  creator: CreatorProfile | null;
+  submittedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
+  confirmedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
+};
+
+export type ManagementRevenueFilters = {
+  startMonth: string;
+  endMonth: string;
+  managerEmployeeId?: string;
+  creatorSearch?: string;
+  platform?: '' | CreatorPlatform;
+  creatorType?: '' | '5+1' | 'non_5_1';
+  regionId?: string;
+  status?: ManagementRevenueStatusFilter;
 };
 
 export type WeeklyRevenueSaveInput = {
@@ -210,6 +230,7 @@ const weeklyRevenueSelect = `
   source,
   source_reference,
   agent_note,
+  manager_note,
   status,
   submitted_by_employee_id,
   submitted_at,
@@ -219,6 +240,13 @@ const weeklyRevenueSelect = `
   updated_by_employee_id,
   created_at,
   updated_at
+`;
+
+const managementWeeklyRevenueSelect = `
+  ${weeklyRevenueSelect},
+  creator:creator_profiles!inner(${creatorSelect}),
+  submitted_by:employees!creator_weekly_revenue_records_submitted_by_employee_id_fkey(id, full_name, nickname, email),
+  confirmed_by:employees!creator_weekly_revenue_records_confirmed_by_employee_id_fkey(id, full_name, nickname, email)
 `;
 
 const designSelect = `
@@ -344,6 +372,57 @@ export const agentService = {
       .eq('week_start_date', input.weekStartDate);
     if (error) throw error;
     return (data ?? []).map(mapWeeklyRevenueRow);
+  },
+
+  async listManagementRevenueRecords(filters: ManagementRevenueFilters): Promise<ManagementRevenueRecord[]> {
+    const normalizedRange = normalizeManagementMonthRange(filters.startMonth, filters.endMonth);
+    let query = db
+      .from('creator_weekly_revenue_records')
+      .select(managementWeeklyRevenueSelect)
+      .gte('week_start_date', normalizedRange.startIso)
+      .lte('week_start_date', normalizedRange.endIso)
+      .in('status', ['submitted', 'confirmed'])
+      .order('week_start_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(2000);
+
+    if (filters.platform) query = query.eq('platform', filters.platform);
+    if (filters.regionId) query = query.eq('creator.region_id', filters.regionId);
+    if (filters.managerEmployeeId) query = query.eq('creator.manager_employee_id', filters.managerEmployeeId);
+    if (filters.creatorType === '5+1') query = query.eq('creator.creator_type', '5+1');
+    if (filters.creatorType === 'non_5_1') query = query.neq('creator.creator_type', '5+1');
+    if (filters.status === 'pending') query = query.eq('status', 'submitted');
+    if (filters.status === 'confirmed') query = query.eq('status', 'confirmed');
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? [])
+      .map(mapManagementRevenueRow)
+      .filter((record: ManagementRevenueRecord) => record.creator?.status !== 'invalid')
+      .filter((record: ManagementRevenueRecord) => matchesManagementRevenueSearch(record, filters.creatorSearch ?? ''));
+  },
+
+  async confirmManagementWeeklyRevenueRecord(recordId: string): Promise<WeeklyRevenueRecord> {
+    const { data, error } = await db.rpc('confirm_creator_weekly_revenue_record', { p_record_id: recordId });
+    if (error) throw error;
+    return mapWeeklyRevenueRow(data);
+  },
+
+  async reviewManagementWeeklyRevenueRecord(recordId: string, managerNote: string | null): Promise<WeeklyRevenueRecord> {
+    const normalizedNote = managerNote?.trim() || null;
+    const { data, error } = await db.rpc('review_creator_weekly_revenue_record', {
+      p_record_id: recordId,
+      p_manager_note: normalizedNote,
+    });
+    if (error) throw error;
+    return mapWeeklyRevenueRow(data);
+  },
+
+  async cancelManagementWeeklyRevenueEntry(recordId: string, reason: string) {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) throw new Error('取消原因必须填写。');
+    const { error } = await db.rpc('cancel_creator_weekly_revenue_entry', { p_record_id: recordId, p_reason: normalizedReason });
+    if (error) throw error;
   },
 
   async submitWeeklyRevenue(input: WeeklyRevenueSaveInput): Promise<WeeklyRevenueRecord> {
@@ -597,6 +676,15 @@ function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
   };
 }
 
+function mapManagementRevenueRow(row: any): ManagementRevenueRecord {
+  return {
+    ...mapWeeklyRevenueRow(row),
+    creator: row.creator ? mapCreatorRow(row.creator) : null,
+    submittedBy: row.submitted_by ?? null,
+    confirmedBy: row.confirmed_by ?? null,
+  };
+}
+
 function mapDesignRow(row: any): DesignRequest {
   return {
     ...row,
@@ -605,4 +693,32 @@ function mapDesignRow(row: any): DesignRequest {
   };
 }
 
+function normalizeManagementMonthRange(startMonth: string, endMonth: string) {
+  const start = isValidMonth(startMonth) ? startMonth : new Date().toISOString().slice(0, 7);
+  const end = isValidMonth(endMonth) ? endMonth : start;
+  const [safeStart, safeEnd] = start <= end ? [start, end] : [end, start];
+  const [endYear, endMonthNumber] = safeEnd.split('-').map(Number);
+  const endDay = new Date(endYear, endMonthNumber, 0).getDate();
+  return {
+    startIso: `${safeStart}-01`,
+    endIso: `${safeEnd}-${String(endDay).padStart(2, '0')}`,
+  };
+}
+
+function isValidMonth(value: string) {
+  return /^\d{4}-\d{2}$/.test(value);
+}
+
+function matchesManagementRevenueSearch(record: ManagementRevenueRecord, search: string) {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) return true;
+  return [
+    record.creator?.creator_name,
+    record.creator?.platform_user_id,
+    record.creator?.platform_account,
+    record.creator?.region?.code,
+    record.creator?.region?.name,
+    getEmployeeName(record.creator?.manager),
+  ].join(' ').toLowerCase().includes(normalizedSearch);
+}
 

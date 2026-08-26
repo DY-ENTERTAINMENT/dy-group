@@ -1,5 +1,5 @@
 ﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, Plus, RefreshCw, Send, X } from 'lucide-react';
+import { Check, Eye, Plus, RefreshCw, Send, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -10,7 +10,6 @@ import {
   adjustmentStatusLabels,
   adjustmentTypeLabels,
   agentService,
-  createRevenueBreakdown,
   creatorTypeLabels,
   designStatusLabels,
   designTypeLabels,
@@ -26,7 +25,7 @@ import {
   type DesignFormValues,
   type DesignRequest,
   type DesignRequestType,
-  type RevenueRecord,
+  type ManagementRevenueRecord,
   type WeeklyRevenueRecord,
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
@@ -73,7 +72,6 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const isManagement = mode === 'management-revenue';
   const [options, setOptions] = useState<AgentOptions>({ regions: [], employees: [], currentEmployee: null });
   const [month, setMonth] = useState(currentMonth);
-  const [platform, setPlatform] = useState('tiktok');
   const [regionId, setRegionId] = useState('');
   const [creatorSearch, setCreatorSearch] = useState('');
   const [creatorPlatform, setCreatorPlatform] = useState('');
@@ -84,7 +82,6 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [reviewPlatform, setReviewPlatform] = useState('');
   const [reviewType, setReviewType] = useState('');
   const [reviewSearch, setReviewSearch] = useState('');
-  const [revenues, setRevenues] = useState<RevenueRecord[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRequest[]>([]);
@@ -101,7 +98,6 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const revenueBreakdown = useMemo(() => createRevenueBreakdown(revenues), [revenues]);
   const pendingAdjustments = adjustments.filter((item) => item.status === 'pending').length;
   const unclaimedDesigns = designRequests.filter((item) => item.status === 'unclaimed').length;
   const inProgressDesigns = designRequests.filter((item) => item.status === 'in_progress' || item.status === 'revision').length;
@@ -113,7 +109,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
 
   useEffect(() => {
     void loadData();
-  }, [mode, profile?.id, month, platform, regionId]);
+  }, [mode, profile?.id, month, regionId]);
 
   async function loadData() {
     if (!profile?.id && !isManagement) return;
@@ -125,9 +121,6 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       const defaultRegion = regionId || nextOptions.currentEmployee?.region_id || '';
       if (!regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
 
-      if (mode === 'management-revenue') {
-        setRevenues(await agentService.listRevenueData({ profileId: profile?.id, month, platform, regionId: defaultRegion, management: isManagement }));
-      }
       if ((mode === 'revenue' || mode === 'creators') && profile?.id) {
         setCreators(await agentService.listManagedCreators(profile.id, { regionId: defaultRegion }));
       }
@@ -264,7 +257,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         {mode === 'design-requests' ? (
           <button className="secondary-action" type="button" onClick={() => setDesignModalOpen(true)}><Plus size={17} /><span>添加新申请</span></button>
         ) : null}
-        {mode === 'revenue' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
+        {mode === 'revenue' || mode === 'management-revenue' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
       </div>
 
       {error ? <p className="form-alert">{error}</p> : null}
@@ -275,7 +268,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       ) : null}
 
       {mode === 'management-revenue' ? (
-        <RevenuePanel isManagement={isManagement} loading={loading} month={month} platform={platform} regionId={regionId} options={options} breakdown={revenueBreakdown} onMonth={setMonth} onPlatform={setPlatform} onRegion={setRegionId} />
+        <RevenuePanel loading={loading} options={options} />
       ) : null}
 
       {mode === 'creators' ? (
@@ -336,69 +329,1034 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   );
 }
 
-function RevenuePanel(props: {
-  isManagement: boolean;
-  loading: boolean;
-  month: string;
-  platform: string;
+type ManagementRevenuePanelFilters = {
+  startMonth: string;
+  endMonth: string;
+  managerEmployeeId: string;
+  creatorSearch: string;
+  platform: '' | CreatorPlatform;
+  creatorType: '' | '5+1' | 'non_5_1';
   regionId: string;
-  options: AgentOptions;
-  breakdown: ReturnType<typeof createRevenueBreakdown>;
-  onMonth: (value: string) => void;
-  onPlatform: (value: string) => void;
-  onRegion: (value: string) => void;
-}) {
-  const showTikTok = !props.platform || props.platform === 'tiktok';
-  const showDouyin = !props.platform || props.platform === 'douyin';
+  status: '' | 'pending' | 'confirmed';
+};
+
+type ManagementRankingView = 'all' | CreatorPlatform;
+
+type ManagementCreatorRevenueRow = {
+  id: string;
+  displayName: string;
+  records: ManagementRevenueRecord[];
+  platforms: CreatorPlatform[];
+  managers: string[];
+  types: string[];
+  regions: string[];
+  tiktokTotal: number;
+  douyinTotal: number;
+  periodCount: number;
+};
+
+type ManagementCreatorPlatformRevenueRow = {
+  platform: CreatorPlatform;
+  uid: string;
+  manager: string;
+  type: string;
+  region: string;
+  amount: number;
+  unit: string;
+};
+
+const managementMonthShortcutOptions: { value: 'current' | 'previous' | 'last3' | 'last6' | 'year'; label: string }[] = [
+  { value: 'current', label: '本月' },
+  { value: 'previous', label: '上月' },
+  { value: 'last3', label: '近3个月' },
+  { value: 'last6', label: '近6个月' },
+  { value: 'year', label: '本年' },
+];
+
+function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
+  const permissions = usePermissions();
+  const [filters, setFilters] = useState<ManagementRevenuePanelFilters>(() => ({
+    startMonth: shiftMonth(currentMonth, -5),
+    endMonth: currentMonth,
+    managerEmployeeId: '',
+    creatorSearch: '',
+    platform: '',
+    creatorType: '',
+    regionId: '',
+    status: '',
+  }));
+  const [managerSearch, setManagerSearch] = useState('');
+  const [records, setRecords] = useState<ManagementRevenueRecord[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [recordsError, setRecordsError] = useState('');
+  const [message, setMessage] = useState('');
+  const [selectedCreatorRow, setSelectedCreatorRow] = useState<ManagementCreatorRevenueRow | null>(null);
+  const [cancelAction, setCancelAction] = useState<{ record: ManagementRevenueRecord; reason: string } | null>(null);
+  const [savingActionId, setSavingActionId] = useState('');
+  const [agentRankingView, setAgentRankingView] = useState<ManagementRankingView>('all');
+  const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('all');
+  const [tablePage, setTablePage] = useState(1);
+  const tablePageSize = 20;
+  const canConfirm = permissions.canUse('management-creator-operation-review');
+  const canCancel = permissions.isSuperAdmin;
+
+  useEffect(() => {
+    void loadRecords();
+  }, [filters]);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [filters]);
+
+  const managerOptions = useMemo(() => {
+    const normalizedSearch = managerSearch.trim().toLowerCase();
+    return props.options.employees.filter((employee) => {
+      if (!normalizedSearch) return true;
+      return [
+        getEmployeeName(employee),
+        employee.full_name,
+        employee.nickname,
+        employee.email,
+      ].join(' ').toLowerCase().includes(normalizedSearch);
+    });
+  }, [managerSearch, props.options.employees]);
+
+  const summary = useMemo(() => summarizeManagementRevenueRecords(records), [records]);
+  const trendPoints = useMemo(() => buildManagementTrendPoints(records, filters.startMonth, filters.endMonth), [filters.endMonth, filters.startMonth, records]);
+  const creatorRows = useMemo(() => buildManagementCreatorRows(records), [records]);
+  const pageCount = Math.max(1, Math.ceil(creatorRows.length / tablePageSize));
+  const safePage = Math.min(tablePage, pageCount);
+  const paginatedCreatorRows = useMemo(() => {
+    const start = (safePage - 1) * tablePageSize;
+    return creatorRows.slice(start, start + tablePageSize);
+  }, [creatorRows, safePage]);
+
+  async function loadRecords() {
+    setRecordsLoading(true);
+    setRecordsError('');
+    setMessage('');
+    try {
+      const nextRecords = await agentService.listManagementRevenueRecords(filters);
+      setRecords(nextRecords);
+    } catch (loadError) {
+      setRecords([]);
+      setRecordsError(`读取总流水数据失败：${getErrorMessage(loadError)}`);
+    } finally {
+      setRecordsLoading(false);
+    }
+  }
+
+  function updateFilter<Key extends keyof ManagementRevenuePanelFilters>(key: Key, value: ManagementRevenuePanelFilters[Key]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateMonthRange(key: 'startMonth' | 'endMonth', value: string) {
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      if (next.startMonth > next.endMonth) {
+        if (key === 'startMonth') next.endMonth = value;
+        else next.startMonth = value;
+      }
+      return next;
+    });
+  }
+
+  function applyMonthShortcut(value: (typeof managementMonthShortcutOptions)[number]['value']) {
+    setFilters((current) => {
+      if (value === 'previous') {
+        const previousMonth = shiftMonth(currentMonth, -1);
+        return { ...current, startMonth: previousMonth, endMonth: previousMonth };
+      }
+      if (value === 'last3') return { ...current, startMonth: shiftMonth(currentMonth, -2), endMonth: currentMonth };
+      if (value === 'last6') return { ...current, startMonth: shiftMonth(currentMonth, -5), endMonth: currentMonth };
+      if (value === 'year') return { ...current, startMonth: `${currentMonth.slice(0, 4)}-01`, endMonth: currentMonth };
+      return { ...current, startMonth: currentMonth, endMonth: currentMonth };
+    });
+  }
+
+  function resetFilters() {
+    setManagerSearch('');
+    setFilters({
+      startMonth: shiftMonth(currentMonth, -5),
+      endMonth: currentMonth,
+      managerEmployeeId: '',
+      creatorSearch: '',
+      platform: '',
+      creatorType: '',
+      regionId: '',
+      status: '',
+    });
+  }
+
+  async function confirmRecord(record: ManagementRevenueRecord, managerNote: string | null = null) {
+    if (savingActionId) return;
+    setSavingActionId(record.id);
+    setRecordsError('');
+    setMessage('');
+    try {
+      await agentService.reviewManagementWeeklyRevenueRecord(record.id, managerNote);
+      setMessage('周期流水已确认。');
+      setSelectedCreatorRow(null);
+      await loadRecords();
+    } catch (confirmError) {
+      setRecordsError(`确认失败：${getErrorMessage(confirmError)}`);
+    } finally {
+      setSavingActionId('');
+    }
+  }
+
+  async function cancelRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!cancelAction || savingActionId) return;
+    const reason = cancelAction.reason.trim();
+    if (!reason) {
+      setRecordsError('取消原因必须填写。');
+      return;
+    }
+
+    setSavingActionId(cancelAction.record.id);
+    setRecordsError('');
+    setMessage('');
+    try {
+      await agentService.cancelManagementWeeklyRevenueEntry(cancelAction.record.id, reason);
+      setMessage('该笔正式流水已取消。');
+      setSelectedCreatorRow(null);
+      setCancelAction(null);
+      await loadRecords();
+    } catch (cancelError) {
+      setRecordsError(`取消失败：${getErrorMessage(cancelError)}`);
+    } finally {
+      setSavingActionId('');
+    }
+  }
 
   return (
-    <div className="staff-list-panel">
-      <AgentFilters {...props} />
-      <div className="scout-stat-grid agent-revenue-card-grid">
-        {props.loading ? (
-          <div className="table-state">正在统计流水...</div>
-        ) : (
-          <>
-            {showTikTok ? <RevenueCard title="TikTok" summary={props.breakdown.tiktok} logoUrl={tiktokLogoUrl} unit="钻石" platform="tiktok" /> : null}
-            {showDouyin ? <RevenueCard title="抖音" summary={props.breakdown.douyin} logoUrl={douyinLogoUrl} unit="音浪" platform="douyin" /> : null}
-          </>
-        )}
+    <div className="staff-list-panel management-revenue-page">
+      <div className="management-revenue-filters">
+        <div className="management-revenue-month-filter">
+          <span>月份范围</span>
+          <div>
+            <MonthSelect value={filters.startMonth} onChange={(value) => updateMonthRange('startMonth', value)} />
+            <b>→</b>
+            <MonthSelect value={filters.endMonth} onChange={(value) => updateMonthRange('endMonth', value)} />
+          </div>
+        </div>
+        <div className="management-revenue-manager-search">
+          <TextField label="经纪人搜索" value={managerSearch} onChange={setManagerSearch} placeholder="姓名 / 昵称 / Email" />
+        </div>
+        <div className="management-revenue-manager-select">
+          <SelectField label="经纪人" value={filters.managerEmployeeId} onChange={(value) => updateFilter('managerEmployeeId', value)}>
+            <option value="">全部经纪人</option>
+            {managerOptions.map((employee) => <option key={employee.id} value={employee.id}>{getEmployeeName(employee) || employee.email}</option>)}
+          </SelectField>
+        </div>
+        <div className="management-revenue-creator-search">
+          <TextField label="主播搜索" value={filters.creatorSearch} onChange={(value) => updateFilter('creatorSearch', value)} placeholder="主播名 / UID / 账号" />
+        </div>
+        <div className="management-revenue-platform-filter">
+          <SelectField label="平台" value={filters.platform} onChange={(value) => updateFilter('platform', value as ManagementRevenuePanelFilters['platform'])}>
+            <option value="">全部</option>
+            <option value="tiktok">TikTok</option>
+            <option value="douyin">抖音</option>
+          </SelectField>
+        </div>
+        <div className="management-revenue-shortcut-filter">
+          <span>快捷月份</span>
+          <div className="management-revenue-shortcuts" role="group" aria-label="月份快捷选项">
+            {managementMonthShortcutOptions.map((option) => (
+              <button key={option.value} type="button" onClick={() => applyMonthShortcut(option.value)}>{option.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="management-revenue-type-filter">
+          <SelectField label="类型" value={filters.creatorType} onChange={(value) => updateFilter('creatorType', value as ManagementRevenuePanelFilters['creatorType'])}>
+            <option value="">全部</option>
+            <option value="5+1">5+1</option>
+            <option value="non_5_1">非5+1</option>
+          </SelectField>
+        </div>
+        <div className="management-revenue-region-filter">
+          <SelectField label="区域" value={filters.regionId} onChange={(value) => updateFilter('regionId', value)}>
+            <option value="">全部</option>
+            {props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
+          </SelectField>
+        </div>
+        <div className="management-revenue-status-filter">
+          <SelectField label="状态" value={filters.status} onChange={(value) => updateFilter('status', value as ManagementRevenuePanelFilters['status'])}>
+            <option value="">全部</option>
+            <option value="pending">待确认</option>
+            <option value="confirmed">已确认</option>
+          </SelectField>
+        </div>
+        <div className="management-revenue-filter-actions">
+          <button className="secondary-button compact-button" type="button" onClick={resetFilters} disabled={props.loading || recordsLoading}>重置</button>
+          <button className="secondary-button compact-button" type="button" onClick={loadRecords} disabled={props.loading || recordsLoading}>
+            <RefreshCw size={15} />
+            <span>刷新</span>
+          </button>
+        </div>
       </div>
+
+      {recordsError ? <p className="form-alert management-revenue-alert">{recordsError}</p> : null}
+      {message ? <p className="form-success management-revenue-alert">{message}</p> : null}
+
+      <div className="management-revenue-kpi-grid">
+        <ManagementRevenueKpiCard title="TikTok 总钻石" value={summary.tiktokTotal} unit="钻石" platform="tiktok" />
+        <ManagementRevenueKpiCard title="抖音总音浪" value={summary.douyinTotal} unit="音浪" platform="douyin" />
+        <ManagementRevenueKpiCard title="已确认周期数" value={summary.confirmedCount} />
+        <ManagementRevenueKpiCard title="待确认周期数" value={summary.pendingCount} />
+      </div>
+
+      <div className="management-revenue-chart-grid">
+        <ManagementRevenueTrendChart points={trendPoints} loading={props.loading || recordsLoading} />
+        <ManagementAgentRankingChart records={records} view={agentRankingView} onView={setAgentRankingView} />
+        <ManagementCreatorRankingChart records={records} view={creatorRankingView} onView={setCreatorRankingView} />
+      </div>
+
+      <ManagementRevenueRecordsSection
+        loading={props.loading || recordsLoading}
+        rows={paginatedCreatorRows}
+        allRows={creatorRows}
+        page={safePage}
+        pageCount={pageCount}
+        canConfirm={canConfirm}
+        canCancel={canCancel}
+        savingActionId={savingActionId}
+        onPage={setTablePage}
+        onView={setSelectedCreatorRow}
+        onConfirm={confirmRecord}
+        onCancel={(record) => setCancelAction({ record, reason: '' })}
+      />
+
+      {selectedCreatorRow ? (
+        <ManagementRevenueDetailModal
+          row={selectedCreatorRow}
+          filters={filters}
+          canConfirm={canConfirm}
+          canCancel={canCancel}
+          savingActionId={savingActionId}
+          onClose={() => setSelectedCreatorRow(null)}
+          onConfirm={confirmRecord}
+          onCancel={(record) => setCancelAction({ record, reason: '' })}
+        />
+      ) : null}
+
+      {cancelAction ? (
+        <ManagementRevenueCancelModal
+          action={cancelAction}
+          saving={savingActionId === cancelAction.record.id}
+          onChange={(reason) => setCancelAction({ ...cancelAction, reason })}
+          onClose={() => setCancelAction(null)}
+          onSubmit={cancelRecord}
+        />
+      ) : null}
     </div>
   );
 }
 
-function RevenueCard({ title, summary, logoUrl, unit, platform }: { title: string; summary: { total: number; plusFiveOne: number; nonFiveOne: number }; logoUrl: string; unit: string; platform: 'tiktok' | 'douyin' }) {
+function ManagementRevenueKpiCard({ title, value, unit, platform }: { title: string; value: number; unit?: string; platform?: CreatorPlatform }) {
   return (
-    <section className={`scout-stat-card agent-revenue-card agent-revenue-card--${platform}`}>
-      <h4 className="agent-revenue-card-title">
-        <img src={logoUrl} alt="" aria-hidden="true" />
+    <article className={`management-revenue-kpi-card ${platform ? `management-revenue-kpi-card--${platform}` : ''}`}>
+      <div>
         <span>{title}</span>
-      </h4>
-      <strong className="agent-revenue-card-total">
-        <span>{formatRevenueAmount(summary.total)}</span>
-        <small>{unit}</small>
-      </strong>
-      <div className="agent-revenue-card-breakdown">
-        <div className="agent-revenue-card-metric">
-          <span>5+1</span>
-          <b>{formatRevenueAmount(summary.plusFiveOne)}</b>
-        </div>
-        <div className="agent-revenue-card-metric">
-          <span>非5+1</span>
-          <b>{formatRevenueAmount(summary.nonFiveOne)}</b>
-        </div>
+        {platform ? <img src={platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" aria-hidden="true" /> : null}
       </div>
+      <strong>{formatRevenueAmount(value)}</strong>
+      {unit ? <small>{unit}</small> : null}
+    </article>
+  );
+}
+
+function ManagementRevenueTrendChart({ points, loading }: { points: ManagementTrendPoint[]; loading: boolean }) {
+  const chart = createManagementTrendChart(points);
+  return (
+    <section className="management-revenue-card management-revenue-trend-card">
+      <ManagementRevenueSectionHead title="流水趋势图" detail="TikTok 使用左轴，抖音使用右轴" />
+      {loading ? <div className="table-state management-revenue-state">正在生成趋势图...</div> : (
+        <div className="management-revenue-line-chart">
+          <svg viewBox="0 0 680 280" role="img" aria-label="流水趋势图">
+            <g className="management-revenue-chart-gridlines">
+              {[0, 1, 2, 3].map((item) => <line key={item} x1="46" x2="632" y1={42 + item * 52} y2={42 + item * 52} />)}
+            </g>
+            <polyline className="management-revenue-line management-revenue-line--tiktok" points={chart.tiktokLine} />
+            <polyline className="management-revenue-line management-revenue-line--douyin" points={chart.douyinLine} />
+            {chart.points.map((point) => (
+              <g key={point.month}>
+                <circle className="management-revenue-dot management-revenue-dot--tiktok" cx={point.x} cy={point.tiktokY} r="4" />
+                <circle className="management-revenue-dot management-revenue-dot--douyin" cx={point.x} cy={point.douyinY} r="4" />
+                <text x={point.x} y="252">{point.month}</text>
+              </g>
+            ))}
+            <text className="management-revenue-axis-label management-revenue-axis-label--left" x="46" y="24">钻石 {formatCompactNumber(chart.maxTikTok)}</text>
+            <text className="management-revenue-axis-label management-revenue-axis-label--right" x="632" y="24">音浪 {formatCompactNumber(chart.maxDouyin)}</text>
+          </svg>
+          <div className="management-revenue-chart-legend">
+            <span><i className="management-revenue-legend-dot management-revenue-legend-dot--tiktok" />TikTok 钻石</span>
+            <span><i className="management-revenue-legend-dot management-revenue-legend-dot--douyin" />抖音音浪</span>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function ManagementAgentRankingChart({ records, view, onView }: { records: ManagementRevenueRecord[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
+  const rows = buildManagementAgentRanking(records, view).slice(0, 8);
+  return (
+    <section className="management-revenue-card">
+      <ManagementRevenueSectionHead title="经纪人流水排行榜" detail={view === 'all' ? '分平台展示，不混合单位' : platformLabels[view]} />
+      <ManagementRankingTabs view={view} onView={onView} />
+      <ManagementRankingBars rows={rows} view={view} emptyText="暂无经纪人流水数据" />
+    </section>
+  );
+}
+
+function ManagementCreatorRankingChart({ records, view, onView }: { records: ManagementRevenueRecord[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
+  const tiktokRows = buildManagementCreatorRanking(records, 'tiktok').slice(0, 10);
+  const douyinRows = buildManagementCreatorRanking(records, 'douyin').slice(0, 10);
+  const rows = view === 'all' ? [] : buildManagementCreatorRanking(records, view).slice(0, 10);
+
+  return (
+    <section className="management-revenue-card">
+      <ManagementRevenueSectionHead title="主播流水排行榜" detail={view === 'all' ? 'TikTok / 抖音分别排行' : platformLabels[view]} />
+      <ManagementRankingTabs view={view} onView={onView} />
+      {view === 'all' ? (
+        <div className="management-revenue-split-ranking">
+          <ManagementRankingList title="TikTok Top 10" rows={tiktokRows} platform="tiktok" />
+          <ManagementRankingList title="抖音 Top 10" rows={douyinRows} platform="douyin" />
+        </div>
+      ) : (
+        <ManagementRankingList title={`${platformLabels[view]} Top 10`} rows={rows} platform={view} />
+      )}
+    </section>
+  );
+}
+
+function ManagementRevenueSectionHead({ title, detail }: { title: string; detail?: string }) {
+  return <div className="management-revenue-section-head"><h3>{title}</h3>{detail ? <span>{detail}</span> : null}</div>;
+}
+
+function ManagementRankingTabs({ view, onView }: { view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
+  return (
+    <div className="management-revenue-ranking-tabs" role="group" aria-label="排行平台">
+      <button className={view === 'all' ? 'active' : ''} type="button" onClick={() => onView('all')}>全部</button>
+      <button className={view === 'tiktok' ? 'active' : ''} type="button" onClick={() => onView('tiktok')}>TikTok 钻石</button>
+      <button className={view === 'douyin' ? 'active' : ''} type="button" onClick={() => onView('douyin')}>抖音音浪</button>
+    </div>
+  );
+}
+
+function ManagementRankingBars({ rows, view, emptyText }: { rows: ManagementRankingRow[]; view: ManagementRankingView; emptyText: string }) {
+  const maxValue = Math.max(1, ...rows.flatMap((row) => view === 'all' ? [row.tiktok, row.douyin] : [row[view]]));
+  if (rows.length === 0) return <div className="table-state management-revenue-state">{emptyText}</div>;
+  return (
+    <div className="management-revenue-ranking-bars">
+      {rows.map((row, index) => (
+        <div key={row.id} className="management-revenue-ranking-row">
+          <ManagementRankBadge rank={index + 1} />
+          <span>{row.label}</span>
+          <div className="management-revenue-ranking-track">
+            {view === 'all' || view === 'tiktok' ? <ManagementRankingBar value={row.tiktok} max={maxValue} platform="tiktok" /> : null}
+            {view === 'all' || view === 'douyin' ? <ManagementRankingBar value={row.douyin} max={maxValue} platform="douyin" /> : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ManagementRankingBar({ value, max, platform }: { value: number; max: number; platform: CreatorPlatform }) {
+  const width = value > 0 ? Math.max(4, (value / max) * 100) : 0;
+  return (
+    <div className={`management-revenue-ranking-bar management-revenue-ranking-bar--${platform}`}>
+      <i style={{ width: `${width}%` }} />
+      <b>{formatRevenueAmount(value)} <small>{getCreatorRevenueUnitLabel(platform)}</small></b>
+    </div>
+  );
+}
+
+function ManagementRankBadge({ rank }: { rank: number }) {
+  return <em className={`management-revenue-rank-badge management-revenue-rank-badge--${rank <= 3 ? rank : 'normal'}`}>{rank}</em>;
+}
+
+function ManagementRankingList({ title, rows, platform }: { title: string; rows: ManagementRankingRow[]; platform: CreatorPlatform }) {
+  return (
+    <div className={`management-revenue-top-list management-revenue-top-list--${platform}`}>
+      <h4>{title}</h4>
+      {rows.length === 0 ? <span>暂无数据</span> : rows.map((row, index) => (
+        <p key={row.id}><ManagementRankBadge rank={index + 1} /><strong>{row.label}</strong><b>{formatRevenueAmount(row[platform])} <small>{getCreatorRevenueUnitLabel(platform)}</small></b></p>
+      ))}
+    </div>
+  );
+}
+
+function ManagementRevenueRecordsSection(props: {
+  loading: boolean;
+  rows: ManagementCreatorRevenueRow[];
+  allRows: ManagementCreatorRevenueRow[];
+  page: number;
+  pageCount: number;
+  canConfirm: boolean;
+  canCancel: boolean;
+  savingActionId: string;
+  onPage: (page: number) => void;
+  onView: (row: ManagementCreatorRevenueRow) => void;
+  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
+  onCancel: (record: ManagementRevenueRecord) => void;
+}) {
+  if (props.loading) return <div className="table-state management-revenue-state">正在读取正式流水数据...</div>;
+  return (
+    <section className="management-revenue-table-section">
+      <ManagementRevenueSectionHead title="正式流水数据" detail={`共 ${props.allRows.length} 位主播`} />
+      {props.allRows.length === 0 ? <div className="table-state management-revenue-state">暂无正式流水数据。</div> : (
+        <>
+          <div className="staff-table-wrap management-revenue-desktop-table">
+            <table className="staff-table agent-table management-revenue-table">
+              <thead>
+                <tr>
+                  <th>主播</th>
+                  <th>平台</th>
+                  <th>经纪人</th>
+                  <th>类型</th>
+                  <th>区域</th>
+                  <th>流水</th>
+                  <th>周期记录数</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {props.rows.map((row) => (
+                  <ManagementCreatorRevenueTableRow key={row.id} row={row} onView={props.onView} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="management-revenue-mobile-list">
+            {props.rows.map((row) => <ManagementCreatorRevenueMobileCard key={row.id} row={row} onView={props.onView} />)}
+          </div>
+          <div className="agent-period-pagination management-revenue-pagination">
+            <span>第 {props.page} / {props.pageCount} 页</span>
+            <div>
+              <button className="secondary-button compact-button" type="button" disabled={props.page <= 1} onClick={() => props.onPage(props.page - 1)}>上一页</button>
+              <button className="secondary-button compact-button" type="button" disabled={props.page >= props.pageCount} onClick={() => props.onPage(props.page + 1)}>下一页</button>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ManagementCreatorRevenueTableRow({ row, onView }: { row: ManagementCreatorRevenueRow; onView: (row: ManagementCreatorRevenueRow) => void }) {
+  const platformRows = getManagementCreatorPlatformRows(row);
+  const sharedManager = getSharedPlatformValue(platformRows, 'manager');
+  const sharedType = getSharedPlatformValue(platformRows, 'type');
+  const sharedRegion = getSharedPlatformValue(platformRows, 'region');
+  const spanCount = platformRows.length;
+  return (
+    <>
+      {platformRows.map((platformRow, index) => (
+        <tr
+          key={`${row.id}:${platformRow.platform}`}
+          className={`management-revenue-creator-platform-row ${index === 0 ? 'management-revenue-creator-platform-row--first' : ''} ${index === spanCount - 1 ? 'management-revenue-creator-platform-row--last' : ''}`}
+        >
+          {index === 0 ? <td rowSpan={spanCount} className="management-revenue-creator-cell"><strong>{row.displayName}</strong></td> : null}
+          <td><ManagementCreatorPlatformDetail platformRow={platformRow} /></td>
+          {sharedManager && index === 0 ? <td rowSpan={spanCount}>{sharedManager}</td> : null}
+          {!sharedManager ? <td>{platformRow.manager}</td> : null}
+          {sharedType && index === 0 ? <td rowSpan={spanCount}>{sharedType}</td> : null}
+          {!sharedType ? <td>{platformRow.type}</td> : null}
+          {sharedRegion && index === 0 ? <td rowSpan={spanCount}>{sharedRegion}</td> : null}
+          {!sharedRegion ? <td>{platformRow.region}</td> : null}
+          <td><ManagementCreatorPlatformAmount platformRow={platformRow} /></td>
+          {index === 0 ? <td rowSpan={spanCount}><strong>{row.periodCount}</strong></td> : null}
+          {index === 0 ? (
+            <td rowSpan={spanCount}>
+              <button className="secondary-button compact-button management-revenue-view-button" type="button" onClick={() => onView(row)}>
+                <Eye size={15} />
+                <span>查看</span>
+              </button>
+            </td>
+          ) : null}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function ManagementCreatorRevenueMobileCard({ row, onView }: { row: ManagementCreatorRevenueRow; onView: (row: ManagementCreatorRevenueRow) => void }) {
+  const platformRows = getManagementCreatorPlatformRows(row);
+  return (
+    <article className="management-revenue-mobile-card">
+      <div className="management-revenue-mobile-head">
+        <div>
+          <strong>{row.displayName}</strong>
+          <span>{formatManagementValueList(row.managers)}</span>
+        </div>
+      </div>
+      <div className="management-revenue-mobile-meta">
+        <span>{formatManagementValueList(row.types)}</span>
+        <span>{formatManagementValueList(row.regions)}</span>
+      </div>
+      <div className="management-revenue-mobile-platform-sections">
+        {platformRows.map((platformRow) => (
+          <div key={platformRow.platform} className="management-revenue-mobile-platform-section">
+            <ManagementCreatorPlatformDetail platformRow={platformRow} />
+            <ManagementCreatorPlatformAmount platformRow={platformRow} />
+          </div>
+        ))}
+      </div>
+      <p><span>周期记录数</span><b>{row.periodCount}</b></p>
+      <button className="secondary-button compact-button management-revenue-view-button" type="button" onClick={() => onView(row)}>
+        <Eye size={15} />
+        <span>查看</span>
+      </button>
+    </article>
+  );
+}
+
+function ManagementWeeklyRevenueActions(props: {
+  record: ManagementRevenueRecord;
+  canConfirm: boolean;
+  canCancel: boolean;
+  savingActionId: string;
+  managerNote: string;
+  onManagerNoteChange: (value: string) => void;
+  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
+  onCancel: (record: ManagementRevenueRecord) => void;
+}) {
+  const isSaving = props.savingActionId === props.record.id;
+  const readonlyManagerNote = props.record.manager_note?.trim() || '-';
+  return (
+    <div className="row-actions management-revenue-row-actions">
+      {props.record.status === 'submitted' && props.canConfirm ? (
+        <div className="management-revenue-review-box">
+          <textarea
+            value={props.managerNote}
+            onChange={(event) => props.onManagerNoteChange(event.target.value)}
+            disabled={isSaving}
+            placeholder="组长备注（选填）"
+            aria-label="组长备注"
+          />
+          <button className="secondary-button compact-button" type="button" onClick={() => props.onConfirm(props.record, props.managerNote)} disabled={isSaving}>
+            <Check size={15} />
+            <span>{isSaving ? '确认中' : '确认'}</span>
+          </button>
+        </div>
+      ) : null}
+      {props.record.status === 'confirmed' ? (
+        <div className="management-revenue-manager-note-readonly">
+          <span>组长备注</span>
+          <b title={readonlyManagerNote}>{readonlyManagerNote}</b>
+        </div>
+      ) : null}
+      {props.record.status === 'confirmed' && props.canCancel ? (
+        <button className="secondary-button compact-button reject-button" type="button" onClick={() => props.onCancel(props.record)} disabled={isSaving}>
+          <X size={15} />
+          <span>{isSaving ? '取消中' : '取消'}</span>
+        </button>
+      ) : null}
+      {props.record.status !== 'submitted' && props.record.status !== 'confirmed' ? <span className="management-revenue-weekly-view-label">查看</span> : null}
+    </div>
+  );
+}
+
+function ManagementRevenueDetailModal({
+  row,
+  filters,
+  canConfirm,
+  canCancel,
+  savingActionId,
+  onClose,
+  onConfirm,
+  onCancel,
+}: {
+  row: ManagementCreatorRevenueRow;
+  filters: ManagementRevenuePanelFilters;
+  canConfirm: boolean;
+  canCancel: boolean;
+  savingActionId: string;
+  onClose: () => void;
+  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
+  onCancel: (record: ManagementRevenueRecord) => void;
+}) {
+  const [managerNotes, setManagerNotes] = useState<Record<string, string>>(() =>
+    Object.fromEntries(row.records.map((record) => [record.id, record.manager_note ?? ''])),
+  );
+
+  return (
+    <SystemModal
+      title="查看主播流水"
+      ariaLabel="主播流水详情"
+      className="management-revenue-detail-modal"
+      onClose={onClose}
+      footer={<button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>}
+    >
+      <div className="management-revenue-detail-summary">
+        <DrawerField label="主播" value={row.displayName} />
+        <div className="agent-creator-drawer-field management-revenue-detail-platform-field">
+          <span>平台 / UID</span>
+          <div>{getManagementCreatorPlatformItems(row).map((item) => <b key={`${item.platform}:${item.uid}`}>{platformLabels[item.platform]} {item.uid}</b>)}</div>
+        </div>
+        <DrawerField label="经纪人" value={formatManagementValueList(row.managers)} />
+        <DrawerField label="类型" value={formatManagementValueList(row.types)} />
+        <DrawerField label="区域" value={formatManagementValueList(row.regions)} />
+        <DrawerField label="月份范围" value={`${filters.startMonth} → ${filters.endMonth}`} />
+        <DrawerField label="TikTok 总钻石" value={`${formatRevenueAmount(row.tiktokTotal)} 钻石`} />
+        <DrawerField label="抖音总音浪" value={`${formatRevenueAmount(row.douyinTotal)} 音浪`} />
+      </div>
+      <div className="management-revenue-weekly-table-wrap">
+        <table className="staff-table agent-table management-revenue-weekly-table">
+          <thead>
+            <tr>
+              <th>周期</th>
+              <th>平台</th>
+              <th>流水</th>
+              <th>经纪人备注</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {row.records.map((record) => (
+              <tr key={record.id}>
+                <td data-label="周期">{getWeekLabel(record.week_start_date, record.week_end_date)}</td>
+                <td data-label="平台"><PlatformPill platform={record.platform} /></td>
+                <td data-label="流水"><strong>{formatRevenueWithUnit(record)}</strong></td>
+                <td data-label="经纪人备注">{record.agent_note || '-'}</td>
+                <td data-label="状态"><ManagementRevenueStatusBadge status={record.status} /></td>
+                <td data-label="操作">
+                  <ManagementWeeklyRevenueActions
+                    record={record}
+                    canConfirm={canConfirm}
+                    canCancel={canCancel}
+                    savingActionId={savingActionId}
+                    managerNote={managerNotes[record.id] ?? ''}
+                    onManagerNoteChange={(value) => setManagerNotes((current) => ({ ...current, [record.id]: value }))}
+                    onConfirm={onConfirm}
+                    onCancel={onCancel}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SystemModal>
+  );
+}
+
+function ManagementRevenueCancelModal({ action, saving, onChange, onClose, onSubmit }: { action: { record: ManagementRevenueRecord; reason: string }; saving: boolean; onChange: (reason: string) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return (
+    <SystemModal
+      title="取消该笔流水"
+      ariaLabel="取消正式流水"
+      onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>关闭</button><button className="primary-button compact-button danger-confirm-button" type="submit" form="management-revenue-cancel-form" disabled={saving || !action.reason.trim()}>{saving ? '取消中...' : '确认取消'}</button></>}
+    >
+      <form id="management-revenue-cancel-form" className="management-revenue-cancel-form" onSubmit={onSubmit}>
+        <div className="adjustment-review-confirm-summary">
+          <strong>{getManagementRecordCreatorName(action.record)}</strong>
+          <span>{getWeekLabel(action.record.week_start_date, action.record.week_end_date)} · {formatRevenueAmount(action.record.revenue_amount)} {getRecordRevenueUnitLabel(action.record)}</span>
+        </div>
+        <label className="form-field">
+          <span>取消原因</span>
+          <textarea value={action.reason} onChange={(event) => onChange(event.target.value)} required placeholder="必须填写取消原因" />
+        </label>
+      </form>
+    </SystemModal>
+  );
+}
+
+function ManagementRevenueStatusBadge({ status }: { status: WeeklyRevenueRecord['status'] }) {
+  return <span className={`management-revenue-status management-revenue-status--${status}`}>{getManagementStatusLabel(status)}</span>;
+}
+
+function ManagementCreatorPlatformPills({ platforms }: { platforms: CreatorPlatform[] }) {
+  return (
+    <div className="management-revenue-platform-list">
+      {platforms.map((platform) => <PlatformPill key={platform} platform={platform} />)}
+    </div>
+  );
+}
+
+function ManagementCreatorPlatformDetail({ platformRow }: { platformRow: ManagementCreatorPlatformRevenueRow }) {
+  return (
+    <div className="management-revenue-platform-detail">
+      <PlatformPill platform={platformRow.platform} />
+      <small>UID: {platformRow.uid}</small>
+    </div>
+  );
+}
+
+function ManagementCreatorPlatformAmount({ platformRow }: { platformRow: ManagementCreatorPlatformRevenueRow }) {
+  return (
+    <span className={`management-revenue-platform-amount management-revenue-platform-amount--${platformRow.platform}`}>
+      <strong>{formatRevenueAmount(platformRow.amount)}</strong>
+      <small>{platformRow.unit}</small>
+    </span>
+  );
+}
+
+function ManagementCreatorRevenueAmounts({ row }: { row: ManagementCreatorRevenueRow }) {
+  return (
+    <span className="management-revenue-amount-lines">
+      {row.platforms.includes('tiktok') ? (
+        <span className="management-revenue-amount-line management-revenue-amount-line--tiktok">
+          <strong>{formatRevenueAmount(row.tiktokTotal)}</strong>
+          <small>钻石</small>
+        </span>
+      ) : null}
+      {row.platforms.includes('douyin') ? (
+        <span className="management-revenue-amount-line management-revenue-amount-line--douyin">
+          <strong>{formatRevenueAmount(row.douyinTotal)}</strong>
+          <small>音浪</small>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function formatManagementValueList(values: string[]) {
+  const filtered = values.filter((value) => value && value !== '-');
+  return filtered.length ? filtered.join(' / ') : '-';
+}
+
+function getManagementCreatorUidText(row: ManagementCreatorRevenueRow) {
+  const uids = Array.from(new Set(row.records.map((record) => record.creator?.platform_user_id || record.platform_uid).filter(Boolean)));
+  return uids.length ? uids.join(' / ') : '-';
+}
+
+function getManagementCreatorPlatformRows(row: ManagementCreatorRevenueRow): ManagementCreatorPlatformRevenueRow[] {
+  return sortCreatorPlatforms(row.platforms).map((platform) => {
+    const platformRecords = row.records.filter((record) => record.platform === platform);
+    return {
+      platform,
+      uid: formatManagementValueList(Array.from(new Set(platformRecords.map((record) => record.creator?.platform_user_id || record.platform_uid || '-')))),
+      manager: formatManagementValueList(Array.from(new Set(platformRecords.map(getManagementRecordAgentName)))),
+      type: formatManagementValueList(Array.from(new Set(platformRecords.map(getManagementRecordTypeLabel)))),
+      region: formatManagementValueList(Array.from(new Set(platformRecords.map(getManagementRecordRegion)))),
+      amount: platformRecords.reduce((sum, record) => sum + record.revenue_amount, 0),
+      unit: getCreatorRevenueUnitLabel(platform),
+    };
+  });
+}
+
+function getSharedPlatformValue(rows: ManagementCreatorPlatformRevenueRow[], key: 'manager' | 'type' | 'region') {
+  if (rows.length <= 1) return rows[0]?.[key] ?? '';
+  const firstValue = rows[0][key];
+  return rows.every((row) => row[key] === firstValue) ? firstValue : '';
+}
+
+function getManagementCreatorPlatformItems(row: ManagementCreatorRevenueRow) {
+  const itemMap = new Map<string, { platform: CreatorPlatform; uid: string }>();
+  row.records.forEach((record) => {
+    const uid = record.creator?.platform_user_id || record.platform_uid || '-';
+    itemMap.set(`${record.platform}:${uid}`, { platform: record.platform, uid });
+  });
+  return Array.from(itemMap.values());
 }
 
 function formatRevenueAmount(value: number) {
   return (Number(value) || 0).toLocaleString('en-MY', { maximumFractionDigits: 2 });
 }
 
-function AgentFilters(props: { month: string; platform: string; regionId: string; options: AgentOptions; onMonth: (value: string) => void; onPlatform: (value: string) => void; onRegion: (value: string) => void }) {
-  return <div className="scout-filters"><label className="form-field"><span>年月份</span><MonthSelect value={props.month} onChange={props.onMonth} /></label><SelectField label="平台" value={props.platform} onChange={props.onPlatform}><option value="tiktok">TikTok</option><option value="douyin">抖音</option><option value="">全部</option></SelectField><SelectField label="区域" value={props.regionId} onChange={props.onRegion}><option value="">全部</option>{props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}</SelectField></div>;
+type ManagementTrendPoint = {
+  month: string;
+  tiktok: number;
+  douyin: number;
+};
+
+type ManagementRankingRow = {
+  id: string;
+  label: string;
+  tiktok: number;
+  douyin: number;
+};
+
+function buildManagementCreatorRows(records: ManagementRevenueRecord[]): ManagementCreatorRevenueRow[] {
+  const rowMap = new Map<string, ManagementCreatorRevenueRow>();
+  records.forEach((record) => {
+    const creatorEntityId = record.creator?.creator_entity_id ?? record.creator_entity_id;
+    const id = creatorEntityId ? `entity:${creatorEntityId}` : `profile:${record.creator_profile_id}`;
+    const row = rowMap.get(id) ?? {
+      id,
+      displayName: getManagementRecordCreatorName(record),
+      records: [],
+      platforms: [],
+      managers: [],
+      types: [],
+      regions: [],
+      tiktokTotal: 0,
+      douyinTotal: 0,
+      periodCount: 0,
+    };
+
+    row.records.push(record);
+    addUniqueValue(row.platforms, record.platform);
+    addUniqueValue(row.managers, getManagementRecordAgentName(record));
+    addUniqueValue(row.types, getManagementRecordTypeLabel(record));
+    addUniqueValue(row.regions, getManagementRecordRegion(record));
+    if (record.platform === 'tiktok') row.tiktokTotal += record.revenue_amount;
+    if (record.platform === 'douyin') row.douyinTotal += record.revenue_amount;
+    row.displayName = row.displayName === '-' ? getManagementRecordCreatorName(record) : row.displayName;
+    rowMap.set(id, row);
+  });
+
+  return Array.from(rowMap.values()).map((row) => ({
+    ...row,
+    records: row.records.sort((first, second) => {
+      if (first.week_start_date !== second.week_start_date) return first.week_start_date.localeCompare(second.week_start_date);
+      return first.platform.localeCompare(second.platform);
+    }),
+    platforms: sortCreatorPlatforms(row.platforms),
+    periodCount: new Set(row.records.map((record) => record.week_start_date)).size,
+  })).sort((first, second) => first.displayName.localeCompare(second.displayName, 'zh-Hans'));
+}
+
+function addUniqueValue<T>(values: T[], value: T) {
+  if (!values.includes(value)) values.push(value);
+}
+
+function sortCreatorPlatforms(platforms: CreatorPlatform[]) {
+  return [...platforms].sort((first, second) => {
+    const order: Record<CreatorPlatform, number> = { tiktok: 1, douyin: 2 };
+    return order[first] - order[second];
+  });
+}
+
+function summarizeManagementRevenueRecords(records: ManagementRevenueRecord[]) {
+  return records.reduce(
+    (summary, record) => {
+      if (record.platform === 'tiktok') summary.tiktokTotal += record.revenue_amount;
+      if (record.platform === 'douyin') summary.douyinTotal += record.revenue_amount;
+      if (record.status === 'confirmed') summary.confirmedCount += 1;
+      if (record.status === 'submitted') summary.pendingCount += 1;
+      return summary;
+    },
+    { tiktokTotal: 0, douyinTotal: 0, confirmedCount: 0, pendingCount: 0 },
+  );
+}
+
+function buildManagementTrendPoints(records: ManagementRevenueRecord[], startMonth: string, endMonth: string): ManagementTrendPoint[] {
+  const months = getMonthRange(startMonth, endMonth);
+  const pointMap = new Map(months.map((month) => [month, { month, tiktok: 0, douyin: 0 }]));
+  records.forEach((record) => {
+    const month = record.week_start_date.slice(0, 7);
+    const point = pointMap.get(month);
+    if (!point) return;
+    if (record.platform === 'tiktok') point.tiktok += record.revenue_amount;
+    if (record.platform === 'douyin') point.douyin += record.revenue_amount;
+  });
+  return Array.from(pointMap.values());
+}
+
+function createManagementTrendChart(points: ManagementTrendPoint[]) {
+  const left = 46;
+  const right = 632;
+  const top = 42;
+  const bottom = 224;
+  const plotWidth = right - left;
+  const plotHeight = bottom - top;
+  const maxTikTok = Math.max(1, ...points.map((point) => point.tiktok));
+  const maxDouyin = Math.max(1, ...points.map((point) => point.douyin));
+  const denominator = Math.max(1, points.length - 1);
+  const chartPoints = points.map((point, index) => {
+    const x = points.length === 1 ? left + plotWidth / 2 : left + (index / denominator) * plotWidth;
+    return {
+      month: point.month,
+      x,
+      tiktokY: bottom - (point.tiktok / maxTikTok) * plotHeight,
+      douyinY: bottom - (point.douyin / maxDouyin) * plotHeight,
+    };
+  });
+
+  return {
+    maxTikTok,
+    maxDouyin,
+    points: chartPoints,
+    tiktokLine: chartPoints.map((point) => `${point.x},${point.tiktokY}`).join(' '),
+    douyinLine: chartPoints.map((point) => `${point.x},${point.douyinY}`).join(' '),
+  };
+}
+
+function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView): ManagementRankingRow[] {
+  const rows = new Map<string, ManagementRankingRow>();
+  records.forEach((record) => {
+    const id = record.creator?.manager_employee_id ?? 'unassigned';
+    const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0 };
+    if (record.platform === 'tiktok') current.tiktok += record.revenue_amount;
+    if (record.platform === 'douyin') current.douyin += record.revenue_amount;
+    rows.set(id, current);
+  });
+  return sortManagementRankingRows(Array.from(rows.values()), view);
+}
+
+function buildManagementCreatorRanking(records: ManagementRevenueRecord[], platform: CreatorPlatform): ManagementRankingRow[] {
+  const rows = new Map<string, ManagementRankingRow>();
+  records.filter((record) => record.platform === platform).forEach((record) => {
+    const id = `${platform}:${record.creator?.creator_entity_id ?? record.creator_profile_id}`;
+    const current = rows.get(id) ?? { id, label: getManagementRecordCreatorName(record), tiktok: 0, douyin: 0 };
+    current[platform] += record.revenue_amount;
+    rows.set(id, current);
+  });
+  return sortManagementRankingRows(Array.from(rows.values()), platform);
+}
+
+function sortManagementRankingRows(rows: ManagementRankingRow[], view: ManagementRankingView) {
+  return rows.sort((first, second) => {
+    const firstValue = view === 'all' ? Math.max(first.tiktok, first.douyin) : first[view];
+    const secondValue = view === 'all' ? Math.max(second.tiktok, second.douyin) : second[view];
+    if (secondValue !== firstValue) return secondValue - firstValue;
+    return first.label.localeCompare(second.label, 'zh-Hans');
+  });
+}
+
+function shiftMonth(month: string, offset: number) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(year, monthNumber - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthRange(startMonth: string, endMonth: string) {
+  const start = startMonth <= endMonth ? startMonth : endMonth;
+  const end = startMonth <= endMonth ? endMonth : startMonth;
+  const months: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    months.push(cursor);
+    cursor = shiftMonth(cursor, 1);
+    if (months.length > 36) break;
+  }
+  return months;
+}
+
+function formatCompactNumber(value: number) {
+  if (value >= 100000000) return `${formatRevenueAmount(value / 100000000)}亿`;
+  if (value >= 10000) return `${formatRevenueAmount(value / 10000)}万`;
+  return formatRevenueAmount(value);
+}
+
+function getManagementRecordCreatorName(record: ManagementRevenueRecord) {
+  return record.creator?.creator_name || record.creator?.platform_account || record.platform_uid || '-';
+}
+
+function getManagementRecordAgentName(record: ManagementRevenueRecord) {
+  return getEmployeeName(record.creator?.manager) || '未分配经纪人';
+}
+
+function getManagementRecordTypeLabel(record: ManagementRevenueRecord) {
+  return record.creator?.creator_type ? creatorTypeLabels[record.creator.creator_type] : '-';
+}
+
+function getManagementRecordRegion(record: ManagementRevenueRecord) {
+  return record.creator?.region?.code ?? record.creator?.region?.name ?? '-';
+}
+
+function getManagementStatusLabel(status: WeeklyRevenueRecord['status']) {
+  if (status === 'confirmed') return '已确认';
+  if (status === 'submitted') return '待确认';
+  return '草稿';
 }
 
 function CreatorDataPanel(props: {
