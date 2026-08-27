@@ -142,6 +142,14 @@ const permissionGroupKeys: Record<string, string> = {
   人事部: 'hr',
   管理: 'management',
 };
+const independentPermissionItems: PermissionItem[] = [
+  {
+    key: 'agent-revenue-period-settings',
+    name: '流水周期设置',
+    parentKey: null,
+    level: 0,
+  },
+];
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1315,13 +1323,15 @@ function buildPermissionItems(): PermissionItem[] {
     groups.set(groupKey, currentItems);
   });
 
-  return Array.from(groups.entries()).flatMap(([groupKey, children]) => {
+  const groupedItems = Array.from(groups.entries()).flatMap(([groupKey, children]) => {
     if (children.length === 1 && children[0].key === groupKey) {
       return [{ ...children[0], parentKey: null, level: 0 }];
     }
 
     return [{ key: groupKey, name: getPermissionGroupName(groupKey), parentKey: null, level: 0 }, ...children];
   });
+
+  return [...groupedItems, ...independentPermissionItems];
 }
 
 function getMenuPermissionKey(item: MenuItem) {

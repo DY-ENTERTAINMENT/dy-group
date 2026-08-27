@@ -5507,6 +5507,26 @@ button.leave-chip:disabled {
   min-width: 86px;
 }
 
+.agent-period-settings-button {
+  align-items: center;
+  background: #ffffff;
+  border-color: #d8b4fe;
+  color: #7e22ce;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  justify-content: center;
+  min-height: 38px;
+  min-width: 122px;
+  padding-inline: 12px;
+  width: auto;
+}
+
+.agent-period-settings-button:hover {
+  background: #faf5ff;
+  border-color: #c084fc;
+}
+
 .agent-operation-refresh-button:hover {
   background: #f6f2ff;
   border-color: #ddd6fe;
@@ -5615,7 +5635,7 @@ button.leave-chip:disabled {
 }
 
 .agent-period-table {
-  min-width: 1160px;
+  min-width: 1100px;
   table-layout: fixed;
 }
 
@@ -5653,11 +5673,11 @@ button.leave-chip:disabled {
 }
 
 .agent-period-col-period {
-  width: 116px;
+  width: 124px;
 }
 
 .agent-period-col-month {
-  width: 145px;
+  width: 158px;
 }
 
 .agent-period-col-status {
@@ -5665,11 +5685,28 @@ button.leave-chip:disabled {
 }
 
 .agent-period-col-note {
-  width: 128px;
+  width: 116px;
 }
 
-.agent-period-col-action {
-  width: 86px;
+.agent-period-header-label {
+  align-items: center;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  line-height: 1.2;
+}
+
+.agent-period-header-label strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.agent-period-header-label small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .agent-period-creator-name {
@@ -5780,8 +5817,13 @@ button.leave-chip:disabled {
 }
 
 .agent-period-entry--missing {
-  background: #fffaf1;
-  border: 1px solid #fdecc8;
+  background: #fff7fb;
+  border: 1px solid #fbcfe8;
+}
+
+.agent-period-entry--missing:hover {
+  background: #fdf2f8;
+  border-color: #f9a8d4;
 }
 
 .agent-period-entry--missing small {
@@ -6039,6 +6081,60 @@ button.leave-chip:disabled {
   gap: 4px;
   font-size: 12px;
   font-weight: 850;
+}
+
+.agent-period-settings-form {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-period-settings-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-period-settings-grid > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-period-settings-grid,
+.agent-period-settings-row {
+  grid-template-columns: 88px minmax(0, 1fr) minmax(0, 1fr) 38px;
+}
+
+.agent-period-settings-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.agent-period-settings-row strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.agent-period-settings-row input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.agent-period-add-week-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-self: start;
+  min-height: 36px;
+  width: auto;
 }
 
 .agent-weekly-revenue-field,

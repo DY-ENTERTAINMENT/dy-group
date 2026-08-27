@@ -177,6 +177,27 @@ export type WeeklyRevenueSaveInput = {
   agentNote: string;
 };
 
+export type RevenuePeriodSettingSource = 'custom' | 'fallback';
+
+export type RevenuePeriodSetting = {
+  id: string | null;
+  revenueMonth: string;
+  periodNo: number;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isEnabled: boolean;
+  source: RevenuePeriodSettingSource;
+};
+
+export type RevenuePeriodSettingSaveInput = {
+  periodNo: number;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isEnabled?: boolean;
+};
+
 const db = supabase as any;
 
 const creatorSelect = `
@@ -360,6 +381,29 @@ export const agentService = {
       .map(mapRevenueRow)
       .filter((row: RevenueRecord) => !input.platform || row.creator?.platform === input.platform)
       .filter((row: RevenueRecord) => !input.regionId || row.creator?.region_id === input.regionId);
+  },
+
+  async listRevenuePeriodSettings(month: string): Promise<RevenuePeriodSetting[]> {
+    const { data, error } = await db.rpc('list_creator_revenue_period_settings', {
+      p_revenue_month: normalizeRevenuePeriodMonth(month),
+    });
+    if (error) throw error;
+    return (data ?? []).map(mapRevenuePeriodSettingRow);
+  },
+
+  async saveRevenuePeriodSettings(month: string, periods: RevenuePeriodSettingSaveInput[]): Promise<RevenuePeriodSetting[]> {
+    const { data, error } = await db.rpc('save_creator_revenue_period_settings', {
+      p_revenue_month: normalizeRevenuePeriodMonth(month),
+      p_periods: periods.map((period) => ({
+        period_no: period.periodNo,
+        label: period.label,
+        start_date: period.startDate,
+        end_date: period.endDate,
+        is_enabled: period.isEnabled ?? true,
+      })),
+    });
+    if (error) throw error;
+    return (data ?? []).map(mapRevenuePeriodSettingRow);
   },
 
   async listWeeklyRevenueRecords(input: { creatorProfileIds: string[]; weekStartDate: string }): Promise<WeeklyRevenueRecord[]> {
@@ -600,6 +644,12 @@ function splitLines(value: string) {
   return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
 
+function normalizeRevenuePeriodMonth(month: string) {
+  if (/^\d{4}-\d{2}$/.test(month)) return `${month}-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(month)) return month.slice(0, 8) + '01';
+  throw new Error('流水周期月份必须是 YYYY-MM 或 YYYY-MM-DD。');
+}
+
 async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput, status: Extract<WeeklyRevenueStatus, 'submitted'>) {
   await ensureWeeklyRevenuePeriodFlow(input.weekStartDate, input.weekEndDate);
 
@@ -673,6 +723,19 @@ function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
   return {
     ...row,
     revenue_amount: Number(row.revenue_amount),
+  };
+}
+
+function mapRevenuePeriodSettingRow(row: any): RevenuePeriodSetting {
+  return {
+    id: row.id ?? null,
+    revenueMonth: row.revenue_month,
+    periodNo: Number(row.period_no),
+    label: row.label,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    isEnabled: Boolean(row.is_enabled),
+    source: row.source === 'custom' ? 'custom' : 'fallback',
   };
 }
 

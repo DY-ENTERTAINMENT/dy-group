@@ -1,5 +1,5 @@
 ﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, Eye, Plus, RefreshCw, Send, X } from 'lucide-react';
+import { Check, Eye, Plus, RefreshCw, Send, Settings, Trash2, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -26,6 +26,8 @@ import {
   type DesignRequest,
   type DesignRequestType,
   type ManagementRevenueRecord,
+  type RevenuePeriodSetting,
+  type RevenuePeriodSettingSaveInput,
   type WeeklyRevenueRecord,
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
@@ -2152,6 +2154,7 @@ type RevenuePeriodRange = {
   endIso: string;
   label: string;
   shortLabel: string;
+  periodNo: number;
 };
 type OperationDateRange = {
   startIso: string;
@@ -2218,21 +2221,26 @@ function AgentPeriodRevenuePanel(props: {
   onRegion: (value: string) => void;
   onRefresh: () => void;
 }) {
-  const currentPeriod = useMemo(() => getRevenuePeriodForDate(new Date()), []);
+  const permissions = usePermissions();
   const todayIso = useMemo(() => formatLocalDate(new Date()), []);
-  const defaultPeriodStart = useMemo(() => getDefaultPeriodStartForMonth(props.month, currentPeriod.startIso), [currentPeriod.startIso, props.month]);
+  const todayMonth = todayIso.slice(0, 7);
   const monthDateRange = useMemo(() => getMonthDateRange(props.month), [props.month]);
-  const currentPreviousPeriod = useMemo(() => getPreviousRevenuePeriod(currentPeriod.startIso), [currentPeriod.startIso]);
+  const [periodsByMonth, setPeriodsByMonth] = useState<Record<string, RevenuePeriodRange[]>>({});
+  const [periodLoading, setPeriodLoading] = useState(false);
+  const [periodError, setPeriodError] = useState('');
+  const currentPeriod = useMemo(() => findRevenuePeriodForDate(periodsByMonth[todayMonth] ?? [], todayIso), [periodsByMonth, todayIso, todayMonth]);
+  const currentPreviousPeriod = useMemo(() => getPreviousRevenuePeriod(currentPeriod, periodsByMonth), [currentPeriod, periodsByMonth]);
   const [filters, setFilters] = useState<OperationFilters>({
     quickRange: 'month',
     status: '',
     platform: '',
     creatorType: '',
     search: '',
-    periodStart: defaultPeriodStart,
+    periodStart: '',
     customStart: monthDateRange.startIso,
     customEnd: monthDateRange.endIso,
   });
+  const [periodModalOpen, setPeriodModalOpen] = useState(false);
   const [recordsByPeriod, setRecordsByPeriod] = useState<Record<string, Record<string, WeeklyRevenueRecord>>>({});
   const [previousRecords, setPreviousRecords] = useState<Record<string, WeeklyRevenueRecord>>({});
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -2249,13 +2257,44 @@ function AgentPeriodRevenuePanel(props: {
     customEnd: filters.customEnd,
     todayIso,
   }), [currentPreviousPeriod, filters.customEnd, filters.customStart, filters.quickRange, monthDateRange, todayIso]);
-  const effectivePeriodOptions = useMemo(() => getRevenuePeriodsForDateRange(effectiveDateRange), [effectiveDateRange]);
+  const effectiveMonths = useMemo(() => getMonthsForDateRange(effectiveDateRange), [effectiveDateRange]);
+  const monthsToLoad = useMemo(() => uniqueValues([props.month, todayMonth, ...effectiveMonths].filter(Boolean)), [effectiveMonths, props.month, todayMonth]);
+  const effectivePeriodOptions = useMemo(() => getRevenuePeriodsForDateRange(effectiveDateRange, periodsByMonth), [effectiveDateRange, periodsByMonth]);
   const selectedPeriod = useMemo(() => effectivePeriodOptions.find((period) => period.startIso === filters.periodStart) ?? effectivePeriodOptions[0], [effectivePeriodOptions, filters.periodStart]);
+  const settingsMonth = effectiveMonths.length === 1 ? effectiveMonths[0] : props.month;
+  const settingsMonthPeriods = periodsByMonth[settingsMonth] ?? [];
+  const reminderPreviousPeriod = settingsMonth === todayMonth ? currentPreviousPeriod : null;
+  const canSetPeriods = permissions.canUse('agent-revenue-period-settings');
 
   useEffect(() => {
     if (effectivePeriodOptions.length === 0) return;
     setFilters((current) => effectivePeriodOptions.some((period) => period.startIso === current.periodStart) ? current : { ...current, periodStart: effectivePeriodOptions[0].startIso });
   }, [effectivePeriodOptions]);
+
+  useEffect(() => {
+    let active = true;
+    const missingMonths = monthsToLoad.filter((month) => !periodsByMonth[month]);
+    if (missingMonths.length === 0) return;
+
+    setPeriodLoading(true);
+    setPeriodError('');
+    Promise.all(missingMonths.map((month) => agentService.listRevenuePeriodSettings(month).then((items) => [month, mapRevenuePeriodSettingsToRanges(items)] as const)))
+      .then((entries) => {
+        if (!active) return;
+        setPeriodsByMonth((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setPeriodError(`读取流水周期失败：${getErrorMessage(loadError)}`);
+      })
+      .finally(() => {
+        if (active) setPeriodLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [monthsToLoad, periodsByMonth]);
 
   useEffect(() => {
     setPage(1);
@@ -2271,9 +2310,12 @@ function AgentPeriodRevenuePanel(props: {
 
     setWeeklyLoading(true);
     setFeatureUnavailable(false);
+    const previousPromise = currentPreviousPeriod
+      ? agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: currentPreviousPeriod.startIso })
+      : Promise.resolve([]);
     Promise.all([
       Promise.all(effectivePeriodOptions.map((period) => agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: period.startIso }))),
-      agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: currentPreviousPeriod.startIso }),
+      previousPromise,
     ])
       .then(([periodItems, previousItems]) => {
         if (!active) return;
@@ -2294,7 +2336,7 @@ function AgentPeriodRevenuePanel(props: {
     return () => {
       active = false;
     };
-  }, [currentPreviousPeriod.startIso, effectivePeriodOptions, sortedCreators]);
+  }, [currentPreviousPeriod, effectivePeriodOptions, sortedCreators]);
 
   const currentRows = useMemo(
     () => buildOperationStreamerRows(sortedCreators, effectivePeriodOptions, recordsByPeriod, filters, todayIso),
@@ -2302,7 +2344,9 @@ function AgentPeriodRevenuePanel(props: {
   );
   const filteredCurrentRows = useMemo(() => filterOperationStreamerRows(currentRows, filters).sort(sortOperationStreamerRows), [currentRows, filters]);
   const summary = useMemo(() => summarizeOperationStreamerRows(currentRows), [currentRows]);
-  const previousMissingCount = useMemo(() => sortedCreators.filter((creator) => !previousRecords[creator.id]).length, [previousRecords, sortedCreators]);
+  const previousMissingCount = useMemo(() => (
+    reminderPreviousPeriod ? sortedCreators.filter((creator) => !previousRecords[creator.id]).length : 0
+  ), [previousRecords, reminderPreviousPeriod, sortedCreators]);
   const pageCount = Math.max(1, Math.ceil(filteredCurrentRows.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const paginatedCurrentRows = useMemo(() => {
@@ -2316,20 +2360,21 @@ function AgentPeriodRevenuePanel(props: {
 
   function updateMonth(value: string) {
     props.onMonth(value);
-    setFilters((current) => ({ ...current, periodStart: getDefaultPeriodStartForMonth(value, currentPeriod.startIso) }));
+    setFilters((current) => ({ ...current, periodStart: periodsByMonth[value]?.[0]?.startIso ?? current.periodStart }));
   }
 
   function updateQuickRange(value: OperationQuickRange) {
     if (value === 'previous') {
+      if (!currentPreviousPeriod) return;
       const previousMonth = currentPreviousPeriod.startIso.slice(0, 7);
       props.onMonth(previousMonth);
       setFilters((current) => ({ ...current, quickRange: value, status: 'missing', periodStart: currentPreviousPeriod.startIso }));
       return;
     }
     if (value === 'month') {
-      const currentMonth = currentPeriod.startIso.slice(0, 7);
+      const currentMonth = currentPeriod?.startIso.slice(0, 7) ?? todayMonth;
       props.onMonth(currentMonth);
-      setFilters((current) => ({ ...current, quickRange: value, periodStart: getDefaultPeriodStartForMonth(currentMonth, currentPeriod.startIso) }));
+      setFilters((current) => ({ ...current, quickRange: value, periodStart: currentPeriod?.startIso ?? periodsByMonth[currentMonth]?.[0]?.startIso ?? current.periodStart }));
       return;
     }
     if (value === 'custom') {
@@ -2345,7 +2390,10 @@ function AgentPeriodRevenuePanel(props: {
   }
 
   function viewPreviousMissing() {
-    updateQuickRange('previous');
+    if (!reminderPreviousPeriod) return;
+    const previousMonth = reminderPreviousPeriod.startIso.slice(0, 7);
+    props.onMonth(previousMonth);
+    setFilters((current) => ({ ...current, quickRange: 'previous', status: 'missing', periodStart: reminderPreviousPeriod.startIso }));
   }
 
   function updateRecord(record: WeeklyRevenueRecord) {
@@ -2360,10 +2408,18 @@ function AgentPeriodRevenuePanel(props: {
     setActiveRow(null);
   }
 
+  function updateSettingsMonthPeriods(periods: RevenuePeriodRange[]) {
+    setPeriodsByMonth((current) => ({ ...current, [settingsMonth]: periods }));
+    setFilters((current) => ({ ...current, periodStart: periods.some((period) => period.startIso === current.periodStart) ? current.periodStart : periods[0]?.startIso ?? '' }));
+    setRecordsByPeriod({});
+    setPreviousRecords({});
+  }
+
   return (
     <div className="staff-list-panel agent-operation-page agent-period-workbench">
       {message ? <p className="form-success agent-operation-alert">{message}</p> : null}
       {featureUnavailable ? <p className="form-alert agent-operation-alert">周期流水数据库 003 尚未启用，暂不能保存新周期流水。</p> : null}
+      {periodError ? <p className="form-alert agent-operation-alert">{periodError}</p> : null}
 
       {featureUnavailable ? null : (
         <>
@@ -2375,13 +2431,15 @@ function AgentPeriodRevenuePanel(props: {
             <OperationKpiCard label="未填写" value={summary.missing} detail="可填写周期" tone="missing" />
           </div>
 
-          <div className={`agent-period-previous-alert agent-period-previous-alert--${previousMissingCount > 0 ? 'missing' : 'filled'}`}>
-            <div>
-              <i aria-hidden="true">!</i>
-              <span>{previousMissingCount > 0 ? `上周期 ${currentPreviousPeriod.label} 还有 ${previousMissingCount} 个平台账号未填写流水` : '上周期流水已全部填写'}</span>
+          {reminderPreviousPeriod ? (
+            <div className={`agent-period-previous-alert agent-period-previous-alert--${previousMissingCount > 0 ? 'missing' : 'filled'}`}>
+              <div>
+                <i aria-hidden="true">!</i>
+                <span>{previousMissingCount > 0 ? `上周期「${formatPeriodTitle(reminderPreviousPeriod)}」还有 ${previousMissingCount} 个平台账号未填写流水` : '上周期流水已全部填写'}</span>
+              </div>
+              {previousMissingCount > 0 ? <button className="secondary-button compact-button" type="button" onClick={viewPreviousMissing}>查看未填写</button> : null}
             </div>
-            {previousMissingCount > 0 ? <button className="secondary-button compact-button" type="button" onClick={viewPreviousMissing}>查看未填写</button> : null}
-          </div>
+          ) : null}
 
           <OperationFilterBar
             filters={filters}
@@ -2392,11 +2450,13 @@ function AgentPeriodRevenuePanel(props: {
             onFilter={updateFilter}
             onRegion={props.onRegion}
             onRefresh={props.onRefresh}
-            refreshing={props.loading || weeklyLoading}
+            refreshing={props.loading || weeklyLoading || periodLoading}
+            canSetPeriods={canSetPeriods}
+            onOpenPeriodSettings={() => setPeriodModalOpen(true)}
           />
 
           <CurrentOperationTable
-            loading={props.loading || weeklyLoading}
+            loading={props.loading || weeklyLoading || (periodLoading && effectivePeriodOptions.length === 0)}
             rows={paginatedCurrentRows}
             allRows={filteredCurrentRows}
             periods={effectivePeriodOptions}
@@ -2417,6 +2477,21 @@ function AgentPeriodRevenuePanel(props: {
           row={activeRow}
           onClose={() => setActiveRow(null)}
           onSubmitted={updateRecord}
+        />
+      ) : null}
+
+      {!featureUnavailable && periodModalOpen ? (
+        <RevenuePeriodSettingsModal
+          key={settingsMonth}
+          month={settingsMonth}
+          periods={settingsMonthPeriods}
+          saving={periodLoading}
+          onClose={() => setPeriodModalOpen(false)}
+          onSaved={(periods) => {
+            updateSettingsMonthPeriods(periods);
+            setPeriodModalOpen(false);
+            setMessage('本月流水周期已保存。');
+          }}
         />
       ) : null}
     </div>
@@ -2446,6 +2521,8 @@ function OperationFilterBar(props: {
   onRegion: (value: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  canSetPeriods: boolean;
+  onOpenPeriodSettings: () => void;
 }) {
   const dateRangeLabel = formatDateRangeText(props.effectiveDateRange.startIso, props.effectiveDateRange.endIso);
 
@@ -2502,6 +2579,12 @@ function OperationFilterBar(props: {
       </div>
       <div className="agent-operation-filter-row agent-operation-filter-row--secondary">
         <TextField label="搜索" value={props.filters.search} onChange={(value) => props.onFilter('search', value)} placeholder="搜索主播名 / 平台 UID / 平台账号" />
+        {props.canSetPeriods ? (
+          <button className="secondary-button compact-button agent-period-settings-button" type="button" onClick={props.onOpenPeriodSettings}>
+            <Settings size={15} />
+            <span>设置本月周期</span>
+          </button>
+        ) : null}
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onRefresh} disabled={props.refreshing}><RefreshCw size={15} /><span>刷新</span></button>
       </div>
     </div>
@@ -2538,18 +2621,16 @@ function CurrentOperationTable(props: {
             <col className="agent-period-col-month" />
             <col className="agent-period-col-status" />
             <col className="agent-period-col-note" />
-            <col className="agent-period-col-action" />
           </colgroup>
           <thead>
             <tr>
               <th>主播</th>
               <th>平台</th>
               <th>类型</th>
-              {periods.map((period) => <th key={period.startIso} className={period.startIso === selectedPeriodStart ? 'agent-period-head-selected' : ''}>{formatOperationPeriodHeader(period, periods)}</th>)}
+              {periods.map((period) => <th key={period.startIso} className={period.startIso === selectedPeriodStart ? 'agent-period-head-selected' : ''}><PeriodHeader period={period} periods={periods} /></th>)}
               <th>本月情况</th>
               <th>状态</th>
               <th>备注</th>
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>{rows.map((row) => <OperationTableRow key={row.id} row={row} selectedPeriodStart={selectedPeriodStart} onOpen={onOpen} />)}</tbody>
@@ -2564,7 +2645,6 @@ function CurrentOperationTable(props: {
 }
 
 function OperationTableRow({ row, selectedPeriodStart, onOpen }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
-  const actionRow = getOperationRowAction(row);
   return (
     <tr>
       <td><strong className="agent-period-creator-name">{row.displayName}</strong><small>{row.regionLabel}</small></td>
@@ -2574,13 +2654,11 @@ function OperationTableRow({ row, selectedPeriodStart, onOpen }: { row: Operatio
       <td><OperationMonthSummary entries={row.monthSummary} /></td>
       <td><OperationRowStatusBadge status={row.status} /></td>
       <td className="agent-period-note">{row.latestNote || '-'}</td>
-      <td>{actionRow ? <button className="secondary-button compact-button" type="button" onClick={() => onOpen(actionRow)}>{row.status === 'missing' ? '填写' : '查看'}</button> : '-'}</td>
     </tr>
   );
 }
 
 function OperationMobileCard({ row, selectedPeriodStart, onOpen }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
-  const actionRow = getOperationRowAction(row);
   return (
     <article className="agent-operation-mobile-card agent-period-mobile-card">
       <div className="agent-operation-mobile-head">
@@ -2604,8 +2682,16 @@ function OperationMobileCard({ row, selectedPeriodStart, onOpen }: { row: Operat
         <OperationMonthSummary entries={row.monthSummary} />
       </div>
       <p>备注：{row.latestNote || '-'}</p>
-      {actionRow ? <button className="secondary-button compact-button" type="button" onClick={() => onOpen(actionRow)}>{row.status === 'missing' ? '填写' : '查看'}</button> : null}
     </article>
+  );
+}
+
+function PeriodHeader({ period, periods }: { period: RevenuePeriodRange; periods: RevenuePeriodRange[] }) {
+  return (
+    <span className="agent-period-header-label">
+      <strong>{getOperationPeriodTitle(period, periods)}</strong>
+      <small>{formatPeriodDayRange(period)}</small>
+    </span>
   );
 }
 
@@ -2681,6 +2767,103 @@ function OperationPagination({ page, pageCount, pageSize, total, onPage, onPageS
         <button className="secondary-button compact-button" type="button" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>下一页</button>
       </div>
     </div>
+  );
+}
+
+type RevenuePeriodDraft = {
+  periodNo: number;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isEnabled: boolean;
+};
+
+function RevenuePeriodSettingsModal({ month, periods, saving, onClose, onSaved }: { month: string; periods: RevenuePeriodRange[]; saving: boolean; onClose: () => void; onSaved: (periods: RevenuePeriodRange[]) => void }) {
+  const [drafts, setDrafts] = useState<RevenuePeriodDraft[]>(() => createRevenuePeriodDrafts(periods, month));
+  const [localSaving, setLocalSaving] = useState(false);
+  const [error, setError] = useState('');
+  const hasFifthWeek = drafts.some((draft) => draft.periodNo === 5);
+  const busy = saving || localSaving;
+
+  function updateDraft(periodNo: number, field: 'startDate' | 'endDate', value: string) {
+    setDrafts((current) => current.map((draft) => (draft.periodNo === periodNo ? { ...draft, [field]: value } : draft)));
+  }
+
+  function addFifthWeek() {
+    setDrafts((current) => {
+      if (current.some((draft) => draft.periodNo === 5)) return current;
+      const monthRange = getMonthDateRange(month);
+      const lastEndDate = current[current.length - 1]?.endDate;
+      const startDate = lastEndDate && lastEndDate < monthRange.endIso ? addDaysIso(lastEndDate, 1) : monthRange.endIso;
+      return [...current, { periodNo: 5, label: getPeriodNoLabel(5), startDate, endDate: monthRange.endIso, isEnabled: true }];
+    });
+  }
+
+  function removeFifthWeek() {
+    setDrafts((current) => current.filter((draft) => draft.periodNo !== 5));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const validationError = validateRevenuePeriodDrafts(drafts, month);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLocalSaving(true);
+    setError('');
+    try {
+      const saved = await agentService.saveRevenuePeriodSettings(month, drafts.map((draft): RevenuePeriodSettingSaveInput => ({
+        periodNo: draft.periodNo,
+        label: draft.label,
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        isEnabled: draft.isEnabled,
+      })));
+      onSaved(mapRevenuePeriodSettingsToRanges(saved));
+    } catch (saveError) {
+      setError(getRevenuePeriodSettingsErrorMessage(saveError));
+    } finally {
+      setLocalSaving(false);
+    }
+  }
+
+  return (
+    <SystemModal
+      title={`设置 ${formatMonthTitle(month)}流水周期`}
+      ariaLabel="设置流水周期"
+      onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="revenue-period-settings-form" disabled={busy}>{busy ? '保存中...' : '保存'}</button></>}
+    >
+      <form id="revenue-period-settings-form" className="agent-period-settings-form" onSubmit={submit}>
+        <div className="agent-period-settings-grid">
+          <span>周期</span>
+          <span>开始日期</span>
+          <span>结束日期</span>
+          <span></span>
+          {drafts.map((draft) => (
+            <div className="agent-period-settings-row" key={draft.periodNo}>
+              <strong>{getPeriodNoLabel(draft.periodNo)}</strong>
+              <input type="date" value={draft.startDate} onChange={(event) => updateDraft(draft.periodNo, 'startDate', event.target.value)} />
+              <input type="date" value={draft.endDate} onChange={(event) => updateDraft(draft.periodNo, 'endDate', event.target.value)} />
+              {draft.periodNo === 5 ? (
+                <button className="icon-button reject-button" type="button" onClick={removeFifthWeek} aria-label="删除第五周">
+                  <Trash2 size={16} />
+                </button>
+              ) : <span aria-hidden="true"></span>}
+            </div>
+          ))}
+        </div>
+        {!hasFifthWeek ? (
+          <button className="secondary-button compact-button agent-period-add-week-button" type="button" onClick={addFifthWeek}>
+            <Plus size={15} />
+            <span>新增第五周</span>
+          </button>
+        ) : null}
+        {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
+      </form>
+    </SystemModal>
   );
 }
 
@@ -2968,28 +3151,6 @@ function getMissingTargetEmailReviewMessage(request: AdjustmentReviewRequest) {
   return request.request_type === 'change_manager' ? '目标经纪人 Email 缺失，请申请人重新提交。' : '目标星探 Email 缺失，请申请人重新提交。';
 }
 
-function getRevenuePeriodForDate(date: Date): RevenuePeriodRange {
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  const day = target.getDate();
-  const startDay = day >= 29 ? 29 : Math.floor((day - 1) / 7) * 7 + 1;
-  return createRevenuePeriod(target.getFullYear(), target.getMonth(), startDay);
-}
-
-function getRevenuePeriodOptions(month: string): RevenuePeriodRange[] {
-  const [yearText, monthText] = month.split('-');
-  const year = Number(yearText);
-  const monthIndex = Number(monthText) - 1;
-  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return [];
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  return [1, 8, 15, 22, 29].filter((startDay) => startDay <= lastDay).map((startDay) => createRevenuePeriod(year, monthIndex, startDay));
-}
-
-function getDefaultPeriodStartForMonth(month: string, currentPeriodStartIso: string) {
-  const options = getRevenuePeriodOptions(month);
-  return options.find((period) => period.startIso === currentPeriodStartIso)?.startIso ?? options[0]?.startIso ?? '';
-}
-
 function getMonthDateRange(month: string) {
   const [yearText, monthText] = month.split('-');
   const year = Number(yearText);
@@ -3003,12 +3164,12 @@ function getMonthDateRange(month: string) {
 
 function getOperationEffectiveDateRange(quickRange: OperationQuickRange, input: {
   monthDateRange: { startIso: string; endIso: string };
-  previousPeriod: RevenuePeriodRange;
+  previousPeriod: RevenuePeriodRange | null;
   customStart: string;
   customEnd: string;
   todayIso: string;
 }): OperationDateRange {
-  if (quickRange === 'previous') return { startIso: input.previousPeriod.startIso, endIso: input.previousPeriod.endIso };
+  if (quickRange === 'previous' && input.previousPeriod) return { startIso: input.previousPeriod.startIso, endIso: input.previousPeriod.endIso };
   if (quickRange === 'last30') {
     const endDate = parseIsoDate(input.todayIso);
     const startDate = parseIsoDate(input.todayIso);
@@ -3028,24 +3189,34 @@ function normalizeOperationDateRange(startIso: string, endIso: string, fallback:
   return startIso <= endIso ? { startIso, endIso } : { startIso: endIso, endIso: startIso };
 }
 
-function getRevenuePeriodsForDateRange(range: OperationDateRange): RevenuePeriodRange[] {
+function getRevenuePeriodsForDateRange(range: OperationDateRange, periodsByMonth: Record<string, RevenuePeriodRange[]>): RevenuePeriodRange[] {
   if (!isValidIsoDate(range.startIso) || !isValidIsoDate(range.endIso)) return [];
   const normalizedRange = normalizeOperationDateRange(range.startIso, range.endIso, range);
   const periods = new Map<string, RevenuePeriodRange>();
+  getMonthsForDateRange(normalizedRange).forEach((month) => {
+    (periodsByMonth[month] ?? [])
+      .filter((period) => doDateRangesOverlap(period.startIso, period.endIso, normalizedRange.startIso, normalizedRange.endIso))
+      .forEach((period) => periods.set(period.startIso, period));
+  });
+
+  return Array.from(periods.values()).sort((first, second) => first.startIso.localeCompare(second.startIso));
+}
+
+function getMonthsForDateRange(range: OperationDateRange) {
+  if (!isValidIsoDate(range.startIso) || !isValidIsoDate(range.endIso)) return [];
+  const normalizedRange = normalizeOperationDateRange(range.startIso, range.endIso, range);
+  const months: string[] = [];
   const cursor = parseIsoDate(normalizedRange.startIso);
   cursor.setDate(1);
   const end = parseIsoDate(normalizedRange.endIso);
   end.setDate(1);
 
   while (cursor <= end) {
-    const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-    getRevenuePeriodOptions(month)
-      .filter((period) => doDateRangesOverlap(period.startIso, period.endIso, normalizedRange.startIso, normalizedRange.endIso))
-      .forEach((period) => periods.set(period.startIso, period));
+    months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
-  return Array.from(periods.values()).sort((first, second) => first.startIso.localeCompare(second.startIso));
+  return months;
 }
 
 function doDateRangesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
@@ -3058,24 +3229,16 @@ function isValidIsoDate(value: string) {
   return !Number.isNaN(date.getTime()) && formatLocalDate(date) === value;
 }
 
-function getPreviousRevenuePeriod(periodStartIso: string): RevenuePeriodRange {
-  const startDate = parseIsoDate(periodStartIso);
-  startDate.setDate(startDate.getDate() - 1);
-  return getRevenuePeriodForDate(startDate);
+function findRevenuePeriodForDate(periods: RevenuePeriodRange[], dateIso: string) {
+  return periods.find((period) => period.startIso <= dateIso && period.endIso >= dateIso) ?? null;
 }
 
-function createRevenuePeriod(year: number, monthIndex: number, startDay: number): RevenuePeriodRange {
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  const safeStartDay = Math.min(startDay, lastDay);
-  const endDay = safeStartDay === 29 ? lastDay : Math.min(safeStartDay + 6, lastDay);
-  const start = new Date(year, monthIndex, safeStartDay);
-  const end = new Date(year, monthIndex, endDay);
-  return {
-    startIso: formatLocalDate(start),
-    endIso: formatLocalDate(end),
-    label: `${formatDateForPeriod(start)} - ${formatDateForPeriod(end)}`,
-    shortLabel: safeStartDay === endDay ? String(safeStartDay).padStart(2, '0') : `${String(safeStartDay).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`,
-  };
+function getPreviousRevenuePeriod(currentPeriod: RevenuePeriodRange | null, periodsByMonth: Record<string, RevenuePeriodRange[]>) {
+  if (!currentPeriod) return null;
+  const monthPeriods = periodsByMonth[currentPeriod.startIso.slice(0, 7)] ?? [];
+  const currentIndex = monthPeriods.findIndex((period) => period.startIso === currentPeriod.startIso);
+  if (currentIndex <= 0) return null;
+  return monthPeriods[currentIndex - 1] ?? null;
 }
 
 function parseIsoDate(value: string) {
@@ -3332,9 +3495,116 @@ function formatDateRangeText(startIso: string, endIso: string) {
 
 function formatOperationPeriodHeader(period: RevenuePeriodRange, periods: RevenuePeriodRange[]) {
   const monthCount = new Set(periods.map((item) => item.startIso.slice(0, 7))).size;
-  if (monthCount <= 1) return period.shortLabel;
+  if (monthCount <= 1) return `${getPeriodNoLabel(period.periodNo)} ${formatPeriodDayRange(period)}`;
   const date = parseIsoDate(period.startIso);
-  return `${String(date.getMonth() + 1).padStart(2, '0')}月 ${period.shortLabel}`;
+  return `${String(date.getMonth() + 1).padStart(2, '0')}月 ${getPeriodNoLabel(period.periodNo)} ${formatPeriodDayRange(period)}`;
+}
+
+function mapRevenuePeriodSettingsToRanges(settings: RevenuePeriodSetting[]): RevenuePeriodRange[] {
+  return settings
+    .filter((setting) => setting.isEnabled)
+    .map((setting) => ({
+      startIso: setting.startDate,
+      endIso: setting.endDate,
+      label: `${formatDateForPeriod(parseIsoDate(setting.startDate))} - ${formatDateForPeriod(parseIsoDate(setting.endDate))}`,
+      shortLabel: formatPeriodDayRange({ startIso: setting.startDate, endIso: setting.endDate }),
+      periodNo: setting.periodNo,
+    }))
+    .sort((first, second) => first.startIso.localeCompare(second.startIso));
+}
+
+function createRevenuePeriodDrafts(periods: RevenuePeriodRange[], month: string): RevenuePeriodDraft[] {
+  const monthRange = getMonthDateRange(month);
+  if (periods.length > 0) {
+    return periods.map((period) => ({
+      periodNo: period.periodNo,
+      label: getPeriodNoLabel(period.periodNo),
+      startDate: period.startIso,
+      endDate: period.endIso,
+      isEnabled: true,
+    }));
+  }
+
+  return [1, 2, 3, 4].map((periodNo) => ({
+    periodNo,
+    label: getPeriodNoLabel(periodNo),
+    startDate: monthRange.startIso,
+    endDate: monthRange.endIso,
+    isEnabled: true,
+  }));
+}
+
+function validateRevenuePeriodDrafts(drafts: RevenuePeriodDraft[], month: string) {
+  if (drafts.length < 4) return '第一周至第四周必须完整设置。';
+  if (drafts.length > 5) return '最多只能设置到第五周。';
+  const monthRange = getMonthDateRange(month);
+  const sortedDrafts = [...drafts].sort((first, second) => first.periodNo - second.periodNo);
+
+  for (let index = 0; index < sortedDrafts.length; index += 1) {
+    const draft = sortedDrafts[index];
+    const expectedPeriodNo = index + 1;
+    if (draft.periodNo !== expectedPeriodNo) return '第一周至第四周必须完整设置。';
+    if (!draft.startDate || !draft.endDate) return `${getPeriodNoLabel(draft.periodNo)}的开始日期和结束日期必须填写。`;
+    if (!isValidIsoDate(draft.startDate) || !isValidIsoDate(draft.endDate)) return `${getPeriodNoLabel(draft.periodNo)}的日期格式不正确。`;
+    if (draft.startDate > draft.endDate) return `${getPeriodNoLabel(draft.periodNo)}的开始日期不能晚于结束日期。`;
+    if (!isDateInRange(draft.startDate, monthRange) || !isDateInRange(draft.endDate, monthRange)) return `${getPeriodNoLabel(draft.periodNo)}的日期必须属于当前月份。`;
+    if (index === 0 && draft.startDate !== monthRange.startIso) return '第一周必须从本月1日开始。';
+    if (index > 0 && draft.startDate !== addDaysIso(sortedDrafts[index - 1].endDate, 1)) return '周期日期必须连续覆盖整个月，不能出现空档或重叠。';
+  }
+
+  if (sortedDrafts[sortedDrafts.length - 1].endDate !== monthRange.endIso) return '最后一个周期必须结束于本月最后一天。';
+
+  return '';
+}
+
+function isDateInRange(dateIso: string, range: OperationDateRange) {
+  return dateIso >= range.startIso && dateIso <= range.endIso;
+}
+
+function addDaysIso(dateIso: string, days: number) {
+  const date = parseIsoDate(dateIso);
+  date.setDate(date.getDate() + days);
+  return formatLocalDate(date);
+}
+
+function getPeriodNoLabel(periodNo: number) {
+  const labels = ['第一周', '第二周', '第三周', '第四周', '第五周'];
+  return labels[periodNo - 1] ?? `第${periodNo}周`;
+}
+
+function getOperationPeriodTitle(period: RevenuePeriodRange, periods: RevenuePeriodRange[]) {
+  const monthCount = new Set(periods.map((item) => item.startIso.slice(0, 7))).size;
+  if (monthCount <= 1) return getPeriodNoLabel(period.periodNo);
+  const date = parseIsoDate(period.startIso);
+  return `${String(date.getMonth() + 1).padStart(2, '0')}月 ${getPeriodNoLabel(period.periodNo)}`;
+}
+
+function formatPeriodDayRange(period: Pick<RevenuePeriodRange, 'startIso' | 'endIso'>) {
+  const start = parseIsoDate(period.startIso).getDate();
+  const end = parseIsoDate(period.endIso).getDate();
+  return `${start}日–${end}日`;
+}
+
+function formatPeriodTitle(period: RevenuePeriodRange) {
+  return `${getPeriodNoLabel(period.periodNo)} ${formatPeriodDayRange(period)}`;
+}
+
+function formatMonthTitle(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(monthNumber)) return `${month} `;
+  return `${year}年${monthNumber}月`;
+}
+
+function getRevenuePeriodSettingsErrorMessage(error: unknown) {
+  const message = getErrorMessage(error);
+  if (message.includes('This month already has weekly revenue records') || message.includes('不能更改原有周期日期')) return '该月份已经存在流水记录，不能更改原有周期日期。';
+  if (message.includes('already has weekly revenue records') || message.includes('已有流水')) return '该周期已有流水记录，不能删除或修改日期。';
+  if (message.includes('require complete periods') || message.includes('fifth revenue period') || message.includes('continuous period numbers')) return '第一周至第四周必须完整设置。';
+  if (message.includes('first day of the month')) return '第一周必须从本月1日开始。';
+  if (message.includes('last day of the month')) return '最后一个周期必须结束于本月最后一天。';
+  if (message.includes('continuously cover') || message.includes('overlap') || message.includes('重叠')) return '周期日期必须连续覆盖整个月，不能出现空档或重叠。';
+  if (message.includes('No permission')) return '没有权限设置流水周期。';
+  return `保存失败：${message}`;
 }
 
 function formatDateTime(value: string | null) {
