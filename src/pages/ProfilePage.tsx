@@ -38,6 +38,7 @@ export function ProfilePage() {
   });
   const [previewOpen, setPreviewOpen] = useState(false);
   const [downloadChoiceOpen, setDownloadChoiceOpen] = useState(false);
+  const [businessCardPreviewUrl, setBusinessCardPreviewUrl] = useState<string | null>(null);
   const [contactEditOpen, setContactEditOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -450,12 +451,40 @@ export function ProfilePage() {
         companyFacebook,
       });
 
+      const filename = `${displayName}-${orientation === 'horizontal' ? '横式' : '竖式'}电子名片.png`;
+
+      if (isIOSDevice()) {
+        const dataUrl = canvas.toDataURL('image/png');
+        const blob = await canvasToPngBlob(canvas);
+
+        if (!blob) {
+          setBusinessCardPreviewUrl(dataUrl);
+          setDownloadChoiceOpen(false);
+          return;
+        }
+
+        const file = new File([blob], filename, { type: 'image/png' });
+        const shared = await shareBusinessCardFile(file);
+
+        if (!shared.supported) {
+          setBusinessCardPreviewUrl(dataUrl);
+        }
+
+        setDownloadChoiceOpen(false);
+        return;
+      }
+
       const link = document.createElement('a');
-      link.download = `${displayName}-${orientation === 'horizontal' ? '横式' : '竖式'}电子名片.png`;
+      link.download = filename;
       link.href = canvas.toDataURL('image/png');
       link.click();
       setDownloadChoiceOpen(false);
     } catch (downloadError) {
+      if (isShareAbortError(downloadError)) {
+        setDownloadChoiceOpen(false);
+        return;
+      }
+
       setError(downloadError instanceof Error ? downloadError.message : '下载电子名片失败。');
     } finally {
       setDownloadingCard(false);
@@ -726,6 +755,16 @@ export function ProfilePage() {
         </SystemModal>
       ) : null}
 
+      {businessCardPreviewUrl ? (
+        <SystemModal title="电子名片预览" subtitle="长按电子名片即可保存图片" ariaLabel="电子名片高清预览" onClose={() => setBusinessCardPreviewUrl(null)}>
+          <img
+            src={businessCardPreviewUrl}
+            alt="电子名片高清预览"
+            style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+          />
+        </SystemModal>
+      ) : null}
+
       {contactEditOpen ? (
         <SystemModal
           title="编辑电子名片"
@@ -819,6 +858,48 @@ function formatTime(value: string | null | undefined) {
 
 function formatMoney(value: number | null | undefined) {
   return value === null || value === undefined ? '未设置' : `RM ${value.toFixed(2)}`;
+}
+
+function isIOSDevice() {
+  const platform = navigator.platform || '';
+  return /iPhone|iPad|iPod/.test(platform) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), 'image/png');
+  });
+}
+
+async function shareBusinessCardFile(file: File) {
+  const shareData: ShareData = { files: [file] };
+
+  if (!navigator.share) {
+    return { supported: false };
+  }
+
+  if (navigator.canShare && !navigator.canShare(shareData)) {
+    return { supported: false };
+  }
+
+  try {
+    await navigator.share(shareData);
+    return { supported: true };
+  } catch (error) {
+    if (isShareAbortError(error)) {
+      throw error;
+    }
+
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === 'NotSupportedError')) {
+      return { supported: false };
+    }
+
+    throw error;
+  }
+}
+
+function isShareAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 async function drawBusinessCard(
