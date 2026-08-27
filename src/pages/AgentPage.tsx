@@ -681,10 +681,11 @@ function ManagementRevenueTrendChart({ points, loading }: { points: ManagementTr
             <polyline className="management-revenue-line management-revenue-line--tiktok" points={chart.tiktokLine} />
             <polyline className="management-revenue-line management-revenue-line--douyin" points={chart.douyinLine} />
             {chart.points.map((point) => (
-              <g key={point.month}>
+              <g key={point.key}>
+                <title>{`${point.label} · TikTok ${formatRevenueAmount(point.tiktok)} 钻石 · 抖音 ${formatRevenueAmount(point.douyin)} 音浪`}</title>
                 <circle className="management-revenue-dot management-revenue-dot--tiktok" cx={point.x} cy={point.tiktokY} r="4" />
                 <circle className="management-revenue-dot management-revenue-dot--douyin" cx={point.x} cy={point.douyinY} r="4" />
-                <text x={point.x} y="252">{point.month}</text>
+                <text x={point.x} y="252">{point.axisLabel}</text>
               </g>
             ))}
             <text className="management-revenue-axis-label management-revenue-axis-label--left" x="46" y="24">钻石 {formatCompactNumber(chart.maxTikTok)}</text>
@@ -1162,7 +1163,9 @@ function formatRevenueAmount(value: number) {
 }
 
 type ManagementTrendPoint = {
-  month: string;
+  key: string;
+  label: string;
+  axisLabel: string;
   tiktok: number;
   douyin: number;
 };
@@ -1240,7 +1243,9 @@ function summarizeManagementRevenueRecords(records: ManagementRevenueRecord[]) {
 
 function buildManagementTrendPoints(records: ManagementRevenueRecord[], startMonth: string, endMonth: string): ManagementTrendPoint[] {
   const months = getMonthRange(startMonth, endMonth);
-  const pointMap = new Map(months.map((month) => [month, { month, tiktok: 0, douyin: 0 }]));
+  if (months.length <= 2) return buildManagementWeeklyTrendPoints(records, months);
+
+  const pointMap = new Map(months.map((month) => [month, { key: month, label: month, axisLabel: month, tiktok: 0, douyin: 0 }]));
   records.forEach((record) => {
     const month = record.week_start_date.slice(0, 7);
     const point = pointMap.get(month);
@@ -1249,6 +1254,74 @@ function buildManagementTrendPoints(records: ManagementRevenueRecord[], startMon
     if (record.platform === 'douyin') point.douyin += record.revenue_amount;
   });
   return Array.from(pointMap.values());
+}
+
+function buildManagementWeeklyTrendPoints(records: ManagementRevenueRecord[], months: string[]): ManagementTrendPoint[] {
+  const weeks = months.flatMap(getManagementMonthWeekRanges);
+  const pointMap = new Map(weeks.map((week) => [
+    week.key,
+    { key: week.key, label: week.label, axisLabel: week.axisLabel, tiktok: 0, douyin: 0 },
+  ]));
+
+  records.forEach((record) => {
+    const point = pointMap.get(getManagementWeekKeyForDate(record.week_start_date));
+    if (!point) return;
+    if (record.platform === 'tiktok') point.tiktok += record.revenue_amount;
+    if (record.platform === 'douyin') point.douyin += record.revenue_amount;
+  });
+
+  return Array.from(pointMap.values());
+}
+
+function getManagementMonthWeekRanges(month: string) {
+  const [yearText, monthText] = month.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return [];
+
+  const ranges: Array<{ key: string; label: string; axisLabel: string }> = [];
+  const cursor = new Date(year, monthIndex, 1);
+  const lastDay = new Date(year, monthIndex + 1, 0);
+
+  while (cursor <= lastDay) {
+    const start = new Date(cursor);
+    const end = new Date(cursor);
+    const dayOfWeek = end.getDay();
+    const daysUntilSunday = (7 - dayOfWeek) % 7;
+    end.setDate(Math.min(end.getDate() + daysUntilSunday, lastDay.getDate()));
+
+    ranges.push({
+      key: getManagementWeekKeyForDate(formatLocalDate(start)),
+      label: formatManagementWeekLabel(start, end),
+      axisLabel: formatManagementAxisDate(start),
+    });
+
+    cursor.setTime(end.getTime());
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return ranges;
+}
+
+function getManagementWeekKeyForDate(dateIso: string) {
+  if (!isValidIsoDate(dateIso)) return dateIso;
+  const date = parseIsoDate(dateIso);
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const monday = new Date(date);
+  const daysSinceMonday = (monday.getDay() + 6) % 7;
+  monday.setDate(monday.getDate() - daysSinceMonday);
+  const start = monday < monthStart ? monthStart : monday;
+  return formatLocalDate(start);
+}
+
+function formatManagementWeekLabel(start: Date, end: Date) {
+  const startLabel = formatManagementAxisDate(start);
+  const endLabel = formatManagementAxisDate(end);
+  return startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`;
+}
+
+function formatManagementAxisDate(date: Date) {
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function createManagementTrendChart(points: ManagementTrendPoint[]) {
@@ -1264,7 +1337,11 @@ function createManagementTrendChart(points: ManagementTrendPoint[]) {
   const chartPoints = points.map((point, index) => {
     const x = points.length === 1 ? left + plotWidth / 2 : left + (index / denominator) * plotWidth;
     return {
-      month: point.month,
+      key: point.key,
+      label: point.label,
+      axisLabel: point.axisLabel,
+      tiktok: point.tiktok,
+      douyin: point.douyin,
       x,
       tiktokY: bottom - (point.tiktok / maxTikTok) * plotHeight,
       douyinY: bottom - (point.douyin / maxDouyin) * plotHeight,
