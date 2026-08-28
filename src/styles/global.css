@@ -26,6 +26,452 @@
   --sidebar-text: #e8eef7;
 }
 
+.offline-live-room-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  min-height: 100%;
+  background: #faf7ff;
+}
+
+.offline-live-room-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.offline-live-room-header span {
+  display: block;
+  margin-bottom: 5px;
+  color: #7c3aed;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.offline-live-room-header h2 {
+  margin: 0;
+  color: #211236;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.offline-live-room-header p {
+  margin: 6px 0 0;
+  color: #756781;
+  font-size: 13px;
+}
+
+.offline-live-room-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.offline-live-room-header-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.offline-live-room-alert {
+  margin: 0;
+}
+
+.offline-live-room-filterbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(180px, 0.7fr) repeat(2, minmax(150px, 0.6fr));
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #eadcff;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(91, 33, 182, 0.06);
+}
+
+.offline-live-room-filterbar .form-field {
+  min-width: 0;
+}
+
+.offline-live-room-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #e9d5ff;
+  border-radius: 10px;
+  background: #f5edff;
+}
+
+.offline-live-room-segmented button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #5b4b66;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.offline-live-room-segmented button.active,
+.offline-live-room-segmented button:hover {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.offline-live-room-kpis {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.25fr) repeat(3, minmax(150px, 0.75fr));
+  gap: 12px;
+}
+
+.offline-live-room-kpi {
+  min-height: 106px;
+  padding: 16px;
+  border: 1px solid #eadcff;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(91, 33, 182, 0.06);
+}
+
+.offline-live-room-kpi > span {
+  display: block;
+  color: #756781;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.offline-live-room-kpi > strong {
+  display: block;
+  margin-top: 10px;
+  color: #211236;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.offline-live-room-kpi > small {
+  display: block;
+  margin-top: 7px;
+  color: #8b7a97;
+  font-size: 12px;
+}
+
+.offline-live-room-kpi--updated > strong {
+  color: #15803d;
+}
+
+.offline-live-room-kpi--pending > strong {
+  color: #b45309;
+}
+
+.offline-live-room-revenue-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.offline-live-room-revenue-pair b {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: #4c1d95;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.offline-live-room-revenue-pair b:nth-child(2) {
+  color: #be185d;
+}
+
+.offline-live-room-revenue-pair small {
+  color: inherit;
+  font-size: 11px;
+}
+
+.offline-live-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 12px;
+}
+
+.offline-live-room-state {
+  grid-column: 1 / -1;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #d8b4fe;
+  border-radius: 12px;
+  background: #fff;
+  color: #7e7089;
+  font-weight: 800;
+}
+
+.offline-live-room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
+  padding: 14px;
+  border: 1px solid #eadcff;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(91, 33, 182, 0.06);
+}
+
+.offline-live-room-card--updated {
+  border-color: #bbf7d0;
+}
+
+.offline-live-room-card--partial {
+  border-color: #fde68a;
+}
+
+.offline-live-room-card--pending,
+.offline-live-room-card--unconfigured {
+  border-color: #fecaca;
+}
+
+.offline-live-room-card-head,
+.offline-live-room-card-footer,
+.offline-live-room-assigned-creator {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.offline-live-room-card-head h3 {
+  margin: 3px 0 2px;
+  color: #211236;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.offline-live-room-card-head span,
+.offline-live-room-card-head p,
+.offline-live-room-card-footer > span {
+  margin: 0;
+  color: #7e7089;
+  font-size: 12px;
+}
+
+.offline-live-room-status {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.offline-live-room-status--updated {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.offline-live-room-status--partial {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.offline-live-room-status--pending,
+.offline-live-room-status--unconfigured {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.offline-live-room-creator-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.offline-live-room-creator {
+  padding: 10px;
+  border-radius: 10px;
+  background: #fbf8ff;
+}
+
+.offline-live-room-creator > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #211236;
+  font-size: 14px;
+}
+
+.offline-live-room-creator > div {
+  display: grid;
+  gap: 6px;
+}
+
+.offline-live-room-platform-line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 36px;
+  align-items: baseline;
+  gap: 8px;
+  color: #5b4b66;
+  font-size: 12px;
+}
+
+.offline-live-room-platform-line em {
+  font-style: normal;
+  font-weight: 900;
+}
+
+.offline-live-room-platform-line b {
+  overflow-wrap: anywhere;
+  color: #4c1d95;
+  font-size: 15px;
+  text-align: right;
+}
+
+.offline-live-room-platform-line--douyin b {
+  color: #be185d;
+}
+
+.offline-live-room-platform-line small {
+  color: #8b7a97;
+  font-size: 11px;
+}
+
+.offline-live-room-card-total {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.offline-live-room-card-total span {
+  padding: 9px;
+  border-radius: 10px;
+  background: #f5edff;
+  color: #5b4b66;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.offline-live-room-card-total b {
+  color: #4c1d95;
+  font-size: 15px;
+}
+
+.offline-live-room-card-footer {
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px solid #f0e5ff;
+}
+
+.offline-live-room-card-footer > div {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.offline-live-room-empty-line {
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.offline-live-room-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  gap: 16px;
+}
+
+.offline-live-room-assignment h4 {
+  margin: 0 0 10px;
+  color: #211236;
+  font-size: 14px;
+}
+
+.offline-live-room-assigned-creator {
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid #eadcff;
+  border-radius: 10px;
+  background: #fbf8ff;
+}
+
+.offline-live-room-assigned-creator strong,
+.offline-live-room-assigned-creator span {
+  display: block;
+}
+
+.offline-live-room-assigned-creator strong {
+  color: #211236;
+  font-size: 14px;
+}
+
+.offline-live-room-assigned-creator span {
+  margin-top: 4px;
+  color: #7e7089;
+  font-size: 12px;
+}
+
+.offline-live-room-search-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.offline-live-room-search-input input {
+  flex: 1;
+  border: 0;
+  padding-inline: 0;
+}
+
+.offline-live-room-search-input input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+@media (max-width: 920px) {
+  .offline-live-room-page {
+    padding: 16px;
+  }
+
+  .offline-live-room-header {
+    flex-direction: column;
+  }
+
+  .offline-live-room-header-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .offline-live-room-header-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .offline-live-room-filterbar,
+  .offline-live-room-kpis,
+  .offline-live-room-assignment {
+    grid-template-columns: 1fr;
+  }
+
+  .offline-live-room-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .offline-live-room-card-total {
+    grid-template-columns: 1fr;
+  }
+}
+
 .avatar-settings-link {
   cursor: pointer;
 }

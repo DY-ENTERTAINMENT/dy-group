@@ -26,6 +26,7 @@ import { RegistrationReviewPage } from '../pages/RegistrationReviewPage';
 import { ScoutPage } from '../pages/ScoutPage';
 import { AgentPage } from '../pages/AgentPage';
 import { DesignerPage } from '../pages/DesignerPage';
+import { OfflineLiveRoomManagementPage } from '../pages/OfflineLiveRoomManagementPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
 import { RequireRole } from '../components/RequireRole';
@@ -193,6 +194,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="management-revenue-data">
                 <AgentPage mode="management-revenue" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('management-offline-live-rooms'),
+            element: (
+              <RequirePermission permissionKey="management-offline-live-rooms">
+                <OfflineLiveRoomManagementPage />
               </RequirePermission>
             ),
           },
