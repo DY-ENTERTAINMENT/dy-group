@@ -201,7 +201,7 @@ export const attendanceManagementService = {
         p_end_date: range.endDate,
         p_region_id: regionId || null,
       }),
-      supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+      supabase.rpc('current_user_authorized_region_ids'),
     ]);
 
     if (employeesResult.error) {
@@ -236,6 +236,18 @@ export const attendanceManagementService = {
       throw regionsResult.error;
     }
 
+    const authorizedRegionIds = regionsResult.data ?? [];
+    const accessibleRegionsResult = await supabase
+      .from('regions')
+      .select('*')
+      .eq('is_active', true)
+      .in('id', authorizedRegionIds)
+      .order('sort_order', { ascending: true });
+
+    if (accessibleRegionsResult.error) {
+      throw accessibleRegionsResult.error;
+    }
+
     return {
       employees: ((employeesResult.data ?? []) as unknown as EmployeeRowWithRelations[])
         .map(mapEmployeeRow)
@@ -246,7 +258,7 @@ export const attendanceManagementService = {
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
       effectiveWorkTimes: effectiveWorkTimesResult.data ?? [],
-      regions: regionsResult.data ?? [],
+      regions: accessibleRegionsResult.data ?? [],
       range,
     };
   },

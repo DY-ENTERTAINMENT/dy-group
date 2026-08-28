@@ -1066,6 +1066,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      current_user_authorized_region_ids: {
+        Args: Record<string, never>;
+        Returns: string[];
+      };
       approve_leave_request: {
         Args: {
           request_id: string;
