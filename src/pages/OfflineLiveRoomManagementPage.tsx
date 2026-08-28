@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Edit3, Plus, Power, RefreshCw, Search, UserPlus, X } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
+import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
+import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
   formatOfflineLiveRoomRevenue,
   getOfflineLiveRoomRevenueUnit,
@@ -182,22 +184,6 @@ export function OfflineLiveRoomManagementPage() {
 
   return (
     <div className="offline-live-room-page">
-      <header className="offline-live-room-header">
-        <div>
-          <span>管理</span>
-          <h2>线下直播间管理</h2>
-          <p>{activeRegion ? `${activeRegion.code || activeRegion.name} / ${formatDateRangeText(visiblePeriods[0]?.startIso ?? selectedRange.startIso, visiblePeriods[visiblePeriods.length - 1]?.endIso ?? selectedRange.endIso)}` : '读取区域中'}</p>
-        </div>
-        <div className="offline-live-room-header-actions">
-          <button className="secondary-button compact-button" type="button" onClick={loadDashboard} disabled={busy || !regionId}>
-            <RefreshCw size={16} /> 刷新
-          </button>
-          <button className="primary-button compact-button" type="button" onClick={() => setRoomModal({ mode: 'create', room: null })} disabled={!canUse || !regionId}>
-            <Plus size={16} /> 添加直播间
-          </button>
-        </div>
-      </header>
-
       {message ? <p className="form-success offline-live-room-alert">{message}</p> : null}
       {error ? <p className="form-alert offline-live-room-alert">{error}</p> : null}
 
@@ -215,6 +201,10 @@ export function OfflineLiveRoomManagementPage() {
             {regions.map((region) => <option key={region.id} value={region.id}>{region.code || region.name}</option>)}
           </select>
         </label>
+        <div className="offline-live-room-period-context">
+          <span>当前周期</span>
+          <strong>{activeRegion ? formatDateRangeText(visiblePeriods[0]?.startIso ?? selectedRange.startIso, visiblePeriods[visiblePeriods.length - 1]?.endIso ?? selectedRange.endIso) : '读取中'}</strong>
+        </div>
         {quickRange === 'custom' ? (
           <>
             <label className="form-field">
@@ -227,6 +217,14 @@ export function OfflineLiveRoomManagementPage() {
             </label>
           </>
         ) : null}
+        <div className="offline-live-room-filter-actions">
+          <button className="secondary-button compact-button" type="button" onClick={loadDashboard} disabled={busy || !regionId}>
+            <RefreshCw size={16} /> 刷新
+          </button>
+          <button className="primary-button compact-button" type="button" onClick={() => setRoomModal({ mode: 'create', room: null })} disabled={!canUse || !regionId}>
+            <Plus size={16} /> 添加直播间
+          </button>
+        </div>
       </section>
 
       <section className="offline-live-room-kpis">
@@ -289,8 +287,23 @@ function KpiCard({ label, value, detail, tone }: { label: string; value: ReactNo
 function RevenuePair({ tiktok, douyin }: { tiktok: number; douyin: number }) {
   return (
     <span className="offline-live-room-revenue-pair">
-      <b>TikTok {formatOfflineLiveRoomRevenue(tiktok)} <small>钻石</small></b>
-      <b>抖音 {formatOfflineLiveRoomRevenue(douyin)} <small>音浪</small></b>
+      <PlatformMetric platform="tiktok" value={tiktok} unit="钻石" />
+      <PlatformMetric platform="douyin" value={douyin} unit="音浪" />
+    </span>
+  );
+}
+
+function PlatformMetric({ platform, value, unit, total = false }: { platform: 'tiktok' | 'douyin'; value: number; unit: string; total?: boolean }) {
+  const label = platform === 'tiktok' ? 'TikTok' : '抖音';
+  return (
+    <span className={`offline-live-room-platform-metric offline-live-room-platform-metric--${platform}`}>
+      <span className="offline-live-room-platform-metric-head">
+        <img src={platform === 'tiktok' ? tiktokLogoUrl : douyinLogoUrl} alt="" aria-hidden="true" />
+        <em>{label}</em>
+        {total ? <small>TOTAL</small> : null}
+      </span>
+      <b>{formatOfflineLiveRoomRevenue(value)}</b>
+      <span className="offline-live-room-platform-metric-unit">{unit}</span>
     </span>
   );
 }
@@ -332,8 +345,8 @@ function RoomCard({ item, canUse, onEdit, onDeactivate, onManageCreators }: {
       </div>
 
       <div className="offline-live-room-card-total">
-        <span>TikTok TOTAL <b>{formatOfflineLiveRoomRevenue(item.tiktokTotal)}</b> 钻石</span>
-        <span>抖音 TOTAL <b>{formatOfflineLiveRoomRevenue(item.douyinTotal)}</b> 音浪</span>
+        <PlatformMetric platform="tiktok" value={item.tiktokTotal} unit="钻石" total />
+        <PlatformMetric platform="douyin" value={item.douyinTotal} unit="音浪" total />
       </div>
 
       <footer className="offline-live-room-card-footer">
