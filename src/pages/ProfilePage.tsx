@@ -625,7 +625,7 @@ export function ProfilePage() {
           <ReadOnlyField label="姓名" value={displayName} />
           <EditableField label="昵称" value={form.nickname} onChange={(value) => setForm((current) => ({ ...current, nickname: value }))} />
           <ReadOnlyField label="生日" value={employee?.birthday} />
-          <EditableField label="电话" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
+          <EditableField label="电话 / WhatsApp" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
           <ReadOnlyField label="邮箱" value={profile?.email} />
           <EditableField label="地址" value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} />
           <ReadOnlyField label="员工编号" value={employee?.employee_code} />
