@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
-import { Camera, Download, Lock, Pencil, ShieldCheck, Trash2, Upload, UserRound } from 'lucide-react';
+import { Camera, Download, Lock, ShieldCheck, Trash2, Upload, UserRound } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { profileService, type BusinessCardQrType, type MyProfileData, type MyProfileUpdateValues } from '../services/profile.service';
@@ -39,7 +39,6 @@ export function ProfilePage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [downloadChoiceOpen, setDownloadChoiceOpen] = useState(false);
   const [businessCardPreviewUrl, setBusinessCardPreviewUrl] = useState<string | null>(null);
-  const [contactEditOpen, setContactEditOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -48,7 +47,6 @@ export function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [socialForm, setSocialForm] = useState({ wechat_id: '', instagram_username: '', use_personal_instagram: false, show_wechat_qr_on_card: false, show_instagram_qr_on_card: false });
   const [avatarOriginalUrl, setAvatarOriginalUrl] = useState<string | null>(null);
-  const [contactForm, setContactForm] = useState({ whatsapp: '', wechat: '' });
   const [cropOriginalFile, setCropOriginalFile] = useState<File | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [cropImageSize, setCropImageSize] = useState({ width: 0, height: 0 });
@@ -157,14 +155,6 @@ export function ProfilePage() {
     };
   }
 
-  function openContactEditor() {
-    setContactForm({
-      whatsapp: form.phone || employee?.phone || profile?.phone || '',
-      wechat: cardWechat,
-    });
-    setContactEditOpen(true);
-  }
-
   function openPasswordModal() {
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage('');
@@ -247,37 +237,6 @@ export function ProfilePage() {
     }
 
     setPasswordSuccess('密码重置邮件已发送，请到邮箱查看重置链接。');
-  }
-
-  async function handleSaveBusinessCardContact(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const nextForm = { ...form, phone: contactForm.whatsapp };
-      await profileService.updateMyProfile(getUpdateValues(nextForm));
-      await profileService.updateBusinessCardSocial({ ...socialForm, wechat_id: contactForm.wechat.trim() });
-      window.localStorage.removeItem(legacyWechatStorageKey);
-      setForm(nextForm);
-      setSocialForm((current) => ({ ...current, wechat_id: contactForm.wechat.trim() }));
-      setProfileData((current) =>
-        current
-          ? {
-              ...current,
-              profile: { ...current.profile, phone: nextForm.phone.trim() || null },
-              employee: current.employee ? { ...current.employee, phone: nextForm.phone.trim() || null, wechat_id: contactForm.wechat.trim() || null } : current.employee,
-            }
-          : current,
-      );
-      setContactEditOpen(false);
-      setSuccess('电子名片联系方式已更新。');
-    } catch (err) {
-      setError(`保存电子名片联系方式失败：${err instanceof Error ? err.message : '未知错误'}`);
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
@@ -650,10 +609,6 @@ export function ProfilePage() {
             <Download size={18} />
             <span>{downloadingCard ? '生成中...' : '下载电子名片'}</span>
           </button>
-          <button className="secondary-action business-card-edit" type="button" onClick={openContactEditor} disabled={saving}>
-            <Pencil size={17} />
-            <span>编辑</span>
-          </button>
         </div>
       </div>
 
@@ -895,36 +850,6 @@ export function ProfilePage() {
         </SystemModal>
       ) : null}
 
-      {contactEditOpen ? (
-        <SystemModal
-          title="编辑电子名片"
-          subtitle="联系方式"
-          ariaLabel="编辑电子名片联系方式"
-          wide={false}
-          onClose={() => setContactEditOpen(false)}
-          footer={
-            <>
-              <button className="secondary-action" type="button" onClick={() => setContactEditOpen(false)} disabled={saving}>
-                取消
-              </button>
-              <button className="primary-button" type="submit" form="business-card-contact-form" disabled={saving}>
-                {saving ? '保存中...' : '保存'}
-              </button>
-            </>
-          }
-        >
-          <form id="business-card-contact-form" className="business-card-contact-form" onSubmit={handleSaveBusinessCardContact}>
-            <label className="form-field">
-              <span>Whatsapp</span>
-              <input value={contactForm.whatsapp} onChange={(event) => setContactForm((current) => ({ ...current, whatsapp: event.target.value }))} />
-            </label>
-            <label className="form-field">
-              <span>Wechat</span>
-              <input value={contactForm.wechat} onChange={(event) => setContactForm((current) => ({ ...current, wechat: event.target.value }))} />
-            </label>
-          </form>
-        </SystemModal>
-      ) : null}
     </section>
   );
 }

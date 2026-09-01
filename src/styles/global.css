@@ -4188,18 +4188,9 @@ button.leave-chip:disabled {
   margin-top: 4px;
 }
 
-.business-card-edit {
-  margin-top: 4px;
-}
-
 .business-card-download-options {
   display: grid;
   gap: 12px;
-}
-
-.business-card-contact-form {
-  display: grid;
-  gap: 14px;
 }
 
 .business-card-download-options .secondary-action {
