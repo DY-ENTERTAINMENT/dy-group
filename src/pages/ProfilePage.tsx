@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent } from 'react';
-import { Camera, Download, Lock, Pencil, ShieldCheck, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
+import { Camera, Download, Lock, Pencil, ShieldCheck, Trash2, Upload, UserRound } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { profileService, type MyProfileData, type MyProfileUpdateValues } from '../services/profile.service';
+import { profileService, type BusinessCardQrType, type MyProfileData, type MyProfileUpdateValues } from '../services/profile.service';
 import { authService } from '../services/auth.service';
 import logoUrl from '../assets/logo.png';
 import whatsappIconUrl from '../assets/icons/whatsapp.svg';
@@ -21,7 +21,7 @@ type ProfileForm = {
 
 type ContactKind = 'whatsapp' | 'wechat' | 'instagram' | 'facebook';
 
-const wechatStorageKey = 'dy-group-business-card-wechat';
+const legacyWechatStorageKey = 'dy-group-business-card-wechat';
 const avatarOriginalStorageKey = 'dy-group-avatar-original-url';
 const avatarCropSize = 320;
 const avatarOutputSize = 800;
@@ -46,7 +46,7 @@ export function ProfilePage() {
   const [passwordResetSending, setPasswordResetSending] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
-  const [wechat, setWechat] = useState('');
+  const [socialForm, setSocialForm] = useState({ wechat_id: '', instagram_username: '', use_personal_instagram: false, show_wechat_qr_on_card: false, show_instagram_qr_on_card: false });
   const [avatarOriginalUrl, setAvatarOriginalUrl] = useState<string | null>(null);
   const [contactForm, setContactForm] = useState({ whatsapp: '', wechat: '' });
   const [cropOriginalFile, setCropOriginalFile] = useState<File | null>(null);
@@ -57,11 +57,14 @@ export function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [qrUploadingType, setQrUploadingType] = useState<BusinessCardQrType | null>(null);
   const [downloadingCard, setDownloadingCard] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const cropDragRef = useRef<{ pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const avatarUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const wechatQrInputRef = useRef<HTMLInputElement | null>(null);
+  const instagramQrInputRef = useRef<HTMLInputElement | null>(null);
 
   const employee = profileData?.employee;
   const profile = profileData?.profile;
@@ -70,16 +73,23 @@ export function ProfilePage() {
   const avatarUrl = employee?.avatar_url || form.avatar_url;
   const avatarPreviewUrl = avatarOriginalUrl || avatarUrl;
   const whatsapp = form.phone || employee?.phone || profile?.phone || '';
-  const cardWechat = wechat.trim();
+  const cardWechat = employee?.wechat_id?.trim() || '';
   const companyChineseName = '东娱传媒';
   const companyEnglishName = employee?.region?.company_english_name ?? '';
   const companyRegistrationNo = employee?.region?.company_registration_no ?? '';
   const companyInstagram = employee?.region?.company_instagram ?? '';
+  const cardInstagram = employee?.use_personal_instagram && employee.instagram_username?.trim() ? employee.instagram_username.trim() : companyInstagram;
   const companyFacebook = employee?.region?.company_facebook ?? '';
   const accountEmail = profile?.email || employee?.email || '';
+  const wechatQrUrl = employee?.wechat_qr_url ?? null;
+  const instagramQrUrl = employee?.instagram_qr_url ?? null;
+  const businessCardQrs = [
+    { type: 'wechat' as const, label: 'WeChat', url: employee?.show_wechat_qr_on_card ? wechatQrUrl : null },
+    { type: 'instagram' as const, label: 'Instagram', url: employee?.show_instagram_qr_on_card ? instagramQrUrl : null },
+  ].filter((item): item is { type: BusinessCardQrType; label: string; url: string } => Boolean(item.url));
   const businessCardContacts = [
     { kind: 'whatsapp' as const, label: 'Whatsapp', value: whatsapp },
-    { kind: 'instagram' as const, label: '公司 Instagram', value: companyInstagram },
+    { kind: 'instagram' as const, label: employee?.use_personal_instagram ? 'Instagram' : '公司 Instagram', value: cardInstagram },
     { kind: 'wechat' as const, label: '微信', value: cardWechat },
     { kind: 'facebook' as const, label: '公司 Facebook', value: companyFacebook },
   ];
@@ -95,7 +105,6 @@ export function ProfilePage() {
   usePullToRefresh(loadProfile);
 
   useEffect(() => {
-    setWechat(window.localStorage.getItem(wechatStorageKey) ?? '');
     setAvatarOriginalUrl(window.localStorage.getItem(avatarOriginalStorageKey));
   }, []);
 
@@ -122,6 +131,13 @@ export function ProfilePage() {
         bank_name: data.employee?.bank_name ?? '',
         bank_account: data.employee?.bank_account ?? '',
       });
+      setSocialForm({
+        wechat_id: data.employee?.wechat_id ?? '',
+        instagram_username: data.employee?.instagram_username ?? '',
+        use_personal_instagram: data.employee?.use_personal_instagram ?? false,
+        show_wechat_qr_on_card: data.employee?.show_wechat_qr_on_card ?? false,
+        show_instagram_qr_on_card: data.employee?.show_instagram_qr_on_card ?? false,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : '读取个人资料失败。');
     } finally {
@@ -144,7 +160,7 @@ export function ProfilePage() {
   function openContactEditor() {
     setContactForm({
       whatsapp: form.phone || employee?.phone || profile?.phone || '',
-      wechat,
+      wechat: cardWechat,
     });
     setContactEditOpen(true);
   }
@@ -242,15 +258,16 @@ export function ProfilePage() {
     try {
       const nextForm = { ...form, phone: contactForm.whatsapp };
       await profileService.updateMyProfile(getUpdateValues(nextForm));
-      window.localStorage.setItem(wechatStorageKey, contactForm.wechat.trim());
+      await profileService.updateBusinessCardSocial({ ...socialForm, wechat_id: contactForm.wechat.trim() });
+      window.localStorage.removeItem(legacyWechatStorageKey);
       setForm(nextForm);
-      setWechat(contactForm.wechat.trim());
+      setSocialForm((current) => ({ ...current, wechat_id: contactForm.wechat.trim() }));
       setProfileData((current) =>
         current
           ? {
               ...current,
               profile: { ...current.profile, phone: nextForm.phone.trim() || null },
-              employee: current.employee ? { ...current.employee, phone: nextForm.phone.trim() || null } : current.employee,
+              employee: current.employee ? { ...current.employee, phone: nextForm.phone.trim() || null, wechat_id: contactForm.wechat.trim() || null } : current.employee,
             }
           : current,
       );
@@ -447,8 +464,12 @@ export function ProfilePage() {
         companyEnglishName,
         companyRegistrationNo,
         companyChineseName,
-        companyInstagram,
+        companyInstagram: cardInstagram,
         companyFacebook,
+        wechatQrUrl,
+        instagramQrUrl,
+        showWechatQrOnCard: employee?.show_wechat_qr_on_card ?? false,
+        showInstagramQrOnCard: employee?.show_instagram_qr_on_card ?? false,
       });
 
       const filename = `${displayName}-${orientation === 'horizontal' ? '横式' : '竖式'}电子名片.png`;
@@ -491,6 +512,92 @@ export function ProfilePage() {
     }
   }
 
+  async function handleBusinessCardQrChange(type: BusinessCardQrType, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setQrUploadingType(type);
+    setError('');
+    setSuccess('');
+    try {
+      const previousUrl = type === 'wechat' ? wechatQrUrl : instagramQrUrl;
+      const uploadedUrl = await profileService.uploadBusinessCardQr(type, file, previousUrl);
+      setProfileData((current) =>
+        current?.employee
+          ? { ...current, employee: { ...current.employee, [type === 'wechat' ? 'wechat_qr_url' : 'instagram_qr_url']: uploadedUrl } }
+          : current,
+      );
+      setSuccess(`${type === 'wechat' ? 'WeChat' : 'Instagram'} 二维码已更新。`);
+    } catch (err) {
+      setError(`上传二维码失败：${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setQrUploadingType(null);
+    }
+  }
+
+  async function handleSaveBusinessCardSocial(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (socialForm.show_wechat_qr_on_card && !wechatQrUrl) {
+      setError('请先上传微信二维码，再选择在名片显示。');
+      return;
+    }
+    if (socialForm.show_instagram_qr_on_card && !instagramQrUrl) {
+      setError('请先上传 Instagram 二维码，再选择在名片显示。');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await profileService.updateBusinessCardSocial(socialForm);
+      window.localStorage.removeItem(legacyWechatStorageKey);
+      setProfileData((current) =>
+        current?.employee
+          ? {
+              ...current,
+              employee: {
+                ...current.employee,
+                wechat_id: socialForm.wechat_id.trim() || null,
+                instagram_username: socialForm.instagram_username.trim().replace(/^@+/, '') || null,
+                use_personal_instagram: socialForm.use_personal_instagram,
+                show_wechat_qr_on_card: socialForm.show_wechat_qr_on_card,
+                show_instagram_qr_on_card: socialForm.show_instagram_qr_on_card,
+              },
+            }
+          : current,
+      );
+      setSuccess('社交资料已保存。');
+    } catch (err) {
+      setError(`保存社交资料失败：${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteBusinessCardQr(type: BusinessCardQrType) {
+    const currentUrl = type === 'wechat' ? wechatQrUrl : instagramQrUrl;
+    if (!currentUrl || !window.confirm(`确定删除 ${type === 'wechat' ? 'WeChat' : 'Instagram'} 二维码吗？`)) return;
+
+    setQrUploadingType(type);
+    setError('');
+    setSuccess('');
+    try {
+      await profileService.deleteBusinessCardQr(type, currentUrl);
+      setProfileData((current) =>
+        current?.employee
+          ? { ...current, employee: { ...current.employee, [type === 'wechat' ? 'wechat_qr_url' : 'instagram_qr_url']: null, [type === 'wechat' ? 'show_wechat_qr_on_card' : 'show_instagram_qr_on_card']: false } }
+          : current,
+      );
+      setSuccess(`${type === 'wechat' ? 'WeChat' : 'Instagram'} 二维码已删除。`);
+    } catch (err) {
+      setError(`删除二维码失败：${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setQrUploadingType(null);
+    }
+  }
+
   if (loading) {
     return (
       <section className="profile-page">
@@ -522,6 +629,7 @@ export function ProfilePage() {
                   <CardContact key={contact.kind} kind={contact.kind} label={contact.label} value={contact.value} />
                 ))}
               </div>
+              {businessCardQrs.length ? <BusinessCardQrPreview qrs={businessCardQrs} /> : null}
             </div>
           </div>
 
@@ -581,6 +689,28 @@ export function ProfilePage() {
           {saving ? '保存中...' : '保存个人资料'}
         </button>
       </form>
+
+      <section className="profile-card business-card-qr-settings">
+        <div className="panel-title-row">
+          <div>
+            <span>社交二维码</span>
+            <h3>个人名片连接方式</h3>
+          </div>
+          <Upload size={20} />
+        </div>
+        <form className="business-card-qr-upload-grid" onSubmit={handleSaveBusinessCardSocial}>
+          <QrUploadCard type="wechat" label="WeChat" url={wechatQrUrl} inputRef={wechatQrInputRef} uploading={qrUploadingType === 'wechat'} onChange={handleBusinessCardQrChange} onDelete={handleDeleteBusinessCardQr}>
+            <label className="form-field"><span>微信号</span><input value={socialForm.wechat_id} onChange={(event) => setSocialForm((current) => ({ ...current, wechat_id: event.target.value }))} /></label>
+            <label className="business-card-qr-toggle"><input type="checkbox" checked={socialForm.show_wechat_qr_on_card} disabled={!wechatQrUrl} onChange={(event) => setSocialForm((current) => ({ ...current, show_wechat_qr_on_card: event.target.checked }))} /> 下载名片时显示微信二维码</label>
+          </QrUploadCard>
+          <QrUploadCard type="instagram" label="Instagram" url={instagramQrUrl} inputRef={instagramQrInputRef} uploading={qrUploadingType === 'instagram'} onChange={handleBusinessCardQrChange} onDelete={handleDeleteBusinessCardQr}>
+            <label className="form-field"><span>个人 Instagram</span><input value={socialForm.instagram_username} placeholder="@username" onChange={(event) => setSocialForm((current) => ({ ...current, instagram_username: event.target.value }))} /></label>
+            <label className="business-card-qr-toggle"><input type="checkbox" checked={socialForm.use_personal_instagram} onChange={(event) => setSocialForm((current) => ({ ...current, use_personal_instagram: event.target.checked }))} /> 在名片使用我的个人 Instagram</label>
+            <label className="business-card-qr-toggle"><input type="checkbox" checked={socialForm.show_instagram_qr_on_card} disabled={!instagramQrUrl} onChange={(event) => setSocialForm((current) => ({ ...current, show_instagram_qr_on_card: event.target.checked }))} /> 下载名片时显示 Instagram 二维码</label>
+          </QrUploadCard>
+          <button className="primary-button profile-save-button" type="submit" disabled={saving || qrUploadingType !== null}>{saving ? '保存中...' : '保存社交资料'}</button>
+        </form>
+      </section>
 
       <div className="profile-card">
         <div className="panel-title-row">
@@ -799,6 +929,63 @@ export function ProfilePage() {
   );
 }
 
+function BusinessCardQrPreview({ qrs }: { qrs: Array<{ type: BusinessCardQrType; label: string; url: string }> }) {
+  return (
+    <div className={`business-card-qr-preview business-card-qr-preview-${qrs.length}`}>
+      <span>SCAN TO CONNECT</span>
+      <div>
+        {qrs.map((qr) => (
+          <figure key={qr.type}>
+            <img src={qr.url} alt={`${qr.label} QR Code`} />
+            <figcaption>{qr.label}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QrUploadCard({
+  type,
+  label,
+  url,
+  inputRef,
+  uploading,
+  onChange,
+  onDelete,
+  children,
+}: {
+  type: BusinessCardQrType;
+  label: string;
+  url: string | null;
+  inputRef: RefObject<HTMLInputElement>;
+  uploading: boolean;
+  onChange: (type: BusinessCardQrType, event: ChangeEvent<HTMLInputElement>) => void;
+  onDelete: (type: BusinessCardQrType) => void;
+  children: ReactNode;
+}) {
+  return (
+    <article className="business-card-qr-upload-card">
+      <strong>{label}</strong>
+      {children}
+      {url ? <img src={url} alt={`${label} 预览`} /> : <p>尚未上传</p>}
+      <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onChange(type, event)} disabled={uploading} />
+      <div>
+        <button className="secondary-action" type="button" onClick={() => inputRef.current?.click()} disabled={uploading}>
+          <Upload size={16} />
+          {uploading ? '上传中...' : url ? '更换' : '上传'}
+        </button>
+        {url ? (
+          <button className="text-button business-card-qr-delete" type="button" onClick={() => onDelete(type)} disabled={uploading}>
+            <Trash2 size={16} /> 删除
+          </button>
+        ) : null}
+      </div>
+      <small>支持 JPEG、PNG、WebP，最大 5MB。</small>
+    </article>
+  );
+}
+
 function CardContact({
   kind,
   label,
@@ -917,6 +1104,10 @@ async function drawBusinessCard(
     companyRegistrationNo: string;
     companyInstagram: string;
     companyFacebook: string;
+    wechatQrUrl: string | null;
+    instagramQrUrl: string | null;
+    showWechatQrOnCard: boolean;
+    showInstagramQrOnCard: boolean;
   },
 ) {
   const { canvas } = context;
@@ -975,6 +1166,10 @@ async function drawBusinessCard(
   context.fill();
 
   const image = values.avatarUrl ? await loadImage(values.avatarUrl) : null;
+  const qrs = await loadBusinessCardQrs(
+    values.showWechatQrOnCard ? values.wechatQrUrl : null,
+    values.showInstagramQrOnCard ? values.instagramQrUrl : null,
+  );
   const contactLogos = {
     whatsapp: await loadImage(whatsappIconUrl),
     wechat: await loadImage(wechatIconUrl),
@@ -983,13 +1178,61 @@ async function drawBusinessCard(
   };
 
   if (values.orientation === 'horizontal') {
-    drawCardDetails(context, values, contactLogos, leftGroupX, 520, leftGroupWidth);
+    drawCardDetails(context, values, contactLogos, leftGroupX, qrs.length ? 450 : 520, leftGroupWidth);
+    drawBusinessCardQrs(context, qrs, 90, 680, 800, 182);
     drawAvatar(context, values, image, 990, 224, 500);
     return;
   }
 
   drawAvatar(context, values, image, 340, 420, 280);
   drawCardDetails(context, values, contactLogos, 122, 780, 716);
+  drawBusinessCardQrs(context, qrs, 122, 1160, 716, 198);
+}
+
+async function loadBusinessCardQrs(wechatQrUrl: string | null, instagramQrUrl: string | null) {
+  const entries = await Promise.all(
+    ([
+      ['wechat', 'WeChat', wechatQrUrl],
+      ['instagram', 'Instagram', instagramQrUrl],
+    ] as const)
+      .filter(([, , url]) => Boolean(url))
+      .map(async ([type, label, url]) => {
+        const image = await loadImage(url!);
+        if (!image) throw new Error(`${label} 二维码加载失败，无法生成完整电子名片。`);
+        return { type, label, image };
+      }),
+  );
+  return entries;
+}
+
+function drawBusinessCardQrs(
+  context: CanvasRenderingContext2D,
+  qrs: Array<{ type: BusinessCardQrType; label: string; image: HTMLImageElement }>,
+  x: number,
+  y: number,
+  width: number,
+  size: number,
+) {
+  if (!qrs.length) return;
+
+  context.textAlign = 'center';
+  context.fillStyle = '#68758a';
+  context.font = 'bold 18px Arial';
+  context.fillText('SCAN TO CONNECT', x + width / 2, y);
+  const gap = qrs.length === 2 ? 42 : 0;
+  const totalWidth = qrs.length * size + (qrs.length - 1) * gap;
+  const startX = x + (width - totalWidth) / 2;
+
+  qrs.forEach((qr, index) => {
+    const qrX = startX + index * (size + gap);
+    context.fillStyle = '#ffffff';
+    roundedRect(context, qrX - 10, y + 16, size + 20, size + 20, 8);
+    context.fill();
+    drawContainImage(context, qr.image, qrX, y + 26, size, size);
+    context.fillStyle = '#172033';
+    context.font = 'bold 19px Arial';
+    context.fillText(qr.label, qrX + size / 2, y + size + 68);
+  });
 }
 
 function drawCardDetails(

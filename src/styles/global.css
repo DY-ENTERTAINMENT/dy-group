@@ -3971,6 +3971,134 @@ button.leave-chip:disabled {
   margin-top: 26px;
 }
 
+.business-card-qr-preview {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.business-card-qr-preview > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.business-card-qr-preview > div {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.business-card-qr-preview figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  justify-items: center;
+}
+
+.business-card-qr-preview img {
+  width: 86px;
+  height: 86px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  object-fit: contain;
+}
+
+.business-card-qr-preview figcaption {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.business-card-qr-settings {
+  display: grid;
+  gap: 18px;
+}
+
+.business-card-qr-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.business-card-qr-upload-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.business-card-qr-upload-card > strong {
+  color: var(--text);
+}
+
+.business-card-qr-upload-card > img {
+  width: 148px;
+  height: 148px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  object-fit: contain;
+}
+
+.business-card-qr-upload-card > p,
+.business-card-qr-upload-card > small {
+  margin: 0;
+  color: var(--muted);
+}
+
+.business-card-qr-upload-card > small {
+  font-size: 12px;
+}
+
+.business-card-qr-upload-card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.business-card-qr-upload-card .form-field {
+  margin: 0;
+}
+
+.business-card-qr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.business-card-qr-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.business-card-qr-upload-grid > .profile-save-button {
+  grid-column: 1 / -1;
+}
+
+.business-card-qr-upload-card .secondary-action,
+.business-card-qr-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+}
+
+.business-card-qr-delete {
+  color: #b42318;
+}
+
 .business-card-contact-grid::after {
   position: absolute;
   top: 6px;
@@ -4825,6 +4953,15 @@ button.leave-chip:disabled {
     gap: 8px 14px;
     width: 100%;
     margin-top: 10px;
+  }
+
+  .business-card-qr-preview img {
+    width: 76px;
+    height: 76px;
+  }
+
+  .business-card-qr-upload-grid {
+    grid-template-columns: 1fr;
   }
 
   .business-card-contact-grid::after {

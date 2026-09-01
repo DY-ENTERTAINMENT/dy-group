@@ -84,6 +84,13 @@ export type Employee = {
   full_name: string;
   nickname: string | null;
   avatar_url: string | null;
+  wechat_id: string | null;
+  wechat_qr_url: string | null;
+  show_wechat_qr_on_card: boolean;
+  instagram_username: string | null;
+  instagram_qr_url: string | null;
+  use_personal_instagram: boolean;
+  show_instagram_qr_on_card: boolean;
   email: string | null;
   phone: string | null;
   gender: string | null;
@@ -459,7 +466,7 @@ export type Database = {
       };
       employees: {
         Row: Employee;
-        Insert: Partial<Pick<Employee, 'id' | 'employee_code' | 'nickname' | 'avatar_url' | 'email' | 'phone' | 'gender' | 'birthday' | 'identity_number' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'bank_name' | 'bank_account' | 'bank_account_name' | 'base_salary' | 'region_id' | 'employment_type_id' | 'job_title_id' | 'status' | 'hire_date' | 'employment_end_date' | 'reviewed_by' | 'reviewed_at' | 'deleted_at' | 'created_at' | 'updated_at'>> &
+        Insert: Partial<Pick<Employee, 'id' | 'employee_code' | 'nickname' | 'avatar_url' | 'wechat_id' | 'wechat_qr_url' | 'show_wechat_qr_on_card' | 'instagram_username' | 'instagram_qr_url' | 'use_personal_instagram' | 'show_instagram_qr_on_card' | 'email' | 'phone' | 'gender' | 'birthday' | 'identity_number' | 'address' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'bank_name' | 'bank_account' | 'bank_account_name' | 'base_salary' | 'region_id' | 'employment_type_id' | 'job_title_id' | 'status' | 'hire_date' | 'employment_end_date' | 'reviewed_by' | 'reviewed_at' | 'deleted_at' | 'created_at' | 'updated_at'>> &
           Pick<Employee, 'full_name'> & {
             profile_id?: string | null;
             start_work_time?: string | null;

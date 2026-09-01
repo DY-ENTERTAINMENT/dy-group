@@ -2,6 +2,10 @@ import { supabase } from '../lib/supabase';
 import type { Employee, EmploymentType, JobTitle, Profile, Region } from '../types/database';
 
 const AVATAR_BUCKET = 'profile-avatars';
+const BUSINESS_CARD_BUCKET = 'profile-business-card';
+const BUSINESS_CARD_QR_TYPES = ['wechat', 'instagram'] as const;
+
+export type BusinessCardQrType = (typeof BUSINESS_CARD_QR_TYPES)[number];
 
 export type MyEmployeeProfile = Pick<
   Employee,
@@ -10,6 +14,13 @@ export type MyEmployeeProfile = Pick<
   | 'full_name'
   | 'nickname'
   | 'avatar_url'
+  | 'wechat_id'
+  | 'wechat_qr_url'
+  | 'show_wechat_qr_on_card'
+  | 'instagram_username'
+  | 'instagram_qr_url'
+  | 'use_personal_instagram'
+  | 'show_instagram_qr_on_card'
   | 'email'
   | 'phone'
   | 'birthday'
@@ -58,6 +69,13 @@ const employeeProfileSelect = `
   full_name,
   nickname,
   avatar_url,
+  wechat_id,
+  wechat_qr_url,
+  show_wechat_qr_on_card,
+  instagram_username,
+  instagram_qr_url,
+  use_personal_instagram,
+  show_instagram_qr_on_card,
   email,
   phone,
   birthday,
@@ -197,7 +215,114 @@ export const profileService = {
     const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
     return data.publicUrl;
   },
+
+  async uploadBusinessCardQr(type: BusinessCardQrType, file: File, previousUrl?: string | null) {
+    const userId = await getCurrentUserId('请先登录后再上传二维码。');
+    validateBusinessCardQrFile(file);
+
+    const extension = getImageExtension(file);
+    const path = `${userId}/${type}-qr-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from(BUSINESS_CARD_BUCKET).upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from(BUSINESS_CARD_BUCKET).getPublicUrl(path);
+    const url = data.publicUrl;
+
+    try {
+      await updateMyBusinessCardQrUrl(userId, type, url);
+    } catch (error) {
+      await supabase.storage.from(BUSINESS_CARD_BUCKET).remove([path]);
+      throw error;
+    }
+
+    if (previousUrl) {
+      await removeBusinessCardQrFile(previousUrl);
+    }
+
+    return url;
+  },
+
+  async deleteBusinessCardQr(type: BusinessCardQrType, currentUrl?: string | null) {
+    const userId = await getCurrentUserId('请先登录后再删除二维码。');
+
+    if (currentUrl) {
+      await removeBusinessCardQrFile(currentUrl);
+    }
+
+    await updateMyBusinessCardQrUrl(userId, type, null, false);
+  },
+
+  async updateBusinessCardSocial(values: {
+    wechat_id: string;
+    instagram_username: string;
+    use_personal_instagram: boolean;
+    show_wechat_qr_on_card: boolean;
+    show_instagram_qr_on_card: boolean;
+  }) {
+    const userId = await getCurrentUserId('请先登录后再保存社交资料。');
+    const { error } = await supabase
+      .from('employees')
+      .update({
+        wechat_id: values.wechat_id.trim() || null,
+        instagram_username: values.instagram_username.trim().replace(/^@+/, '') || null,
+        use_personal_instagram: values.use_personal_instagram,
+        show_wechat_qr_on_card: values.show_wechat_qr_on_card,
+        show_instagram_qr_on_card: values.show_instagram_qr_on_card,
+      })
+      .eq('profile_id', userId)
+      .is('deleted_at', null);
+    if (error) throw error;
+  },
 };
+
+async function getCurrentUserId(message: string) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!data.user?.id) throw new Error(message);
+  return data.user.id;
+}
+
+function validateBusinessCardQrFile(file: File) {
+  if (!BUSINESS_CARD_QR_TYPES.length || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('二维码图片仅支持 JPEG、PNG 或 WebP。');
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('二维码图片不能超过 5MB。');
+  }
+}
+
+function getImageExtension(file: File) {
+  if (file.type === 'image/jpeg') return 'jpg';
+  if (file.type === 'image/webp') return 'webp';
+  return 'png';
+}
+
+async function updateMyBusinessCardQrUrl(userId: string, type: BusinessCardQrType, url: string | null, showOnCard?: boolean) {
+  const values = type === 'wechat'
+    ? { wechat_qr_url: url, ...(showOnCard === undefined ? {} : { show_wechat_qr_on_card: showOnCard }) }
+    : { instagram_qr_url: url, ...(showOnCard === undefined ? {} : { show_instagram_qr_on_card: showOnCard }) };
+  const { error } = await supabase
+    .from('employees')
+    .update(values)
+    .eq('profile_id', userId)
+    .is('deleted_at', null);
+  if (error) throw error;
+}
+
+async function removeBusinessCardQrFile(url: string) {
+  const marker = `/storage/v1/object/public/${BUSINESS_CARD_BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index < 0) return;
+
+  const path = decodeURIComponent(url.slice(index + marker.length).split('?')[0]);
+  if (!path) return;
+  await supabase.storage.from(BUSINESS_CARD_BUCKET).remove([path]);
+}
 
 function mapEmployeeProfile(row: EmployeeProfileRow): MyEmployeeProfile {
   return {
@@ -206,6 +331,13 @@ function mapEmployeeProfile(row: EmployeeProfileRow): MyEmployeeProfile {
     full_name: row.full_name,
     nickname: row.nickname,
     avatar_url: row.avatar_url,
+    wechat_id: row.wechat_id,
+    wechat_qr_url: row.wechat_qr_url,
+    show_wechat_qr_on_card: row.show_wechat_qr_on_card,
+    instagram_username: row.instagram_username,
+    instagram_qr_url: row.instagram_qr_url,
+    use_personal_instagram: row.use_personal_instagram,
+    show_instagram_qr_on_card: row.show_instagram_qr_on_card,
     email: row.email,
     phone: row.phone,
     birthday: row.birthday,
