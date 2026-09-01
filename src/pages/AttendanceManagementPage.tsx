@@ -72,6 +72,8 @@ type AbnormalReviewSnapshot = {
 
 type AbnormalCenterTab = 'pending' | 'abnormal';
 
+type EmployeeStatusFilter = 'working-attendance' | 'all-working' | 'attendance-exempt' | 'left' | 'all';
+
 const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
   medical: '病假',
@@ -85,6 +87,7 @@ export function AttendanceManagementPage() {
   const canUseAttendance = permissions.canUse('attendance-management');
   const [month, setMonth] = useState(getCurrentMonth());
   const [regionId, setRegionId] = useState('');
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<EmployeeStatusFilter>('working-attendance');
   const [regions, setRegions] = useState<Region[]>([]);
   const [summaries, setSummaries] = useState<EmployeeAttendanceSummary[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -95,7 +98,30 @@ export function AttendanceManagementPage() {
   const isSuperAdmin = profile?.role === 'super_admin';
   const canSwitchRegion = regions.length > 1;
   const range = useMemo(() => getAttendancePeriodRange(month), [month]);
-  const selectedSummary = summaries.find((summary) => summary.employee.id === selectedEmployeeId) ?? null;
+  const filteredSummaries = useMemo(() => {
+    return summaries.filter(({ employee }) => {
+      const isWorking = employee.status === 'active' || employee.status === 'probation';
+
+      if (employeeStatusFilter === 'working-attendance') {
+        return isWorking && employee.require_attendance;
+      }
+
+      if (employeeStatusFilter === 'all-working') {
+        return isWorking;
+      }
+
+      if (employeeStatusFilter === 'attendance-exempt') {
+        return isWorking && !employee.require_attendance;
+      }
+
+      if (employeeStatusFilter === 'left') {
+        return employee.status === 'left';
+      }
+
+      return true;
+    });
+  }, [employeeStatusFilter, summaries]);
+  const selectedSummary = filteredSummaries.find((summary) => summary.employee.id === selectedEmployeeId) ?? null;
   const abnormalRecords = summaries.flatMap((summary) => summary.abnormalRecords);
   const pendingAbnormalRecords = abnormalRecords.filter((record) => record.reviewStatus === 'pending');
   const abnormalEmployeeCount = new Set(pendingAbnormalRecords.map((record) => record.employee.id)).size;
@@ -187,13 +213,24 @@ export function AttendanceManagementPage() {
             ))}
           </select>
         </label>
+
+        <label className="form-field">
+          <span>员工状态</span>
+          <select value={employeeStatusFilter} onChange={(event) => setEmployeeStatusFilter(event.target.value as EmployeeStatusFilter)}>
+            <option value="working-attendance">在职考勤员工</option>
+            <option value="all-working">全部在职</option>
+            <option value="attendance-exempt">免打卡</option>
+            <option value="left">已离职</option>
+            <option value="all">全部员工</option>
+          </select>
+        </label>
       </div>
 
       <div className="staff-list-panel">
         <div className="list-header">
           <div>
             <span>考勤主表</span>
-            <h3>{summaries.length} 位员工</h3>
+            <h3>{filteredSummaries.length} 位员工</h3>
           </div>
         </div>
 
@@ -201,7 +238,7 @@ export function AttendanceManagementPage() {
 
         {loading ? (
           <div className="table-state">正在读取考勤数据...</div>
-        ) : summaries.length === 0 ? (
+        ) : filteredSummaries.length === 0 ? (
           <div className="table-state">暂无考勤数据。</div>
         ) : (
           <div className="staff-table-wrap">
@@ -218,7 +255,7 @@ export function AttendanceManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {summaries.map((summary) => (
+                {filteredSummaries.map((summary) => (
                   <tr key={summary.employee.id}>
                     <td>
                       {canUseAttendance ? (
