@@ -22,6 +22,7 @@ import {
   type CandidateFormValues,
   type CreatorEntityFormValues,
   type CreatorManagerDisplayName,
+  type CreatorRegistrationType,
   type CreatorFormValues,
   type CreatorPlatform,
   type CreatorPlatformFormValues,
@@ -31,6 +32,8 @@ import {
   type CreatorType,
   type FollowStatus,
   type OnboardingManagerOption,
+  type OnboardingCollaboratorOption,
+  type OnboardingScoutOption,
   type ScoutOptions,
   type WorkloadGranularity,
 } from '../services/scout.service';
@@ -96,11 +99,13 @@ const emptyCreatorForm: CreatorFormValues = {
   platform: 'tiktok',
   platform_user_id: '',
   platform_account: '',
+  platform_public_id: '',
   region_id: '',
   creator_name: '',
   scout_employee_id: '',
   manager_employee_id: '',
   creator_type: '5+1',
+  bank_account_name: '',
   bank_name: '',
   bank_account: '',
 };
@@ -111,7 +116,9 @@ function emptyCreatorPlatformForm(enabled = false): CreatorPlatformFormValues {
     joined_date: today,
     platform_user_id: '',
     platform_account: '',
+    platform_public_id: '',
     creator_type: '5+1',
+    bank_account_name: '',
     bank_name: '',
     bank_account: '',
   };
@@ -119,9 +126,15 @@ function emptyCreatorPlatformForm(enabled = false): CreatorPlatformFormValues {
 
 const emptyCreatorEntityForm: CreatorEntityFormValues = {
   display_name: '',
+  registration_type: 'new_onboarding',
+  guild_joined_date: today,
   region_id: '',
   scout_employee_id: '',
   manager_employee_id: '',
+  has_secondary_scout: false,
+  secondary_scout_employee_id: '',
+  has_secondary_manager: false,
+  secondary_manager_employee_id: '',
   platforms: {
     tiktok: emptyCreatorPlatformForm(true),
     douyin: emptyCreatorPlatformForm(false),
@@ -156,6 +169,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const canManageCreatorStatus = mode === 'management-streamers' && permissions.isSuperAdmin;
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
+  const [onboardingScoutOptions, setOnboardingScoutOptions] = useState<OnboardingScoutOption[]>([]);
+  const [secondaryManagerOptions, setSecondaryManagerOptions] = useState<OnboardingCollaboratorOption[]>([]);
   const [creatorManagerNames, setCreatorManagerNames] = useState<CreatorManagerDisplayName[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -288,6 +303,19 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       } catch (managerOptionsError) {
         console.error('Failed to load onboarding manager options', managerOptionsError);
         setManagerOptions([]);
+      }
+
+      try {
+        setOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions());
+      } catch (scoutOptionsError) {
+        console.error('Failed to load onboarding scout options', scoutOptionsError);
+        setOnboardingScoutOptions([]);
+      }
+      try {
+        setSecondaryManagerOptions(await scoutService.listOnboardingCollaboratorOptions('manager'));
+      } catch (secondaryManagerOptionsError) {
+        console.error('Failed to load onboarding secondary manager options', secondaryManagerOptionsError);
+        setSecondaryManagerOptions([]);
       }
 
       if (mode === 'personal-streamers' || mode === 'management-streamers') {
@@ -476,8 +504,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCandidateForm(emptyCandidateForm);
   }
 
-  function openCreatorCreate() {
-    const currentEmployee = options.employees.find((employee) => employee.profile_id === profile?.id);
+  function openCreatorCreate(registrationType: CreatorRegistrationType = 'new_onboarding') {
+    const currentEmployee = onboardingScoutOptions.find((employee) => employee.id === options.employees.find((option) => option.profile_id === profile?.id)?.id);
     setEditingCreator(null);
     setCreatorForm({
       ...emptyCreatorForm,
@@ -486,6 +514,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     });
     setCreatorEntityForm({
       ...emptyCreatorEntityForm,
+      registration_type: registrationType,
+      guild_joined_date: today,
       region_id: currentEmployee?.region_id ?? '',
       scout_employee_id: currentEmployee?.id ?? '',
       platforms: {
@@ -503,12 +533,14 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       platform: creator.platform,
       platform_user_id: creator.platform_user_id,
       platform_account: creator.platform_account,
+      platform_public_id: creator.platform_public_id ?? '',
       region_id: creator.region_id ?? '',
       creator_name: creator.creator_name,
       scout_employee_id: creator.scout_employee_id ?? '',
       manager_employee_id: creator.manager_employee_id ?? '',
       creator_type: creator.creator_type,
       bank_name: creator.bank_name ?? '',
+      bank_account_name: creator.bank_account_name ?? '',
       bank_account: creator.bank_account ?? '',
     });
     setCreatorModalOpen(true);
@@ -709,6 +741,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           values={creatorForm}
           entityValues={creatorEntityForm}
           options={options}
+          scoutOptions={onboardingScoutOptions}
+          secondaryManagerOptions={secondaryManagerOptions}
           managerOptions={managerOptions}
           editingCreator={editingCreator}
           saving={saving}
@@ -1282,17 +1316,20 @@ function CandidateMobileCard({
   );
 }
 
-function OnboardingPanel({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
+function OnboardingPanel({ canCreate, onCreate }: { canCreate: boolean; onCreate: (registrationType: CreatorRegistrationType) => void }) {
   return (
     <div className="onboarding-entry-panel">
       <section className="onboarding-entry-intro">
-        <h3>主播入公会登记</h3>
-        <p>用于登记已确认加入公会的主播，支持 TikTok、抖音单平台或双平台同时入会。</p>
-        <p>主播共同资料只需填写一次，TikTok 与抖音的平台资料分别记录。</p>
-        <div className="onboarding-platform-note">TikTok + 抖音 · 支持单平台 / 双平台 · 5+1 / 非5+1</div>
-        <button className="primary-action onboarding-create-button" type="button" onClick={onCreate} disabled={!canCreate}>
+        <h3>入公会登记管理</h3>
+        <p>统一管理新入公会主播登记与现有主播资料补录，主播共同资料填写一次，TikTok 与抖音平台资料分别记录。</p>
+        <div className="onboarding-platform-note">TikTok + 抖音 · 支持单平台/双平台</div>
+        <button className="primary-action onboarding-create-button" type="button" onClick={() => onCreate('new_onboarding')} disabled={!canCreate}>
           <Plus size={17} />
-          <span>登记主播</span>
+          <span>新入公会主播登记</span>
+        </button>
+        <button className="secondary-action onboarding-create-button" type="button" onClick={() => onCreate('existing_creator')} disabled={!canCreate}>
+          <Plus size={17} />
+          <span>现有主播资料补录</span>
         </button>
       </section>
     </div>
@@ -2442,7 +2479,9 @@ function createWorkloadRowFromCreator(creator: CreatorProfile, range: WorkloadDa
 }
 
 function isCreatorJoinedInRange(creator: CreatorProfile, range: WorkloadDateRange) {
-  return range.startIso <= creator.joined_date && creator.joined_date <= range.endIso;
+  if (creator.registration_type === 'existing_creator') return false;
+  const joinedDate = creator.guild_joined_date ?? creator.joined_date;
+  return range.startIso <= joinedDate && joinedDate <= range.endIso;
 }
 
 function getCreatorPersonKey(creator: CreatorProfile) {
@@ -3047,6 +3086,8 @@ function CreatorModal(props: {
   values: CreatorFormValues;
   entityValues: CreatorEntityFormValues;
   options: ScoutOptions;
+  scoutOptions: OnboardingScoutOption[];
+  secondaryManagerOptions: OnboardingCollaboratorOption[];
   managerOptions: OnboardingManagerOption[];
   editingCreator: CreatorProfile | null;
   saving: boolean;
@@ -3055,13 +3096,27 @@ function CreatorModal(props: {
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const requiresBank = props.values.creator_type === '5+1' || props.values.creator_type === 'company';
-  const platformIdLabel = props.values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID';
-  const platformAccountLabel = props.values.platform === 'tiktok' ? '用户名' : '抖音号';
+  const platformIdLabel = props.values.platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID';
+  const platformAccountLabel = props.values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名';
   const platformNameLabel = props.values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字';
 
   function updateEntity(values: Partial<CreatorEntityFormValues>) {
-    props.onEntityChange({ ...props.entityValues, ...values });
+    const nextValues = { ...props.entityValues, ...values, platforms: { ...props.entityValues.platforms } };
+    if (values.display_name !== undefined) {
+      (Object.keys(nextValues.platforms) as CreatorPlatform[]).forEach((platform) => {
+        nextValues.platforms[platform] = { ...nextValues.platforms[platform], bank_account_name: values.display_name ?? '' };
+      });
+    }
+    if (values.guild_joined_date !== undefined) {
+      (Object.keys(nextValues.platforms) as CreatorPlatform[]).forEach((platform) => {
+        nextValues.platforms[platform] = { ...nextValues.platforms[platform], joined_date: values.guild_joined_date ?? '' };
+      });
+    }
+    if (values.scout_employee_id && values.scout_employee_id === nextValues.secondary_scout_employee_id) nextValues.secondary_scout_employee_id = '';
+    if (values.manager_employee_id && values.manager_employee_id === nextValues.secondary_manager_employee_id) nextValues.secondary_manager_employee_id = '';
+    if (values.has_secondary_scout === false) nextValues.secondary_scout_employee_id = '';
+    if (values.has_secondary_manager === false) nextValues.secondary_manager_employee_id = '';
+    props.onEntityChange(nextValues);
   }
 
   function updatePlatform(platform: CreatorPlatform, values: Partial<CreatorPlatformFormValues>) {
@@ -3079,10 +3134,11 @@ function CreatorModal(props: {
 
   if (!props.editingCreator) {
     const selectedPlatforms = (Object.keys(props.entityValues.platforms) as CreatorPlatform[]).filter((platform) => props.entityValues.platforms[platform].enabled);
+    const sharedBankValues = props.entityValues.platforms[selectedPlatforms[0] ?? 'tiktok'];
 
     return (
       <SystemModal
-        title="入公会"
+        title={props.entityValues.registration_type === 'existing_creator' ? '现有主播补录' : '新增入公会'}
         ariaLabel="主播资料"
         onClose={props.onClose}
         footer={
@@ -3099,7 +3155,9 @@ function CreatorModal(props: {
         <form id="creator-form" className="creator-onboarding-form" onSubmit={props.onSubmit}>
           <div className="form-grid">
             <div className="form-section-title">共同资料</div>
+            {props.entityValues.registration_type === 'existing_creator' ? <p className="form-field-wide">用于录入公司现有主播，不计入新增入公会统计。</p> : null}
             <TextField label="主播名字" value={props.entityValues.display_name} onChange={(value) => updateEntity({ display_name: value })} required />
+            <TextField label={props.entityValues.registration_type === 'existing_creator' ? '真实入公会日期' : '入会日期'} type="date" value={props.entityValues.guild_joined_date} onChange={(value) => updateEntity({ guild_joined_date: value })} required />
             <SelectField label="区域" value={props.entityValues.region_id} onChange={(value) => updateEntity({ region_id: value })} required>
               <option value="">请选择</option>
               {props.options.regions.map((region) => (
@@ -3108,8 +3166,22 @@ function CreatorModal(props: {
                 </option>
               ))}
             </SelectField>
-            <EmployeeSelect label="星探" value={props.entityValues.scout_employee_id} employees={props.options.employees} onChange={(value) => updateEntity({ scout_employee_id: value })} required />
-            <OnboardingManagerSelect label="经纪人" value={props.entityValues.manager_employee_id} managers={props.managerOptions} onChange={(value) => updateEntity({ manager_employee_id: value })} required />
+            <SearchableEmployeeSelect label="星探" value={props.entityValues.scout_employee_id} options={props.scoutOptions} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ scout_employee_id: value })} placeholder="搜索星探" required />
+            <SearchableEmployeeSelect label="经纪人" value={props.entityValues.manager_employee_id} options={props.managerOptions} onChange={(value) => updateEntity({ manager_employee_id: value })} placeholder="搜索经纪人" required />
+            <label className="form-field collaborator-toggle-field">
+              <span>协同星探</span>
+              <span className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_scout} onChange={(event) => updateEntity({ has_secondary_scout: event.target.checked })} /> 还有第二位星探</span>
+            </label>
+            {props.entityValues.has_secondary_scout ? (
+              <SearchableEmployeeSelect label="第二位星探" value={props.entityValues.secondary_scout_employee_id} options={props.scoutOptions.filter((scout) => scout.id !== props.entityValues.scout_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_scout_employee_id: value })} placeholder="搜索星探" required />
+            ) : null}
+            <label className="form-field collaborator-toggle-field">
+              <span>协同经纪人</span>
+              <span className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_manager} onChange={(event) => updateEntity({ has_secondary_manager: event.target.checked })} /> 还有第二位经纪人</span>
+            </label>
+            {props.entityValues.has_secondary_manager ? (
+              <SearchableEmployeeSelect label="第二位经纪人" value={props.entityValues.secondary_manager_employee_id} options={props.secondaryManagerOptions.filter((manager) => manager.id !== props.entityValues.manager_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_manager_employee_id: value })} placeholder="搜索经纪人" required />
+            ) : null}
 
             <div className="form-section-title">平台</div>
             <div className="platform-checkbox-grid">
@@ -3123,13 +3195,13 @@ function CreatorModal(props: {
 
             {selectedPlatforms.map((platform) => {
               const platformValues = props.entityValues.platforms[platform];
-              const platformRequiresBank = platformValues.creator_type === '5+1' || platformValues.creator_type === 'company';
               return (
                 <div className="form-grid form-field-wide" key={platform}>
                   <div className="form-section-title platform-form-section-title">{platformLabels[platform]}</div>
                   <TextField label="入会日期" type="date" value={platformValues.joined_date} onChange={(value) => updatePlatform(platform, { joined_date: value })} required />
-                  <TextField label={platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platform, { platform_user_id: value })} required />
-                  <TextField label={platform === 'tiktok' ? '用户名' : '抖音号'} value={platformValues.platform_account} onChange={(value) => updatePlatform(platform, { platform_account: value })} required />
+                  <TextField label={platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platform, { platform_user_id: value })} required />
+                  <TextField label={platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={platformValues.platform_account} onChange={(value) => updatePlatform(platform, { platform_account: value })} required />
+                  <TextField label={platform === 'tiktok' ? 'TikTok ID' : '抖音号'} value={platformValues.platform_public_id} onChange={(value) => updatePlatform(platform, { platform_public_id: value })} required />
                   <SelectField label="主播形式" value={platformValues.creator_type} onChange={(value) => updatePlatform(platform, { creator_type: value as CreatorType })}>
                     {creatorTypes.map((type) => (
                       <option key={type} value={type}>
@@ -3137,15 +3209,13 @@ function CreatorModal(props: {
                       </option>
                     ))}
                   </SelectField>
-                  {platformRequiresBank ? (
-                    <>
-                      <TextField label="银行" value={platformValues.bank_name} onChange={(value) => updatePlatform(platform, { bank_name: value })} required />
-                      <TextField label="银行户口" value={platformValues.bank_account} onChange={(value) => updatePlatform(platform, { bank_account: value })} required />
-                    </>
-                  ) : null}
                 </div>
               );
             })}
+            <div className="form-section-title">银行资料</div>
+            <TextField label="银行账户名字" value={props.entityValues.display_name} onChange={() => undefined} readOnly />
+            <TextField label="银行名字" value={sharedBankValues.bank_name} onChange={(value) => selectedPlatforms.forEach((platform) => updatePlatform(platform, { bank_name: value }))} required />
+            <TextField label="银行账号" value={sharedBankValues.bank_account} onChange={(value) => selectedPlatforms.forEach((platform) => updatePlatform(platform, { bank_account: value }))} required />
           </div>
         </form>
       </SystemModal>
@@ -3178,6 +3248,7 @@ function CreatorModal(props: {
           <TextField label="入会日期" type="date" value={props.values.joined_date} onChange={(value) => props.onChange({ ...props.values, joined_date: value })} required />
           <TextField label={platformIdLabel} value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} required />
           <TextField label={platformAccountLabel} value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} required />
+          <TextField label={props.values.platform === 'tiktok' ? 'TikTok ID' : '抖音号'} value={props.values.platform_public_id} onChange={(value) => props.onChange({ ...props.values, platform_public_id: value })} />
           <SelectField label="区域" value={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, region_id: value })} required>
             <option value="">请选择</option>
             {props.options.regions.map((region) => (
@@ -3187,8 +3258,8 @@ function CreatorModal(props: {
             ))}
           </SelectField>
           <TextField label={platformNameLabel} value={props.values.creator_name} onChange={(value) => props.onChange({ ...props.values, creator_name: value })} required />
-          <EmployeeSelect label="星探" value={props.values.scout_employee_id} employees={props.options.employees} onChange={(value) => props.onChange({ ...props.values, scout_employee_id: value })} required />
-          <OnboardingManagerSelect label="经纪人" value={props.values.manager_employee_id} managers={props.managerOptions} onChange={(value) => props.onChange({ ...props.values, manager_employee_id: value })} required />
+          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} regionId={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, scout_employee_id: value })} placeholder="搜索星探" required />
+          <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => props.onChange({ ...props.values, manager_employee_id: value })} placeholder="搜索经纪人" required />
           <SelectField label="主播形式" value={props.values.creator_type} onChange={(value) => props.onChange({ ...props.values, creator_type: value as CreatorType })}>
             {creatorTypes.map((type) => (
               <option key={type} value={type}>
@@ -3196,12 +3267,10 @@ function CreatorModal(props: {
               </option>
             ))}
           </SelectField>
-          {requiresBank ? (
-            <>
-              <TextField label="银行" value={props.values.bank_name} onChange={(value) => props.onChange({ ...props.values, bank_name: value })} />
-              <TextField label="银行户口" value={props.values.bank_account} onChange={(value) => props.onChange({ ...props.values, bank_account: value })} />
-            </>
-          ) : null}
+          <div className="form-section-title">银行资料</div>
+          <TextField label="银行账户名字" value={props.values.bank_account_name} onChange={(value) => props.onChange({ ...props.values, bank_account_name: value })} />
+          <TextField label="银行名字" value={props.values.bank_name} onChange={(value) => props.onChange({ ...props.values, bank_name: value })} />
+          <TextField label="银行账号" value={props.values.bank_account} onChange={(value) => props.onChange({ ...props.values, bank_account: value })} />
         </div>
       </form>
     </SystemModal>
@@ -3214,17 +3283,19 @@ function TextField({
   onChange,
   type = 'text',
   required,
+  readOnly,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <label className="form-field">
       <span>{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} />
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} readOnly={readOnly} />
     </label>
   );
 }
@@ -3279,28 +3350,61 @@ function EmployeeSelect({
   );
 }
 
-function OnboardingManagerSelect({
+type SearchableEmployeeOption = {
+  id: string;
+  display_name: string;
+  region_id?: string;
+};
+
+function SearchableEmployeeSelect({
   label,
   value,
-  managers,
+  options,
+  regionId,
   onChange,
+  placeholder,
   required,
 }: {
   label: string;
   value: string;
-  managers: OnboardingManagerOption[];
+  options: SearchableEmployeeOption[];
+  regionId?: string;
   onChange: (value: string) => void;
+  placeholder: string;
   required?: boolean;
 }) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleOptions = options.filter((option) =>
+    (!regionId || !option.region_id || option.region_id === regionId)
+    && (!normalizedQuery || option.display_name.toLowerCase().includes(normalizedQuery)),
+  );
+  const selectedOption = options.find((option) => option.id === value);
+  const inputValue = isOpen ? query : selectedOption?.display_name ?? query;
+
   return (
-    <SelectField label={label} value={value} onChange={onChange} required={required}>
-      <option value="">请选择</option>
-      {managers.map((manager) => (
-        <option key={manager.id} value={manager.id}>
-          {manager.display_name}
-        </option>
-      ))}
-    </SelectField>
+    <div className="form-field searchable-employee-select">
+      <span>{label}</span>
+      <input
+        type="search"
+        value={inputValue}
+        placeholder={placeholder}
+        required={required}
+        onFocus={() => { setQuery(''); setIsOpen(true); }}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+        onChange={(event) => { setQuery(event.target.value); setIsOpen(true); }}
+      />
+      {isOpen ? (
+        <div className="searchable-employee-options" role="listbox" aria-label={label}>
+          {visibleOptions.length ? visibleOptions.map((option) => (
+            <button key={option.id} type="button" role="option" aria-selected={option.id === value} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(option.id); setQuery(''); setIsOpen(false); }}>
+              {option.display_name}
+            </button>
+          )) : <p>没有符合条件的人员</p>}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

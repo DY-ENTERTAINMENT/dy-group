@@ -7420,6 +7420,56 @@ button.leave-chip:disabled {
   box-shadow: 0 0 0 3px var(--dy-purple-ring);
 }
 
+#creator-form .searchable-employee-select {
+  position: relative;
+}
+
+#creator-form .searchable-employee-options {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 0;
+  left: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+#creator-form .searchable-employee-options button,
+#creator-form .searchable-employee-options p {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+#creator-form .searchable-employee-options button:hover {
+  background: var(--dy-purple-soft);
+}
+
+#creator-form .collaborator-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+#creator-form .collaborator-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--dy-purple);
+}
+
 .platform-form-section-title {
   margin-top: 12px;
   color: var(--dy-purple-dark);

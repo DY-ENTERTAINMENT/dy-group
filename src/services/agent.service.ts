@@ -40,6 +40,7 @@ export type AdjustmentRequest = {
   request_type: AdjustmentType;
   effective_date: string | null;
   full_name: string | null;
+  bank_account_name: string | null;
   bank_name: string | null;
   bank_account: string | null;
   target_nickname: string | null;
@@ -68,6 +69,7 @@ export type AdjustmentFormValues = {
   request_type: AdjustmentType;
   effective_date: string;
   full_name: string;
+  bank_account_name: string;
   bank_name: string;
   bank_account: string;
   target_nickname: string;
@@ -600,6 +602,7 @@ function normalizeAdjustment(values: AdjustmentFormValues) {
     request_type: values.request_type,
     effective_date: values.effective_date || null,
     full_name: values.full_name.trim() || null,
+    bank_account_name: values.bank_account_name.trim() || null,
     bank_name: values.bank_name.trim() || null,
     bank_account: values.bank_account.trim() || null,
     target_nickname: values.target_nickname.trim() || null,

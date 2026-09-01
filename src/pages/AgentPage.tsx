@@ -43,6 +43,7 @@ const emptyAdjustment: AdjustmentFormValues = {
   request_type: 'to_online',
   effective_date: today,
   full_name: '',
+  bank_account_name: '',
   bank_name: '',
   bank_account: '',
   target_nickname: '',
@@ -1892,8 +1893,9 @@ function AdjustmentReviewDrawer({ request, onClose }: { request: AdjustmentRevie
               {request.request_type === 'change_manager' ? <DrawerField label="目标经纪人后台 Email" value={request.target_email ?? '-'} /> : null}
               {request.request_type === 'change_scout' ? <DrawerField label="目标星探昵称" value={request.target_nickname ?? '-'} /> : null}
               {request.request_type === 'change_scout' ? <DrawerField label="目标星探后台 Email" value={request.target_email ?? '-'} /> : null}
-              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行" value={request.bank_name ?? '-'} /> : null}
-              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行户口" value={request.bank_account ?? '-'} /> : null}
+              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行账户名字" value={request.bank_account_name ?? '-'} /> : null}
+              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行名字" value={request.bank_name ?? '-'} /> : null}
+              {['to_company', 'to_5_1', 'change_bank'].includes(request.request_type) ? <DrawerField label="银行账号" value={request.bank_account ?? '-'} /> : null}
               <DrawerField label="申请备注" value={request.content ?? '-'} />
             </div>
           </DrawerSection>
@@ -1991,13 +1993,14 @@ function AdjustmentModal({
           <SelectField label="可申请项目" value={values.request_type} onChange={updateRequestType}>
             {adjustmentTypes.map((type) => <option key={type} value={type}>{adjustmentTypeLabels[type]}</option>)}
           </SelectField>
-          {values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}
+          {values.request_type !== 'special' ? <TextField label={values.platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} required /> : null}
           {needsEffective ? <TextField label="生效日期" type="date" value={values.effective_date} onChange={(value) => onChange({ ...values, effective_date: value })} /> : null}
           {needsBank ? (
             <>
               <TextField label="全名" value={values.full_name} onChange={(value) => onChange({ ...values, full_name: value })} />
-              <TextField label="银行" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} />
-              <TextField label="银行户口" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} />
+              <TextField label="银行账户名字" value={values.bank_account_name} onChange={(value) => onChange({ ...values, bank_account_name: value })} />
+              <TextField label="银行名字" value={values.bank_name} onChange={(value) => onChange({ ...values, bank_name: value })} />
+              <TextField label="银行账号" value={values.bank_account} onChange={(value) => onChange({ ...values, bank_account: value })} />
             </>
           ) : null}
           {needsTarget ? (
@@ -2142,7 +2145,7 @@ function AdjustmentTargetEmployeeSearch({
 function DesignModal({ values, saving, onChange, onClose, onSubmit }: { values: DesignFormValues; saving: boolean; onChange: (values: DesignFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const isSpecial = values.request_type === 'special';
   const isPoster = values.request_type === 'poster';
-  return <SystemModal title="添加新申请" ariaLabel="美工申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="design-form" disabled={saving}>提交</button></>}><form id="design-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="申请类型" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as DesignRequestType })}>{designTypes.map((type) => <option key={type} value={type}>{designTypeLabels[type]}</option>)}</SelectField>{!isSpecial ? <><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><TextField label={values.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字'} value={values.creator_name} onChange={(value) => onChange({ ...values, creator_name: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音号'} value={values.platform_account} onChange={(value) => onChange({ ...values, platform_account: value })} /></> : null}{!isSpecial && !isPoster ? <><TextField label="粉丝昵称" value={values.fan_nickname} onChange={(value) => onChange({ ...values, fan_nickname: value })} /><TextField label="粉丝灯牌等级 / 财富等级" value={values.fan_level} onChange={(value) => onChange({ ...values, fan_level: value })} /><SelectField label="打印方式" value={values.print_method} onChange={(value) => onChange({ ...values, print_method: value as DesignFormValues['print_method'] })}>{Object.entries(printMethodLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</SelectField></> : null}{!isSpecial ? <TextField label={isPoster ? '海报内容' : '设计内容'} value={values.design_content} onChange={(value) => onChange({ ...values, design_content: value })} /> : null}{isPoster ? <TextField label="设计元素" value={values.design_elements} onChange={(value) => onChange({ ...values, design_elements: value })} /> : null}{isSpecial ? <label className="form-field form-field-wide"><span>自由需求说明</span><textarea value={values.special_content} onChange={(event) => onChange({ ...values, special_content: event.target.value })} /></label> : null}<label className="form-field form-field-wide"><span>参考图片链接（每行一个，未来可接文件上传）</span><textarea value={values.reference_urls} onChange={(event) => onChange({ ...values, reference_urls: event.target.value })} /></label></div></form></SystemModal>;
+  return <SystemModal title="添加新申请" ariaLabel="美工申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="design-form" disabled={saving}>提交</button></>}><form id="design-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="申请类型" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as DesignRequestType })}>{designTypes.map((type) => <option key={type} value={type}>{designTypeLabels[type]}</option>)}</SelectField>{!isSpecial ? <><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><TextField label={values.platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字'} value={values.creator_name} onChange={(value) => onChange({ ...values, creator_name: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={values.platform_account} onChange={(value) => onChange({ ...values, platform_account: value })} /></> : null}{!isSpecial && !isPoster ? <><TextField label="粉丝昵称" value={values.fan_nickname} onChange={(value) => onChange({ ...values, fan_nickname: value })} /><TextField label="粉丝灯牌等级 / 财富等级" value={values.fan_level} onChange={(value) => onChange({ ...values, fan_level: value })} /><SelectField label="打印方式" value={values.print_method} onChange={(value) => onChange({ ...values, print_method: value as DesignFormValues['print_method'] })}>{Object.entries(printMethodLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</SelectField></> : null}{!isSpecial ? <TextField label={isPoster ? '海报内容' : '设计内容'} value={values.design_content} onChange={(value) => onChange({ ...values, design_content: value })} /> : null}{isPoster ? <TextField label="设计元素" value={values.design_elements} onChange={(value) => onChange({ ...values, design_elements: value })} /> : null}{isSpecial ? <label className="form-field form-field-wide"><span>自由需求说明</span><textarea value={values.special_content} onChange={(event) => onChange({ ...values, special_content: event.target.value })} /></label> : null}<label className="form-field form-field-wide"><span>参考图片链接（每行一个，未来可接文件上传）</span><textarea value={values.reference_urls} onChange={(event) => onChange({ ...values, reference_urls: event.target.value })} /></label></div></form></SystemModal>;
 }
 
 type OperationStatus = 'missing' | 'filled';
@@ -3043,8 +3046,8 @@ function getCreatorCompleteness(profiles: CreatorProfile[]): CreatorCompleteness
   if (hasCriticalMissing) return 'critical';
 
   const hasMissingBank = profiles.some((creator) =>
-    (creator.creator_type === '5+1' || creator.creator_type === 'company')
-    && (!creator.bank_name || !creator.bank_account),
+    ['5+1', 'online', 'offline', 'company'].includes(creator.creator_type)
+    && (!creator.bank_account_name || !creator.bank_name || !creator.bank_account),
   );
   return hasMissingBank ? 'missing' : 'complete';
 }
@@ -3124,7 +3127,7 @@ function getAdjustmentRequesterName(request: AdjustmentReviewRequest) {
 function formatAdjustmentTarget(request: AdjustmentReviewRequest) {
   if (request.request_type === 'change_manager') return request.target_nickname || request.target_email || '转经纪人';
   if (request.request_type === 'change_scout') return request.target_nickname || request.target_email || '转星探';
-  if (request.request_type === 'change_bank') return [request.bank_name, request.bank_account].filter(Boolean).join(' / ') || '更换银行户口';
+  if (request.request_type === 'change_bank') return [request.bank_account_name, request.bank_name, request.bank_account].filter(Boolean).join(' / ') || '更换银行户口';
   if (request.request_type === 'to_online') return '转线上';
   if (request.request_type === 'to_company') return '转公司提';
   if (request.request_type === 'to_5_1') return '转5+1';

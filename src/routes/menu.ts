@@ -91,7 +91,7 @@ export const menuItems: MenuItem[] = [
   },
   {
     key: 'scout-onboarding',
-    label: '入公会',
+    label: '入公会登记管理',
     path: '/tools/scout/onboarding',
     icon: UserCheck,
     section: '工作工具',

@@ -405,16 +405,49 @@ export type CreatorProfile = {
   platform: CreatorPlatform;
   platform_user_id: string;
   platform_account: string;
+  platform_public_id: string | null;
   region_id: string | null;
   creator_name: string;
   scout_employee_id: string | null;
   scout_profile_id: string | null;
   manager_employee_id: string | null;
   creator_type: CreatorType;
+  bank_account_name: string | null;
   bank_name: string | null;
   bank_account: string | null;
   created_by: string | null;
   updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatorEntity = {
+  id: string;
+  display_name: string;
+  region_id: string | null;
+  scout_employee_id: string | null;
+  scout_profile_id: string | null;
+  manager_employee_id: string | null;
+  registration_type: 'new_onboarding' | 'existing_creator' | null;
+  guild_joined_date: string | null;
+  status: 'active' | 'invalid';
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatorCollaboratorAssignment = {
+  id: string;
+  creator_entity_id: string | null;
+  creator_profile_id: string | null;
+  assignment_type: 'scout' | 'manager';
+  employee_id: string;
+  assignment_role: 'secondary';
+  status: 'active' | 'inactive';
+  created_by: string | null;
+  ended_at: string | null;
+  ended_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1016,6 +1049,12 @@ export type Database = {
           },
         ];
       };
+      creator_entities: {
+        Row: CreatorEntity;
+        Insert: Pick<CreatorEntity, 'display_name'> & Partial<Omit<CreatorEntity, 'id' | 'display_name' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<CreatorEntity, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [];
+      };
       creator_profiles: {
         Row: CreatorProfile;
         Insert: Pick<
@@ -1030,6 +1069,7 @@ export type Database = {
               | 'scout_employee_id'
               | 'scout_profile_id'
               | 'manager_employee_id'
+              | 'bank_account_name'
               | 'bank_name'
               | 'bank_account'
               | 'created_by'
@@ -1069,6 +1109,12 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      creator_collaborator_assignments: {
+        Row: CreatorCollaboratorAssignment;
+        Insert: Pick<CreatorCollaboratorAssignment, 'assignment_type' | 'employee_id'> & Partial<Omit<CreatorCollaboratorAssignment, 'id' | 'assignment_type' | 'employee_id' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<CreatorCollaboratorAssignment, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

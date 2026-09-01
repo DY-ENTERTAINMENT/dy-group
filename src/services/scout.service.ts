@@ -5,6 +5,7 @@ export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type FollowStatus = CandidateFollowStatus;
 export type CreatorPlatform = 'tiktok' | 'douyin';
 export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
+export type CreatorRegistrationType = 'new_onboarding' | 'existing_creator';
 export type CreatorStatus = 'active' | 'invalid';
 export type CreatorStatusFilter = CreatorStatus | 'all';
 
@@ -86,11 +87,13 @@ export type CreatorFormValues = {
   platform: CreatorPlatform;
   platform_user_id: string;
   platform_account: string;
+  platform_public_id: string;
   region_id: string;
   creator_name: string;
   scout_employee_id: string;
   manager_employee_id: string;
   creator_type: CreatorType;
+  bank_account_name: string;
   bank_name: string;
   bank_account: string;
 };
@@ -100,26 +103,37 @@ export type CreatorPlatformFormValues = {
   joined_date: string;
   platform_user_id: string;
   platform_account: string;
+  platform_public_id: string;
   creator_type: CreatorType;
+  bank_account_name: string;
   bank_name: string;
   bank_account: string;
 };
 
 export type CreatorEntityFormValues = {
   display_name: string;
+  registration_type: CreatorRegistrationType;
+  guild_joined_date: string;
   region_id: string;
   scout_employee_id: string;
   manager_employee_id: string;
+  has_secondary_scout: boolean;
+  secondary_scout_employee_id: string;
+  has_secondary_manager: boolean;
+  secondary_manager_employee_id: string;
   platforms: Record<CreatorPlatform, CreatorPlatformFormValues>;
 };
 
 export type CreatorProfile = {
   id: string;
   creator_entity_id: string | null;
+  registration_type?: CreatorRegistrationType | null;
+  guild_joined_date?: string | null;
   joined_date: string;
   platform: CreatorPlatform;
   platform_user_id: string;
   platform_account: string;
+  platform_public_id?: string | null;
   region_id: string | null;
   creator_name: string;
   scout_employee_id: string | null;
@@ -127,6 +141,7 @@ export type CreatorProfile = {
   manager_employee_id: string | null;
   creator_type: CreatorType;
   status?: CreatorStatus;
+  bank_account_name?: string | null;
   bank_name: string | null;
   bank_account: string | null;
   created_at: string;
@@ -146,6 +161,14 @@ export type OnboardingManagerOption = {
   id: string;
   display_name: string;
 };
+
+export type OnboardingScoutOption = {
+  id: string;
+  display_name: string;
+  region_id: string;
+};
+
+export type OnboardingCollaboratorOption = OnboardingScoutOption;
 
 export type CreatorManagerDisplayName = {
   creator_id: string;
@@ -191,6 +214,7 @@ const creatorSelect = `
   platform,
   platform_user_id,
   platform_account,
+  platform_public_id,
   region_id,
   creator_name,
   scout_employee_id,
@@ -198,6 +222,7 @@ const creatorSelect = `
   manager_employee_id,
   creator_type,
   status,
+  bank_account_name,
   bank_name,
   bank_account,
   created_at,
@@ -248,6 +273,30 @@ export const scoutService = {
     return ((data ?? []) as Array<{ employee_id: string; display_name: string }>).map((employee) => ({
       id: employee.employee_id,
       display_name: employee.display_name,
+    }));
+  },
+
+  async listOnboardingScoutOptions(): Promise<OnboardingScoutOption[]> {
+    const { data, error } = await db.rpc('get_scout_onboarding_scout_options');
+    if (error) throw error;
+
+    return ((data ?? []) as Array<{ employee_id: string; display_name: string; region_id: string }>).map((employee) => ({
+      id: employee.employee_id,
+      display_name: employee.display_name,
+      region_id: employee.region_id,
+    }));
+  },
+
+  async listOnboardingCollaboratorOptions(assignmentType: 'scout' | 'manager'): Promise<OnboardingCollaboratorOption[]> {
+    const { data, error } = await db.rpc('get_creator_collaborator_options', {
+      p_assignment_type: assignmentType,
+      p_region_id: null,
+    });
+    if (error) throw error;
+    return ((data ?? []) as Array<{ employee_id: string; display_name: string; region_id: string }>).map((employee) => ({
+      id: employee.employee_id,
+      display_name: employee.display_name,
+      region_id: employee.region_id,
     }));
   },
 
@@ -368,7 +417,21 @@ export const scoutService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []).map(mapCreatorRow);
+    const creators: CreatorProfile[] = (data ?? []).map(mapCreatorRow);
+    const entityIds = Array.from(new Set(creators.map((creator) => creator.creator_entity_id).filter((id): id is string => Boolean(id))));
+    if (entityIds.length === 0) return creators;
+
+    const { data: metadataRows, error: metadataError } = await db.rpc('get_visible_creator_registration_metadata', {
+      p_creator_entity_ids: entityIds,
+    });
+    if (metadataError) throw metadataError;
+
+    type CreatorRegistrationMetadata = { creator_entity_id: string; registration_type: CreatorRegistrationType | null; guild_joined_date: string | null };
+    const metadataByEntityId = new Map<string, CreatorRegistrationMetadata>((metadataRows ?? []).map((metadata: CreatorRegistrationMetadata) => [metadata.creator_entity_id, metadata]));
+    return creators.map((creator) => {
+      const metadata = creator.creator_entity_id ? metadataByEntityId.get(creator.creator_entity_id) : undefined;
+      return metadata ? { ...creator, registration_type: metadata.registration_type, guild_joined_date: metadata.guild_joined_date } : creator;
+    });
   },
 
   async listCreatorScoutDisplayNames(creatorProfileIds: string[]): Promise<CreatorScoutDisplayName[]> {
@@ -398,6 +461,8 @@ export const scoutService = {
       p_scout_employee_id: values.scout_employee_id || null,
       p_manager_employee_id: values.manager_employee_id || null,
       p_platforms: platforms,
+      p_secondary_scout_employee_id: values.has_secondary_scout ? values.secondary_scout_employee_id || null : null,
+      p_secondary_manager_employee_id: values.has_secondary_manager ? values.secondary_manager_employee_id || null : null,
     });
 
     if (error) throw error;
@@ -458,12 +523,22 @@ export function createRegionRecruitSummaries(creators: CreatorProfile[]): Region
 }
 
 export function summarizeCreators(creators: CreatorProfile[]): RecruitSummary {
-  return creators.reduce<RecruitSummary>(
-    (summary, creator) => {
+  const creatorGroups = new Map<string, CreatorProfile[]>();
+  creators
+    .filter((creator) => creator.registration_type !== 'existing_creator')
+    .forEach((creator) => {
+      const key = creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
+      creatorGroups.set(key, [...(creatorGroups.get(key) ?? []), creator]);
+    });
+
+  return Array.from(creatorGroups.values()).reduce<RecruitSummary>(
+    (summary, profiles) => {
+      const platforms = new Set(profiles.map((creator) => creator.platform));
+      const representative = profiles[0];
       summary.total += 1;
-      if (creator.platform === 'tiktok') summary.tiktok += 1;
-      if (creator.platform === 'douyin') summary.douyin += 1;
-      if (creator.creator_type === '5+1') summary.plusFiveOne += 1;
+      if (platforms.has('tiktok')) summary.tiktok += 1;
+      if (platforms.has('douyin')) summary.douyin += 1;
+      if (representative.creator_type === '5+1') summary.plusFiveOne += 1;
       else summary.nonFiveOne += 1;
       return summary;
     },
@@ -472,7 +547,7 @@ export function summarizeCreators(creators: CreatorProfile[]): RecruitSummary {
 }
 
 export function filterCreatorsByMonth(creators: CreatorProfile[], month: string) {
-  return creators.filter((creator) => creator.joined_date.startsWith(month));
+  return creators.filter((creator) => creator.registration_type !== 'existing_creator' && (creator.guild_joined_date ?? creator.joined_date).startsWith(month));
 }
 
 export function getEmployeeName(employee: Pick<Employee, 'full_name' | 'nickname'> | null | undefined) {
@@ -481,21 +556,22 @@ export function getEmployeeName(employee: Pick<Employee, 'full_name' | 'nickname
 
 async function normalizeCreator(values: CreatorFormValues) {
   const scoutProfileId = await getEmployeeProfileId(values.scout_employee_id);
-  const requiresBank = values.creator_type === '5+1' || values.creator_type === 'company';
 
   return {
     joined_date: values.joined_date,
     platform: values.platform,
     platform_user_id: values.platform_user_id.trim(),
     platform_account: values.platform_account.trim(),
+    platform_public_id: values.platform_public_id.trim() || null,
     region_id: values.region_id || null,
     creator_name: values.creator_name.trim(),
     scout_employee_id: values.scout_employee_id || null,
     scout_profile_id: scoutProfileId,
     manager_employee_id: values.manager_employee_id || null,
     creator_type: values.creator_type,
-    bank_name: requiresBank ? values.bank_name.trim() || null : null,
-    bank_account: requiresBank ? values.bank_account.trim() || null : null,
+    bank_account_name: values.bank_account_name.trim() || null,
+    bank_name: values.bank_name.trim() || null,
+    bank_account: values.bank_account.trim() || null,
   };
 }
 
@@ -511,16 +587,19 @@ function normalizeCreatorEntityPlatforms(values: CreatorEntityFormValues) {
   return (Object.entries(values.platforms) as Array<[CreatorPlatform, CreatorPlatformFormValues]>)
     .filter(([, platformValues]) => platformValues.enabled)
     .map(([platform, platformValues]) => {
-      const requiresBank = platformValues.creator_type === '5+1' || platformValues.creator_type === 'company';
       return {
         platform,
         joined_date: platformValues.joined_date,
         platform_user_id: platformValues.platform_user_id.trim(),
         platform_account: platformValues.platform_account.trim(),
+        platform_public_id: platformValues.platform_public_id.trim() || null,
+        registration_type: values.registration_type,
+        guild_joined_date: values.guild_joined_date,
         creator_name: values.display_name.trim(),
         creator_type: platformValues.creator_type,
-        bank_name: requiresBank ? platformValues.bank_name.trim() || null : null,
-        bank_account: requiresBank ? platformValues.bank_account.trim() || null : null,
+        bank_account_name: platformValues.bank_account_name.trim() || null,
+        bank_name: platformValues.bank_name.trim() || null,
+        bank_account: platformValues.bank_account.trim() || null,
       };
     });
 }
@@ -571,10 +650,13 @@ function mapCreatorRow(row: any): CreatorProfile {
   return {
     id: row.id,
     creator_entity_id: row.creator_entity_id,
+    registration_type: null,
+    guild_joined_date: null,
     joined_date: row.joined_date,
     platform: row.platform,
     platform_user_id: row.platform_user_id,
     platform_account: row.platform_account,
+    platform_public_id: row.platform_public_id,
     region_id: row.region_id,
     creator_name: row.creator_name,
     scout_employee_id: row.scout_employee_id,
@@ -582,6 +664,7 @@ function mapCreatorRow(row: any): CreatorProfile {
     manager_employee_id: row.manager_employee_id,
     creator_type: row.creator_type,
     status: row.status,
+    bank_account_name: row.bank_account_name,
     bank_name: row.bank_name,
     bank_account: row.bank_account,
     created_at: row.created_at,
