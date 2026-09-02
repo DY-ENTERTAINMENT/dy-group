@@ -3135,7 +3135,7 @@ function CreatorModal(props: {
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const platformIdLabel = props.values.platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID';
+  const platformIdLabel = props.values.platform === 'tiktok' ? 'TikTok ID' : '抖音UID';
   const platformAccountLabel = props.values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名';
   const platformNameLabel = props.values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字';
 
@@ -3239,9 +3239,9 @@ function CreatorModal(props: {
                 <div className="form-grid form-field-wide" key={platform}>
                   <div className="form-section-title platform-form-section-title">{platformLabels[platform]}</div>
                   <TextField label="入会日期" type="date" value={platformValues.joined_date} onChange={(value) => updatePlatform(platform, { joined_date: value })} required />
-                  <TextField label={platform === 'tiktok' ? 'TikTok User ID' : '抖音UID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platform, { platform_user_id: value })} required />
+                  <TextField label={platform === 'tiktok' ? 'TikTok ID' : '抖音UID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platform, { platform_user_id: value })} required />
                   <TextField label={platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={platformValues.platform_account} onChange={(value) => updatePlatform(platform, { platform_account: value })} required />
-                  <TextField label={platform === 'tiktok' ? 'TikTok ID' : '抖音ID'} value={platformValues.platform_public_id} onChange={(value) => updatePlatform(platform, { platform_public_id: value })} required />
+                  <TextField label={platform === 'tiktok' ? 'User ID' : '抖音号'} value={platformValues.platform_public_id} onChange={(value) => updatePlatform(platform, { platform_public_id: value })} required />
                   <SelectField label="主播形式" value={platformValues.creator_type} onChange={(value) => updatePlatform(platform, { creator_type: value as CreatorType })}>
                     {creatorTypes.map((type) => (
                       <option key={type} value={type}>
@@ -3288,7 +3288,7 @@ function CreatorModal(props: {
           <TextField label="入会日期" type="date" value={props.values.joined_date} onChange={(value) => props.onChange({ ...props.values, joined_date: value })} required />
           <TextField label={platformIdLabel} value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} required />
           <TextField label={platformAccountLabel} value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} required />
-          <TextField label={props.values.platform === 'tiktok' ? 'TikTok ID' : '抖音号'} value={props.values.platform_public_id} onChange={(value) => props.onChange({ ...props.values, platform_public_id: value })} />
+          <TextField label={props.values.platform === 'tiktok' ? 'User ID' : '抖音号'} value={props.values.platform_public_id} onChange={(value) => props.onChange({ ...props.values, platform_public_id: value })} />
           <SelectField label="区域" value={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, region_id: value })} required>
             <option value="">请选择</option>
             {props.options.regions.map((region) => (
