@@ -3141,11 +3141,6 @@ function CreatorModal(props: {
 
   function updateEntity(values: Partial<CreatorEntityFormValues>) {
     const nextValues = { ...props.entityValues, ...values, platforms: { ...props.entityValues.platforms } };
-    if (values.display_name !== undefined) {
-      (Object.keys(nextValues.platforms) as CreatorPlatform[]).forEach((platform) => {
-        nextValues.platforms[platform] = { ...nextValues.platforms[platform], bank_account_name: values.display_name ?? '' };
-      });
-    }
     if (values.guild_joined_date !== undefined) {
       (Object.keys(nextValues.platforms) as CreatorPlatform[]).forEach((platform) => {
         nextValues.platforms[platform] = { ...nextValues.platforms[platform], joined_date: values.guild_joined_date ?? '' };
@@ -3169,6 +3164,14 @@ function CreatorModal(props: {
         },
       },
     });
+  }
+
+  function updateSharedBank(platforms: CreatorPlatform[], values: Partial<Pick<CreatorPlatformFormValues, 'bank_account_name' | 'bank_name' | 'bank_account'>>) {
+    const nextPlatforms = { ...props.entityValues.platforms };
+    platforms.forEach((platform) => {
+      nextPlatforms[platform] = { ...nextPlatforms[platform], ...values };
+    });
+    props.onEntityChange({ ...props.entityValues, platforms: nextPlatforms });
   }
 
   if (!props.editingCreator) {
@@ -3250,9 +3253,9 @@ function CreatorModal(props: {
               );
             })}
             <div className="form-section-title">银行资料</div>
-            <TextField label="银行账户名字" value={props.entityValues.display_name} onChange={() => undefined} readOnly />
-            <TextField label="银行名字" value={sharedBankValues.bank_name} onChange={(value) => selectedPlatforms.forEach((platform) => updatePlatform(platform, { bank_name: value }))} required />
-            <TextField label="银行账号" value={sharedBankValues.bank_account} onChange={(value) => selectedPlatforms.forEach((platform) => updatePlatform(platform, { bank_account: value }))} required />
+            <TextField label="银行账户名字" value={sharedBankValues.bank_account_name} onChange={(value) => updateSharedBank(selectedPlatforms, { bank_account_name: value })} required />
+            <TextField label="银行名字" value={sharedBankValues.bank_name} onChange={(value) => updateSharedBank(selectedPlatforms, { bank_name: value })} required />
+            <TextField label="银行账号" value={sharedBankValues.bank_account} onChange={(value) => updateSharedBank(selectedPlatforms, { bank_account: value })} required />
           </div>
         </form>
       </SystemModal>
