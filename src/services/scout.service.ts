@@ -136,6 +136,14 @@ export type CreatorEntitySharedFormValues = {
   bank_account: string;
 };
 
+export type CreatorAdditionalPlatformFormValues = {
+  joined_date: string;
+  platform_user_id: string;
+  platform_account: string;
+  platform_public_id: string;
+  creator_type: CreatorType;
+};
+
 export type CreatorProfile = {
   id: string;
   creator_entity_id: string | null;
@@ -533,6 +541,20 @@ export const scoutService = {
       p_bank_account_name: values.bank_account_name.trim() || null,
       p_bank_name: values.bank_name.trim() || null,
       p_bank_account: values.bank_account.trim() || null,
+    });
+
+    if (error) throw error;
+  },
+
+  async addCreatorEntityPlatformProfile(creatorEntityId: string, platform: CreatorPlatform, values: CreatorAdditionalPlatformFormValues) {
+    const { error } = await db.rpc('add_creator_entity_platform_profile', {
+      p_creator_entity_id: creatorEntityId,
+      p_platform: platform,
+      p_joined_date: values.joined_date || null,
+      p_platform_user_id: values.platform_user_id.trim(),
+      p_platform_account: values.platform_account.trim(),
+      p_platform_public_id: values.platform_public_id.trim(),
+      p_creator_type: values.creator_type,
     });
 
     if (error) throw error;

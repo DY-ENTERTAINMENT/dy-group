@@ -22,6 +22,7 @@ import {
   type CandidateFormValues,
   type CreatorEntityFormValues,
   type CreatorEntitySharedFormValues,
+  type CreatorAdditionalPlatformFormValues,
   type CreatorManagerDisplayName,
   type CreatorRegistrationType,
   type CreatorFormValues,
@@ -155,6 +156,14 @@ const emptyCreatorEntitySharedForm: CreatorEntitySharedFormValues = {
   bank_account: '',
 };
 
+const emptyCreatorAdditionalPlatformForm: CreatorAdditionalPlatformFormValues = {
+  joined_date: today,
+  platform_user_id: '',
+  platform_account: '',
+  platform_public_id: '',
+  creator_type: '5+1',
+};
+
 const creatorTypes: CreatorType[] = ['5+1', 'online', 'offline', 'company'];
 const followStatuses: FollowStatus[] = ['pending', 'following', 'interview', 'ready_onboarding'];
 
@@ -217,6 +226,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorEntitySharedForm, setCreatorEntitySharedForm] = useState<CreatorEntitySharedFormValues>(emptyCreatorEntitySharedForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
   const [editingCreatorEntityId, setEditingCreatorEntityId] = useState<string | null>(null);
+  const [addingCreatorPlatform, setAddingCreatorPlatform] = useState<{ creatorEntityId: string; platform: CreatorPlatform } | null>(null);
+  const [creatorAdditionalPlatformForm, setCreatorAdditionalPlatformForm] = useState<CreatorAdditionalPlatformFormValues>(emptyCreatorAdditionalPlatformForm);
   const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
@@ -359,6 +370,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       } else {
         setCreatorManagerNames([]);
       }
+
+      return creatorsWithVisibleScoutDisplayNames;
     } catch (loadError) {
       setError(`读取星探资料失败：${getErrorMessage(loadError)}`);
     } finally {
@@ -453,6 +466,35 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       await loadData();
     } catch (saveError) {
       setError(`保存主播资料失败：${getErrorMessage(saveError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitCreatorAdditionalPlatform(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!addingCreatorPlatform) return;
+    setSaving(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await scoutService.addCreatorEntityPlatformProfile(
+        addingCreatorPlatform.creatorEntityId,
+        addingCreatorPlatform.platform,
+        creatorAdditionalPlatformForm,
+      );
+      const refreshedCreators = await loadData();
+      const refreshedGroup = refreshedCreators
+        ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId)
+          .find((group) => group.profiles.some((creator) => creator.creator_entity_id === addingCreatorPlatform.creatorEntityId))
+        : undefined;
+      if (refreshedGroup) setSelectedCreatorGroup(refreshedGroup);
+      setAddingCreatorPlatform(null);
+      setCreatorAdditionalPlatformForm(emptyCreatorAdditionalPlatformForm);
+      setMessage(`${platformLabels[addingCreatorPlatform.platform]} 平台资料已添加。`);
+    } catch (saveError) {
+      setError(`添加平台资料失败：${getErrorMessage(saveError)}`);
     } finally {
       setSaving(false);
     }
@@ -634,6 +676,22 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
   }
 
+  function openCreatorAdditionalPlatform(group: CreatorProfileGroup, platform: CreatorPlatform) {
+    const primaryCreator = group.profiles[0];
+    if (!primaryCreator.creator_entity_id) return;
+    setCreatorAdditionalPlatformForm({
+      ...emptyCreatorAdditionalPlatformForm,
+      joined_date: primaryCreator.guild_joined_date ?? primaryCreator.joined_date,
+      creator_type: primaryCreator.creator_type,
+    });
+    setAddingCreatorPlatform({ creatorEntityId: primaryCreator.creator_entity_id, platform });
+  }
+
+  function closeCreatorAdditionalPlatformModal() {
+    setAddingCreatorPlatform(null);
+    setCreatorAdditionalPlatformForm(emptyCreatorAdditionalPlatformForm);
+  }
+
   function openCreatorStatus(creator: CreatorProfile) {
     setStatusCreator(creator);
   }
@@ -769,6 +827,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onClose={() => setSelectedCreatorGroup(null)}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
+          onAddPlatform={openCreatorAdditionalPlatform}
         />
       ) : null}
 
@@ -844,6 +903,17 @@ export function ScoutPage({ mode }: ScoutPageProps) {
             onSubmit={submitCreator}
           />
         )
+      ) : null}
+
+      {addingCreatorPlatform ? (
+        <CreatorAdditionalPlatformModal
+          platform={addingCreatorPlatform.platform}
+          values={creatorAdditionalPlatformForm}
+          saving={saving}
+          onChange={setCreatorAdditionalPlatformForm}
+          onClose={closeCreatorAdditionalPlatformModal}
+          onSubmit={submitCreatorAdditionalPlatform}
+        />
       ) : null}
 
       {statusCreator ? <CreatorStatusModal creator={statusCreator} saving={saving} onClose={closeCreatorStatus} onSetInvalid={setCreatorInvalid} onSetActive={setCreatorActive} /> : null}
@@ -1826,6 +1896,7 @@ function CreatorDetailDrawer({
   onClose,
   onEdit,
   onStatus,
+  onAddPlatform,
 }: {
   group: CreatorProfileGroup;
   managerDisplayNameByCreatorId: Record<string, string>;
@@ -1834,8 +1905,13 @@ function CreatorDetailDrawer({
   onClose: () => void;
   onEdit: (creator: CreatorProfile) => void;
   onStatus: (creator: CreatorProfile) => void;
+  onAddPlatform: (group: CreatorProfileGroup, platform: CreatorPlatform) => void;
 }) {
   const primaryCreator = group.profiles[0];
+  const platforms = new Set(group.profiles.map((creator) => creator.platform));
+  const missingPlatform = primaryCreator.creator_entity_id && group.profiles.length === 1
+    ? platforms.has('tiktok') ? 'douyin' : 'tiktok'
+    : null;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1902,6 +1978,12 @@ function CreatorDetailDrawer({
                 ) : null}
               </article>
             ))}
+            {canEdit && missingPlatform ? (
+              <button className="secondary-button compact-button" type="button" onClick={() => onAddPlatform(group, missingPlatform)}>
+                <Plus size={15} />
+                <span>添加{platformLabels[missingPlatform]}</span>
+              </button>
+            ) : null}
           </DrawerSection>
 
           <DrawerSection title="所属资料">
@@ -3246,6 +3328,58 @@ function FollowUpModal(props: {
           </div>
         </form>
       </div>
+    </SystemModal>
+  );
+}
+
+function CreatorAdditionalPlatformModal(props: {
+  platform: CreatorPlatform;
+  values: CreatorAdditionalPlatformFormValues;
+  saving: boolean;
+  onChange: (values: CreatorAdditionalPlatformFormValues) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const platformIdLabel = props.platform === 'tiktok' ? 'TikTok ID' : '抖音UID';
+  const platformAccountLabel = props.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名';
+  const platformPublicIdLabel = props.platform === 'tiktok' ? 'User ID' : '抖音号';
+  const updateValues = (values: Partial<CreatorAdditionalPlatformFormValues>) => {
+    props.onChange({ ...props.values, ...values });
+  };
+
+  return (
+    <SystemModal
+      title={`添加${platformLabels[props.platform]}`}
+      subtitle="总主播统计"
+      ariaLabel={`添加${platformLabels[props.platform]}平台资料`}
+      onClose={props.onClose}
+      footer={
+        <>
+          <button className="secondary-button compact-button" type="button" onClick={props.onClose}>
+            取消
+          </button>
+          <button className="primary-button compact-button" type="submit" form="creator-additional-platform-form" disabled={props.saving}>
+            {props.saving ? '保存中...' : '确认'}
+          </button>
+        </>
+      }
+    >
+      <form id="creator-additional-platform-form" onSubmit={props.onSubmit}>
+        <div className="form-grid">
+          <TextField label="平台" value={platformLabels[props.platform]} onChange={() => undefined} readOnly />
+          <TextField label="平台入会日期" type="date" value={props.values.joined_date} onChange={(value) => updateValues({ joined_date: value })} required />
+          <TextField label={platformIdLabel} value={props.values.platform_user_id} onChange={(value) => updateValues({ platform_user_id: value })} required />
+          <TextField label={platformAccountLabel} value={props.values.platform_account} onChange={(value) => updateValues({ platform_account: value })} required />
+          <TextField label={platformPublicIdLabel} value={props.values.platform_public_id} onChange={(value) => updateValues({ platform_public_id: value })} required />
+          <SelectField label="主播形式" value={props.values.creator_type} onChange={(value) => updateValues({ creator_type: value as CreatorType })}>
+            {creatorTypes.map((type) => (
+              <option key={type} value={type}>
+                {creatorTypeLabels[type]}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      </form>
     </SystemModal>
   );
 }
