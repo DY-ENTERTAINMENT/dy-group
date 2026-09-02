@@ -7420,11 +7420,13 @@ button.leave-chip:disabled {
   box-shadow: 0 0 0 3px var(--dy-purple-ring);
 }
 
-#creator-form .searchable-employee-select {
+#creator-form .searchable-employee-select,
+#creator-entity-shared-form .searchable-employee-select {
   position: relative;
 }
 
-#creator-form .searchable-employee-options {
+#creator-form .searchable-employee-options,
+#creator-entity-shared-form .searchable-employee-options {
   position: absolute;
   z-index: 20;
   top: 100%;
@@ -7439,7 +7441,9 @@ button.leave-chip:disabled {
 }
 
 #creator-form .searchable-employee-options button,
-#creator-form .searchable-employee-options p {
+#creator-form .searchable-employee-options p,
+#creator-entity-shared-form .searchable-employee-options button,
+#creator-entity-shared-form .searchable-employee-options p {
   display: block;
   width: 100%;
   margin: 0;
@@ -7451,7 +7455,8 @@ button.leave-chip:disabled {
   text-align: left;
 }
 
-#creator-form .searchable-employee-options button:hover {
+#creator-form .searchable-employee-options button:hover,
+#creator-entity-shared-form .searchable-employee-options button:hover {
   background: var(--dy-purple-soft);
 }
 

@@ -21,6 +21,7 @@ import {
   type CandidateFollowUpHistory,
   type CandidateFormValues,
   type CreatorEntityFormValues,
+  type CreatorEntitySharedFormValues,
   type CreatorManagerDisplayName,
   type CreatorRegistrationType,
   type CreatorFormValues,
@@ -142,6 +143,18 @@ const emptyCreatorEntityForm: CreatorEntityFormValues = {
   },
 };
 
+const emptyCreatorEntitySharedForm: CreatorEntitySharedFormValues = {
+  display_name: '',
+  registration_type: 'new_onboarding',
+  guild_joined_date: '',
+  region_id: '',
+  scout_employee_id: '',
+  manager_employee_id: '',
+  bank_account_name: '',
+  bank_name: '',
+  bank_account: '',
+};
+
 const creatorTypes: CreatorType[] = ['5+1', 'online', 'offline', 'company'];
 const followStatuses: FollowStatus[] = ['pending', 'following', 'interview', 'ready_onboarding'];
 
@@ -201,7 +214,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [creatorForm, setCreatorForm] = useState<CreatorFormValues>(emptyCreatorForm);
   const [creatorEntityForm, setCreatorEntityForm] = useState<CreatorEntityFormValues>(emptyCreatorEntityForm);
+  const [creatorEntitySharedForm, setCreatorEntitySharedForm] = useState<CreatorEntitySharedFormValues>(emptyCreatorEntitySharedForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
+  const [editingCreatorEntityId, setEditingCreatorEntityId] = useState<string | null>(null);
   const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
@@ -280,7 +295,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     try {
       const [nextOptions, nextCreators, nextCandidates, nextDailyWorkLogs, nextManagementWorkloadStats] = await Promise.all([
         scoutService.getOptions(),
-        scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
+        mode === 'personal-streamers'
+          ? scoutService.listPersonalStreamerProfiles()
+          : scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
         mode === 'personal-recruiting' ? scoutService.listDailyWorkLogs(month) : Promise.resolve([]),
         mode === 'management-recruiting' ? listManagementWorkloadStatsForView({ month, regionId: regionFilter, granularity: workloadGranularity, view: workloadView }) : Promise.resolve([]),
@@ -422,7 +439,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setMessage('');
 
     try {
-      if (editingCreator) {
+      if (editingCreatorEntityId) {
+        await scoutService.updateCreatorEntitySharedProfileData(editingCreatorEntityId, creatorEntitySharedForm);
+        setMessage('主播共同资料已更新。');
+      } else if (editingCreator) {
         await scoutService.updateCreator(editingCreator.id, creatorForm);
         setMessage('主播资料已更新。');
       } else {
@@ -546,6 +566,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   function openCreatorCreate(registrationType: CreatorRegistrationType = 'new_onboarding') {
     const currentEmployee = onboardingScoutOptions.find((employee) => employee.id === options.employees.find((option) => option.profile_id === profile?.id)?.id);
     setEditingCreator(null);
+    setEditingCreatorEntityId(null);
     setCreatorForm({
       ...emptyCreatorForm,
       scout_employee_id: currentEmployee?.id ?? '',
@@ -566,6 +587,25 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   }
 
   function openCreatorEdit(creator: CreatorProfile) {
+    if (creator.creator_entity_id) {
+      setEditingCreator(null);
+      setEditingCreatorEntityId(creator.creator_entity_id);
+      setCreatorEntitySharedForm({
+        display_name: creator.creator_name,
+        registration_type: creator.registration_type ?? 'new_onboarding',
+        guild_joined_date: creator.guild_joined_date ?? creator.joined_date,
+        region_id: creator.region_id ?? '',
+        scout_employee_id: creator.scout_employee_id ?? '',
+        manager_employee_id: creator.manager_employee_id ?? '',
+        bank_account_name: creator.bank_account_name ?? '',
+        bank_name: creator.bank_name ?? '',
+        bank_account: creator.bank_account ?? '',
+      });
+      setCreatorModalOpen(true);
+      return;
+    }
+
+    setEditingCreatorEntityId(null);
     setEditingCreator(creator);
     setCreatorForm({
       joined_date: creator.joined_date,
@@ -588,8 +628,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   function closeCreatorModal() {
     setCreatorModalOpen(false);
     setEditingCreator(null);
+    setEditingCreatorEntityId(null);
     setCreatorForm(emptyCreatorForm);
     setCreatorEntityForm(emptyCreatorEntityForm);
+    setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
   }
 
   function openCreatorStatus(creator: CreatorProfile) {
@@ -775,20 +817,33 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       ) : null}
 
       {creatorModalOpen ? (
-        <CreatorModal
-          values={creatorForm}
-          entityValues={creatorEntityForm}
-          options={options}
-          scoutOptions={creatorEntityForm.registration_type === 'existing_creator' ? historicalOnboardingScoutOptions : onboardingScoutOptions}
-          secondaryManagerOptions={secondaryManagerOptions}
-          managerOptions={managerOptions}
-          editingCreator={editingCreator}
-          saving={saving}
-          onChange={setCreatorForm}
-          onEntityChange={setCreatorEntityForm}
-          onClose={closeCreatorModal}
-          onSubmit={submitCreator}
-        />
+        editingCreatorEntityId ? (
+          <CreatorEntitySharedModal
+            values={creatorEntitySharedForm}
+            options={options}
+            scoutOptions={creatorEntitySharedForm.registration_type === 'existing_creator' ? historicalOnboardingScoutOptions : onboardingScoutOptions}
+            managerOptions={managerOptions}
+            saving={saving}
+            onChange={setCreatorEntitySharedForm}
+            onClose={closeCreatorModal}
+            onSubmit={submitCreator}
+          />
+        ) : (
+          <CreatorModal
+            values={creatorForm}
+            entityValues={creatorEntityForm}
+            options={options}
+            scoutOptions={creatorEntityForm.registration_type === 'existing_creator' ? historicalOnboardingScoutOptions : onboardingScoutOptions}
+            secondaryManagerOptions={secondaryManagerOptions}
+            managerOptions={managerOptions}
+            editingCreator={editingCreator}
+            saving={saving}
+            onChange={setCreatorForm}
+            onEntityChange={setCreatorEntityForm}
+            onClose={closeCreatorModal}
+            onSubmit={submitCreator}
+          />
+        )
       ) : null}
 
       {statusCreator ? <CreatorStatusModal creator={statusCreator} saving={saving} onClose={closeCreatorStatus} onSetInvalid={setCreatorInvalid} onSetActive={setCreatorActive} /> : null}
@@ -3195,6 +3250,66 @@ function FollowUpModal(props: {
   );
 }
 
+function CreatorEntitySharedModal(props: {
+  values: CreatorEntitySharedFormValues;
+  options: ScoutOptions;
+  scoutOptions: OnboardingScoutOption[];
+  managerOptions: OnboardingManagerOption[];
+  saving: boolean;
+  onChange: (values: CreatorEntitySharedFormValues) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const updateValues = (values: Partial<CreatorEntitySharedFormValues>) => {
+    props.onChange({ ...props.values, ...values });
+  };
+
+  return (
+    <SystemModal
+      title="编辑主播共同资料"
+      subtitle="总主播统计"
+      ariaLabel="主播共同资料"
+      onClose={props.onClose}
+      footer={
+        <>
+          <button className="secondary-button compact-button" type="button" onClick={props.onClose}>
+            取消
+          </button>
+          <button className="primary-button compact-button" type="submit" form="creator-entity-shared-form" disabled={props.saving}>
+            {props.saving ? '保存中...' : '确认'}
+          </button>
+        </>
+      }
+    >
+      <form id="creator-entity-shared-form" onSubmit={props.onSubmit}>
+        <div className="form-grid">
+          <div className="form-section-title">共同资料</div>
+          <TextField label="主播名字" value={props.values.display_name} onChange={(value) => updateValues({ display_name: value })} required />
+          <SelectField label="登记类型" value={props.values.registration_type} onChange={(value) => updateValues({ registration_type: value as CreatorRegistrationType })} required>
+            <option value="new_onboarding">新入公会</option>
+            <option value="existing_creator">现有主播补录</option>
+          </SelectField>
+          <TextField label={props.values.registration_type === 'existing_creator' ? '真实入公会日期' : '入会日期'} type="date" value={props.values.guild_joined_date} onChange={(value) => updateValues({ guild_joined_date: value })} required />
+          <SelectField label="区域" value={props.values.region_id} onChange={(value) => updateValues({ region_id: value })} required>
+            <option value="">请选择</option>
+            {props.options.regions.map((region) => (
+              <option key={region.id} value={region.id}>
+                {region.code}
+              </option>
+            ))}
+          </SelectField>
+          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} regionId={props.values.region_id} onChange={(value) => updateValues({ scout_employee_id: value })} placeholder="搜索星探" requireQueryBeforeResults excludeLeftOptions required />
+          <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => updateValues({ manager_employee_id: value })} placeholder="搜索经纪人" requireQueryBeforeResults excludeLeftOptions required />
+          <div className="form-section-title">银行资料</div>
+          <TextField label="银行账户名字" value={props.values.bank_account_name} onChange={(value) => updateValues({ bank_account_name: value })} required />
+          <TextField label="银行名字" value={props.values.bank_name} onChange={(value) => updateValues({ bank_name: value })} required />
+          <TextField label="银行账号" value={props.values.bank_account} onChange={(value) => updateValues({ bank_account: value })} required />
+        </div>
+      </form>
+    </SystemModal>
+  );
+}
+
 function CreatorModal(props: {
   values: CreatorFormValues;
   entityValues: CreatorEntityFormValues;
@@ -3480,6 +3595,8 @@ function SearchableEmployeeSelect({
   placeholder,
   required,
   hideLabel = false,
+  requireQueryBeforeResults = false,
+  excludeLeftOptions = false,
 }: {
   label: string;
   value: string;
@@ -3489,12 +3606,15 @@ function SearchableEmployeeSelect({
   placeholder: string;
   required?: boolean;
   hideLabel?: boolean;
+  requireQueryBeforeResults?: boolean;
+  excludeLeftOptions?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleOptions = options.filter((option) =>
     (!regionId || !option.region_id || option.region_id === regionId)
+    && (!excludeLeftOptions || option.employee_status !== 'left')
     && (!normalizedQuery || option.display_name.toLowerCase().includes(normalizedQuery)),
   );
   const selectedOption = options.find((option) => option.id === value);
@@ -3514,7 +3634,7 @@ function SearchableEmployeeSelect({
         onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
         onChange={(event) => { setQuery(event.target.value); setIsOpen(true); }}
       />
-      {isOpen ? (
+      {isOpen && (!requireQueryBeforeResults || normalizedQuery) ? (
         <div className="searchable-employee-options" role="listbox" aria-label={label}>
           {visibleOptions.length ? visibleOptions.map((option) => (
             <button key={option.id} type="button" role="option" aria-selected={option.id === value} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(option.id); setQuery(''); setIsOpen(false); }}>

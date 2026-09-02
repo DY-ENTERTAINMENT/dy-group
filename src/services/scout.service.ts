@@ -124,6 +124,18 @@ export type CreatorEntityFormValues = {
   platforms: Record<CreatorPlatform, CreatorPlatformFormValues>;
 };
 
+export type CreatorEntitySharedFormValues = {
+  display_name: string;
+  registration_type: CreatorRegistrationType;
+  guild_joined_date: string;
+  region_id: string;
+  scout_employee_id: string;
+  manager_employee_id: string;
+  bank_account_name: string;
+  bank_name: string;
+  bank_account: string;
+};
+
 export type CreatorProfile = {
   id: string;
   creator_entity_id: string | null;
@@ -458,6 +470,18 @@ export const scoutService = {
     });
   },
 
+  async listPersonalStreamerProfiles(): Promise<CreatorProfile[]> {
+    const { data, error } = await db.rpc('list_personal_streamer_profiles', { p_status: 'active' });
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => mapCreatorRow({
+      ...row,
+      regions: row.region_id ? { id: row.region_id, code: row.region_code, name: row.region_name } : null,
+      scout: row.scout_employee_id ? { id: row.scout_employee_id, full_name: row.scout_full_name, nickname: row.scout_nickname } : null,
+      manager: row.manager_employee_id ? { id: row.manager_employee_id, full_name: row.manager_full_name, nickname: row.manager_nickname } : null,
+    }));
+  },
+
   async listCreatorScoutDisplayNames(creatorProfileIds: string[]): Promise<CreatorScoutDisplayName[]> {
     const uniqueCreatorProfileIds = Array.from(new Set(creatorProfileIds.filter(Boolean)));
     if (uniqueCreatorProfileIds.length === 0) return [];
@@ -494,6 +518,23 @@ export const scoutService = {
 
   async updateCreator(creatorId: string, values: CreatorFormValues) {
     const { error } = await db.from('creator_profiles').update(await normalizeCreator(values)).eq('id', creatorId);
+    if (error) throw error;
+  },
+
+  async updateCreatorEntitySharedProfileData(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
+    const { error } = await db.rpc('update_creator_entity_shared_profile_data', {
+      p_creator_entity_id: creatorEntityId,
+      p_display_name: values.display_name.trim(),
+      p_region_id: values.region_id || null,
+      p_scout_employee_id: values.scout_employee_id || null,
+      p_manager_employee_id: values.manager_employee_id || null,
+      p_registration_type: values.registration_type,
+      p_guild_joined_date: values.guild_joined_date || null,
+      p_bank_account_name: values.bank_account_name.trim() || null,
+      p_bank_name: values.bank_name.trim() || null,
+      p_bank_account: values.bank_account.trim() || null,
+    });
+
     if (error) throw error;
   },
 
@@ -674,8 +715,8 @@ function mapCreatorRow(row: any): CreatorProfile {
   return {
     id: row.id,
     creator_entity_id: row.creator_entity_id,
-    registration_type: null,
-    guild_joined_date: null,
+    registration_type: row.registration_type ?? null,
+    guild_joined_date: row.guild_joined_date ?? null,
     joined_date: row.joined_date,
     platform: row.platform,
     platform_user_id: row.platform_user_id,
