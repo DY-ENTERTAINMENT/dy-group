@@ -180,11 +180,13 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [dailyWorkLogs, setDailyWorkLogs] = useState<DailyWorkLog[]>([]);
   const [managementWorkloadStats, setManagementWorkloadStats] = useState<ManagementWorkloadStat[]>([]);
   const [month, setMonth] = useState(currentMonth);
+  const [creatorStatsMonth, setCreatorStatsMonth] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
   const [scoutFilter, setScoutFilter] = useState('');
   const [managerFilter, setManagerFilter] = useState('');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
+  const [creatorRegistrationTypeFilter, setCreatorRegistrationTypeFilter] = useState<CreatorRegistrationType | ''>('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
   const [candidateStatusFilter, setCandidateStatusFilter] = useState<CandidateStatusFilter>('pending');
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
@@ -634,14 +636,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
   return (
     <section className={`scout-page${mode === 'recruit-list' ? ' scout-candidate-page' : ''}`}>
-      {mode !== 'recruit-list' ? (
+      {mode !== 'recruit-list' && mode !== 'personal-streamers' && mode !== 'management-streamers' ? (
         <div className="toolbar-actions staff-actions-row">
-          {mode === 'management-streamers' && canManageCreators ? (
-            <button className="secondary-action creator-create-action" type="button" onClick={() => openCreatorCreate()}>
-              <Plus size={17} />
-              <span>新增主播</span>
-            </button>
-          ) : null}
           <button className="secondary-action" type="button" onClick={loadData} disabled={loading}>
             <RefreshCw size={17} />
             <span>刷新</span>
@@ -693,23 +689,28 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       {mode === 'personal-streamers' || mode === 'management-streamers' ? (
         <CreatorStatsPanel
           loading={loading}
-          creators={filteredCreators}
+          creators={creators}
           options={options}
           isManagement={mode === 'management-streamers'}
-          canEdit={canManageCreators}
+          month={creatorStatsMonth}
+          canEdit={mode === 'management-streamers' && canManageCreators}
           canManageStatus={canManageCreatorStatus}
           platformFilter={platformFilter}
           regionFilter={regionFilter}
           scoutFilter={scoutFilter}
           managerFilter={managerFilter}
           creatorTypeFilter={creatorTypeFilter}
+          creatorRegistrationTypeFilter={creatorRegistrationTypeFilter}
           creatorStatusFilter={creatorStatusFilter}
           onPlatformFilter={setPlatformFilter}
+          onMonthChange={setCreatorStatsMonth}
           onRegionFilter={setRegionFilter}
           onScoutFilter={setScoutFilter}
           onManagerFilter={setManagerFilter}
           onCreatorTypeFilter={setCreatorTypeFilter}
+          onCreatorRegistrationTypeFilter={setCreatorRegistrationTypeFilter}
           onCreatorStatusFilter={setCreatorStatusFilter}
+          onRefresh={loadData}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
@@ -721,7 +722,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         <CreatorDetailDrawer
           group={selectedCreatorGroup}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
-          canEdit={canManageCreators}
+          canEdit={mode === 'management-streamers' && canManageCreators}
           canManageStatus={canManageCreatorStatus}
           onClose={() => setSelectedCreatorGroup(null)}
           onEdit={openCreatorEdit}
@@ -1378,6 +1379,7 @@ function CreatorStatsPanel({
   creators,
   options,
   isManagement,
+  month,
   canEdit,
   canManageStatus,
   platformFilter,
@@ -1385,13 +1387,17 @@ function CreatorStatsPanel({
   scoutFilter,
   managerFilter,
   creatorTypeFilter,
+  creatorRegistrationTypeFilter,
   creatorStatusFilter,
   onPlatformFilter,
+  onMonthChange,
   onRegionFilter,
   onScoutFilter,
   onManagerFilter,
   onCreatorTypeFilter,
+  onCreatorRegistrationTypeFilter,
   onCreatorStatusFilter,
+  onRefresh,
   managerDisplayNameByCreatorId,
   onEdit,
   onStatus,
@@ -1401,6 +1407,7 @@ function CreatorStatsPanel({
   creators: CreatorProfile[];
   options: ScoutOptions;
   isManagement: boolean;
+  month: string;
   canEdit: boolean;
   canManageStatus: boolean;
   platformFilter: string;
@@ -1408,21 +1415,37 @@ function CreatorStatsPanel({
   scoutFilter: string;
   managerFilter: string;
   creatorTypeFilter: string;
+  creatorRegistrationTypeFilter: CreatorRegistrationType | '';
   creatorStatusFilter: CreatorStatusFilter;
   onPlatformFilter: (value: string) => void;
+  onMonthChange: (value: string) => void;
   onRegionFilter: (value: string) => void;
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
   onCreatorTypeFilter: (value: string) => void;
+  onCreatorRegistrationTypeFilter: (value: CreatorRegistrationType | '') => void;
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
+  onRefresh: () => void;
   managerDisplayNameByCreatorId: Record<string, string>;
   onEdit: (creator: CreatorProfile) => void;
   onStatus: (creator: CreatorProfile) => void;
   onView: (group: CreatorProfileGroup) => void;
 }) {
   const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
-  const visibleCreators = useMemo(() => filterCreatorsBySearch(creators, creatorSearchQuery), [creators, creatorSearchQuery]);
-  const creatorGroups = useMemo(() => filterCreatorGroupsByPlatform(groupCreatorProfiles(visibleCreators, managerDisplayNameByCreatorId), platformFilter), [visibleCreators, managerDisplayNameByCreatorId, platformFilter]);
+  const creatorGroups = useMemo(
+    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId), {
+      month,
+      searchQuery: creatorSearchQuery,
+      platform: platformFilter,
+      regionId: regionFilter,
+      scoutId: scoutFilter,
+      managerId: managerFilter,
+      creatorType: creatorTypeFilter,
+      registrationType: creatorRegistrationTypeFilter,
+      status: creatorStatusFilter,
+    }),
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, platformFilter, regionFilter, scoutFilter],
+  );
   const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => getDefaultCreatorPageSize());
@@ -1435,7 +1458,7 @@ function CreatorStatsPanel({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, pageSize]);
+  }, [creatorRegistrationTypeFilter, creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, pageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -1447,20 +1470,25 @@ function CreatorStatsPanel({
       <CreatorFilters
         options={options}
         isManagement={isManagement}
+        month={month}
         searchQuery={creatorSearchQuery}
         platformFilter={platformFilter}
         regionFilter={regionFilter}
         scoutFilter={scoutFilter}
         managerFilter={managerFilter}
         creatorTypeFilter={creatorTypeFilter}
+        creatorRegistrationTypeFilter={creatorRegistrationTypeFilter}
         creatorStatusFilter={creatorStatusFilter}
         onPlatformFilter={onPlatformFilter}
+        onMonthChange={onMonthChange}
         onSearchQuery={setCreatorSearchQuery}
         onRegionFilter={onRegionFilter}
         onScoutFilter={onScoutFilter}
         onManagerFilter={onManagerFilter}
         onCreatorTypeFilter={onCreatorTypeFilter}
+        onCreatorRegistrationTypeFilter={onCreatorRegistrationTypeFilter}
         onCreatorStatusFilter={onCreatorStatusFilter}
+        onRefresh={onRefresh}
       />
       {loading ? (
         <div className="table-state">正在读取主播统计...</div>
@@ -1513,28 +1541,40 @@ function CreatorSummaryCard({ title, value, icon, logoUrl }: { title: string; va
 function CreatorFilters(props: {
   options: ScoutOptions;
   isManagement: boolean;
+  month: string;
   searchQuery: string;
   platformFilter: string;
   regionFilter: string;
   scoutFilter: string;
   managerFilter: string;
   creatorTypeFilter: string;
+  creatorRegistrationTypeFilter: CreatorRegistrationType | '';
   creatorStatusFilter: CreatorStatusFilter;
   onPlatformFilter: (value: string) => void;
+  onMonthChange: (value: string) => void;
   onSearchQuery: (value: string) => void;
   onRegionFilter: (value: string) => void;
   onScoutFilter: (value: string) => void;
   onManagerFilter: (value: string) => void;
   onCreatorTypeFilter: (value: string) => void;
+  onCreatorRegistrationTypeFilter: (value: CreatorRegistrationType | '') => void;
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
+  onRefresh: () => void;
 }) {
   return (
     <div className="scout-filters">
+      <label className="form-field">
+        <span>月份</span>
+        <select value={props.month} onChange={(event) => props.onMonthChange(event.target.value)}>
+          <option value="">全部</option>
+          <CreatorMonthOptions selectedMonth={props.month} />
+        </select>
+      </label>
       <label className="form-field creator-search-field">
         <span>搜索</span>
         <div className="creator-search-input">
           <Search size={16} />
-          <input value={props.searchQuery} onChange={(event) => props.onSearchQuery(event.target.value)} placeholder="搜索主播名字 / 主播号 / UID" />
+          <input value={props.searchQuery} onChange={(event) => props.onSearchQuery(event.target.value)} placeholder="搜索主播名字 / 用户名 / ID / 公开 ID" />
         </div>
       </label>
       <SelectField label="平台" value={props.platformFilter} onChange={props.onPlatformFilter}>
@@ -1563,6 +1603,11 @@ function CreatorFilters(props: {
           </option>
         ))}
       </SelectField>
+      <SelectField label="登记类型" value={props.creatorRegistrationTypeFilter} onChange={(value) => props.onCreatorRegistrationTypeFilter(value as CreatorRegistrationType | '')}>
+        <option value="">全部</option>
+        <option value="new_onboarding">新入公会</option>
+        <option value="existing_creator">现有主播补录</option>
+      </SelectField>
       {props.isManagement ? (
         <SelectField label="状态" value={props.creatorStatusFilter} onChange={(value) => props.onCreatorStatusFilter(value as CreatorStatusFilter)}>
           <option value="active">在职</option>
@@ -1570,8 +1615,27 @@ function CreatorFilters(props: {
           <option value="all">全部</option>
         </SelectField>
       ) : null}
+      <button className="secondary-action creator-refresh-action" type="button" onClick={props.onRefresh}>
+        <RefreshCw size={16} />
+        <span>刷新</span>
+      </button>
     </div>
   );
+}
+
+function CreatorMonthOptions({ selectedMonth }: { selectedMonth: string }) {
+  const months = useMemo(() => {
+    const options: string[] = [];
+    const current = new Date();
+    for (let offset = -24; offset <= 24; offset += 1) {
+      const date = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+      options.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+    }
+    if (selectedMonth && !options.includes(selectedMonth)) options.push(selectedMonth);
+    return options.sort().reverse();
+  }, [selectedMonth]);
+
+  return <>{months.map((value) => <option key={value} value={value}>{value}</option>)}</>;
 }
 
 function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: CreatorProfileGroup[]; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
@@ -1581,7 +1645,8 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
         <thead>
           <tr>
             <th>主播名字</th>
-            <th>平台账号（UID / 类型）</th>
+            <th>平台资料</th>
+            <th>区域</th>
             <th>经纪人</th>
             {showScout ? <th>星探</th> : null}
             <th>状态</th>
@@ -1593,21 +1658,26 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
             <tr key={group.id} className="creator-profile-row">
               <td>
                 <strong className="creator-row-name">{group.displayName}</strong>
+                <span className={`creator-row-registration creator-row-registration--${group.profiles.some((creator) => creator.registration_type === 'existing_creator') ? 'existing' : 'new'}`}>{getCreatorRegistrationTypeLabel(group.profiles)}</span>
               </td>
               <td>
                 <div className="creator-platform-lines">
                   {group.profiles.map((creator) => (
-                    <div key={creator.id} className="creator-platform-line">
+                    <div key={creator.id} className={`creator-platform-line creator-platform-line--${creator.platform}`}>
                       <span className="creator-platform-name">
                         <PlatformLogo platform={creator.platform} />
                         <span>{platformLabels[creator.platform]}</span>
                       </span>
-                      <span className="creator-platform-uid"><span>UID</span> {creator.platform_user_id}</span>
-                      <CreatorTypeBadge type={creator.creator_type} />
+                      <span className="creator-platform-details">
+                        <span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}：{creator.platform_account}</span>
+                        <span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音UID'}：{creator.platform_user_id}</span>
+                        <span>主播形式：{creatorTypeLabels[creator.creator_type]}</span>
+                      </span>
                     </div>
                   ))}
                 </div>
               </td>
+              <td>{getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')}</td>
               <td>{group.managerName}</td>
               {showScout ? <td>{group.scoutName}</td> : null}
               <td>
@@ -1682,7 +1752,7 @@ function CreatorPagination({
 }
 
 function CreatorTypeBadge({ type }: { type: CreatorType }) {
-  return <span className={`creator-type-badge creator-type-badge--${type === '5+1' ? 'plus' : 'standard'}`}>{type === '5+1' ? '5+1' : '非5+1'}</span>;
+  return <span className={`creator-type-badge creator-type-badge--${type === '5+1' ? 'plus' : 'standard'} creator-type-badge--${type.replace('+', '-plus-')}`}>{creatorTypeLabels[type]}</span>;
 }
 
 function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
@@ -1754,8 +1824,9 @@ function CreatorDetailDrawer({
                   </strong>
                   <CreatorTypeBadge type={creator.creator_type} />
                 </div>
-                <DrawerField label="主播号" value={creator.platform_account} />
-                <DrawerField label="UID" value={creator.platform_user_id} />
+                <DrawerField label={creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={creator.platform_account} />
+                <DrawerField label={creator.platform === 'tiktok' ? 'TikTok ID' : '抖音UID'} value={creator.platform_user_id} />
+                <DrawerField label={creator.platform === 'tiktok' ? 'TikTok User ID' : '抖音号'} value={creator.platform_public_id ?? '-'} />
                 <DrawerField label="加入日期" value={creator.joined_date} />
                 <DrawerField label="主播形式" value={creatorTypeLabels[creator.creator_type]} />
                 <DrawerField label="状态" value={<CreatorStatusBadge status={(creator.status ?? 'active') as CreatorStatus} />} />
@@ -1789,14 +1860,17 @@ function CreatorDetailDrawer({
           <DrawerSection title="主播资料">
             <div className="creator-drawer-field-grid">
               <DrawerField label="主播形式" value={getCreatorTypeDetail(group.profiles)} />
+              <DrawerField label="登记类型" value={getCreatorRegistrationTypeLabel(group.profiles)} />
+              <DrawerField label="真实入公会日期" value={getConsistentValue(group.profiles, (creator) => creator.guild_joined_date ?? creator.joined_date)} />
               <DrawerField label="状态" value={<CreatorStatusBadge status={group.status} />} />
             </div>
           </DrawerSection>
 
           <DrawerSection title="银行资料">
             <div className="creator-drawer-field-grid">
-              <DrawerField label="银行" value={getConsistentValue(group.profiles, (creator) => creator.bank_name ?? '') || primaryCreator.bank_name || '-'} />
-              <DrawerField label="银行户口" value={getConsistentValue(group.profiles, (creator) => creator.bank_account ?? '') || primaryCreator.bank_account || '-'} />
+              <DrawerField label="银行账户名字" value={getConsistentValue(group.profiles, (creator) => creator.bank_account_name ?? '') || primaryCreator.bank_account_name || '-'} />
+              <DrawerField label="银行名字" value={getConsistentValue(group.profiles, (creator) => creator.bank_name ?? '') || primaryCreator.bank_name || '-'} />
+              <DrawerField label="银行账号" value={getConsistentValue(group.profiles, (creator) => creator.bank_account ?? '') || primaryCreator.bank_account || '-'} />
             </div>
           </DrawerSection>
         </div>
@@ -3488,23 +3562,43 @@ function summarizeCreatorGroups(groups: CreatorProfileGroup[]): CreatorGroupSumm
   );
 }
 
-function filterCreatorGroupsByPlatform(groups: CreatorProfileGroup[], platformFilter: string) {
-  if (platformFilter !== 'dual_platform') return groups;
+function filterCreatorGroups(
+  groups: CreatorProfileGroup[],
+  filters: {
+    month: string;
+    searchQuery: string;
+    platform: string;
+    regionId: string;
+    scoutId: string;
+    managerId: string;
+    creatorType: string;
+    registrationType: CreatorRegistrationType | '';
+    status: CreatorStatusFilter;
+  },
+) {
+  const searchQuery = filters.searchQuery.trim().toLowerCase();
 
   return groups.filter((group) => {
-    if (!group.profiles.some((creator) => creator.creator_entity_id)) return false;
-    const platforms = new Set(group.profiles.map((creator) => creator.platform));
-    return platforms.has('tiktok') && platforms.has('douyin');
+    const profiles = group.profiles;
+    const hasProfile = (matches: (creator: CreatorProfile) => boolean) => profiles.some(matches);
+
+    if (filters.month && !hasProfile((creator) => (creator.guild_joined_date ?? creator.joined_date).startsWith(filters.month))) return false;
+    if (filters.platform === 'dual_platform') {
+      const platforms = new Set(profiles.map((creator) => creator.platform));
+      if (!platforms.has('tiktok') || !platforms.has('douyin')) return false;
+    } else if (filters.platform && !hasProfile((creator) => creator.platform === filters.platform)) return false;
+    if (filters.regionId && !hasProfile((creator) => creator.region_id === filters.regionId)) return false;
+    if (filters.scoutId && !hasProfile((creator) => creator.scout_employee_id === filters.scoutId)) return false;
+    if (filters.managerId && !hasProfile((creator) => creator.manager_employee_id === filters.managerId)) return false;
+    if (filters.creatorType && !hasProfile((creator) => creator.creator_type === filters.creatorType)) return false;
+    if (filters.registrationType && !hasProfile((creator) => creator.registration_type === filters.registrationType)) return false;
+    if (filters.status !== 'all' && !hasProfile((creator) => (creator.status ?? 'active') === filters.status)) return false;
+    if (searchQuery && !hasProfile((creator) =>
+      [creator.creator_name, creator.platform_account, creator.platform_user_id, creator.platform_public_id ?? '']
+        .some((value) => value.toLowerCase().includes(searchQuery)),
+    )) return false;
+    return true;
   });
-}
-
-function filterCreatorsBySearch(creators: CreatorProfile[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return creators;
-
-  return creators.filter((creator) =>
-    [creator.creator_name, creator.platform_account, creator.platform_user_id].some((value) => value.toLowerCase().includes(normalizedQuery)),
-  );
 }
 
 function getDefaultCreatorPageSize() {
@@ -3563,6 +3657,10 @@ function getCreatorTypeDetail(creators: CreatorProfile[]) {
   return sortCreatorProfiles(creators)
     .map((creator) => `${platformLabels[creator.platform]}：${creatorTypeLabels[creator.creator_type]}`)
     .join(' ｜ ');
+}
+
+function getCreatorRegistrationTypeLabel(creators: CreatorProfile[]) {
+  return getConsistentValue(creators, (creator) => creator.registration_type === 'existing_creator' ? '现有主播补录' : '新入公会');
 }
 
 function getConsistentValue(creators: CreatorProfile[], getValue: (creator: CreatorProfile) => string) {
