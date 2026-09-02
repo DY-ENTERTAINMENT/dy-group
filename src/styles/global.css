@@ -8269,6 +8269,23 @@ button.leave-chip:disabled {
   width: 16%;
 }
 
+.creator-profile-table--with-scout th:nth-child(1),
+.creator-profile-table--with-scout td:nth-child(1) { width: 16%; }
+
+.creator-profile-table--with-scout th:nth-child(2),
+.creator-profile-table--with-scout td:nth-child(2) { width: 38%; }
+
+.creator-profile-table--with-scout th:nth-child(3),
+.creator-profile-table--with-scout td:nth-child(3),
+.creator-profile-table--with-scout th:nth-child(4),
+.creator-profile-table--with-scout td:nth-child(4) { width: 12%; }
+
+.creator-profile-table--with-scout th:nth-child(5),
+.creator-profile-table--with-scout td:nth-child(5) { width: 9%; }
+
+.creator-profile-table--with-scout th:nth-child(6),
+.creator-profile-table--with-scout td:nth-child(6) { width: 13%; }
+
 .creator-profile-table thead th {
   padding: 8px 12px;
   border-bottom: 0;
@@ -8854,6 +8871,15 @@ button.leave-chip:disabled {
       linear-gradient(135deg, rgba(167, 139, 250, 0.42), rgba(244, 114, 182, 0.28)) border-box;
   }
 
+  .creator-profile-table--with-scout tbody tr {
+    grid-template-areas:
+      "name status"
+      "platforms platforms"
+      "manager manager"
+      "scout scout"
+      "action action";
+  }
+
   .creator-profile-table tbody td {
     width: 100%;
     padding: 0;
@@ -8907,6 +8933,35 @@ button.leave-chip:disabled {
   }
 
   .creator-profile-table tbody td:nth-child(5) {
+    grid-area: action;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .creator-profile-table--with-scout tbody td:nth-child(4) {
+    grid-area: scout;
+    display: grid;
+    gap: 3px;
+    padding-top: 2px;
+    color: var(--text);
+    font-weight: 800;
+  }
+
+  .creator-profile-table--with-scout tbody td:nth-child(4)::before {
+    content: '星探';
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .creator-profile-table--with-scout tbody td:nth-child(5) {
+    grid-area: status;
+    justify-self: end;
+    align-self: center;
+    width: auto;
+  }
+
+  .creator-profile-table--with-scout tbody td:nth-child(6) {
     grid-area: action;
     display: flex;
     justify-content: flex-end;

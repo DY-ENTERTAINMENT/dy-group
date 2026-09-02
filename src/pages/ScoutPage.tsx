@@ -152,6 +152,7 @@ type CreatorProfileGroup = {
   displayName: string;
   profiles: CreatorProfile[];
   managerName: string;
+  scoutName: string;
   status: CreatorGroupStatus;
 };
 
@@ -286,9 +287,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       const creatorsWithScoutDisplayNames = mode === 'management-recruiting'
         ? await attachScoutDisplayNames(nextCreators)
         : nextCreators;
+      const creatorsWithVisibleScoutDisplayNames = mode === 'management-streamers'
+        ? await attachVisibleScoutDisplayNames(creatorsWithScoutDisplayNames)
+        : creatorsWithScoutDisplayNames;
 
       setOptions(nextOptions);
-      setCreators(creatorsWithScoutDisplayNames);
+      setCreators(creatorsWithVisibleScoutDisplayNames);
       setCandidates(nextCandidates);
       setDailyWorkLogs(nextDailyWorkLogs);
       setManagementWorkloadStats(nextManagementWorkloadStats);
@@ -357,6 +361,31 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     } catch (displayNameError) {
       console.error('Failed to load scout display names', displayNameError);
       return nextCreators;
+    }
+  }
+
+  async function attachVisibleScoutDisplayNames(nextCreators: CreatorProfile[]) {
+    try {
+      const scoutDisplayNames = await scoutService.listVisibleCreatorScoutDisplayNames({
+        creatorEntityIds: nextCreators.flatMap((creator) => creator.creator_entity_id ? [creator.creator_entity_id] : []),
+        creatorProfileIds: nextCreators.flatMap((creator) => creator.creator_entity_id ? [] : [creator.id]),
+      });
+      const displayNameByEntityId = new Map(
+        scoutDisplayNames.filter((scout) => scout.creator_entity_id).map((scout) => [scout.creator_entity_id!, scout.scout_display_name]),
+      );
+      const displayNameByProfileId = new Map(
+        scoutDisplayNames.filter((scout) => scout.creator_profile_id).map((scout) => [scout.creator_profile_id!, scout.scout_display_name]),
+      );
+
+      return nextCreators.map((creator) => ({
+        ...creator,
+        scout_display_name: creator.creator_entity_id
+          ? displayNameByEntityId.get(creator.creator_entity_id) ?? null
+          : displayNameByProfileId.get(creator.id) ?? null,
+      }));
+    } catch (displayNameError) {
+      console.error('Failed to load visible creator scout display names', displayNameError);
+      return nextCreators.map((creator) => ({ ...creator, scout_display_name: null }));
     }
   }
 
@@ -1439,7 +1468,7 @@ function CreatorStatsPanel({
         <div className="table-state">暂无主播资料。</div>
       ) : (
         <>
-          <CreatorTable creatorGroups={paginatedCreatorGroups} onView={onView} />
+          <CreatorTable creatorGroups={paginatedCreatorGroups} showScout={isManagement} onView={onView} />
           <CreatorPagination
             currentPage={safeCurrentPage}
             pageSize={pageSize}
@@ -1545,15 +1574,16 @@ function CreatorFilters(props: {
   );
 }
 
-function CreatorTable({ creatorGroups, onView }: { creatorGroups: CreatorProfileGroup[]; onView: (group: CreatorProfileGroup) => void }) {
+function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: CreatorProfileGroup[]; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
   return (
     <div className="creator-list-wrap">
-      <table className="staff-table scout-table creator-profile-table">
+      <table className={`staff-table scout-table creator-profile-table${showScout ? ' creator-profile-table--with-scout' : ''}`}>
         <thead>
           <tr>
             <th>主播名字</th>
             <th>平台账号（UID / 类型）</th>
             <th>经纪人</th>
+            {showScout ? <th>星探</th> : null}
             <th>状态</th>
             <th>操作</th>
           </tr>
@@ -1579,6 +1609,7 @@ function CreatorTable({ creatorGroups, onView }: { creatorGroups: CreatorProfile
                 </div>
               </td>
               <td>{group.managerName}</td>
+              {showScout ? <td>{group.scoutName}</td> : null}
               <td>
                 <CreatorStatusBadge status={group.status} />
               </td>
@@ -3434,6 +3465,7 @@ function groupCreatorProfiles(creators: CreatorProfile[], managerDisplayNameByCr
       displayName: getConsistentValue(sortedProfiles, (creator) => creator.creator_name),
       profiles: sortedProfiles,
       managerName: getConsistentValue(sortedProfiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId)),
+      scoutName: getCreatorScoutName(sortedProfiles),
       status: getCreatorGroupStatus(sortedProfiles),
     };
   });
@@ -3503,6 +3535,11 @@ function sortCreatorProfiles(creators: CreatorProfile[]) {
 
 function getCreatorManagerName(creator: CreatorProfile, managerDisplayNameByCreatorId: Record<string, string>) {
   return getEmployeeName(creator.manager) || managerDisplayNameByCreatorId[creator.id] || '';
+}
+
+function getCreatorScoutName(creators: CreatorProfile[]) {
+  const scoutName = getConsistentValue(creators, (creator) => creator.scout_display_name ?? '');
+  return scoutName === '-' ? '—' : scoutName;
 }
 
 function getCreatorGroupStatus(creators: CreatorProfile[]): CreatorGroupStatus {

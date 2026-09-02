@@ -184,6 +184,13 @@ export type CreatorScoutDisplayName = {
   display_name: string | null;
 };
 
+export type VisibleCreatorScoutDisplayName = {
+  creator_entity_id: string | null;
+  creator_profile_id: string | null;
+  scout_employee_id: string | null;
+  scout_display_name: string | null;
+};
+
 export type RecruitSummary = {
   total: number;
   plusFiveOne: number;
@@ -313,6 +320,19 @@ export const scoutService = {
       manager_employee_id: manager.manager_employee_id,
       manager_display_name: manager.manager_display_name,
     }));
+  },
+
+  async listVisibleCreatorScoutDisplayNames(input: { creatorEntityIds: string[]; creatorProfileIds: string[] }): Promise<VisibleCreatorScoutDisplayName[]> {
+    const creatorEntityIds = Array.from(new Set(input.creatorEntityIds.filter(Boolean)));
+    const creatorProfileIds = Array.from(new Set(input.creatorProfileIds.filter(Boolean)));
+    if (creatorEntityIds.length === 0 && creatorProfileIds.length === 0) return [];
+
+    const { data, error } = await db.rpc('get_visible_creator_scout_display_names', {
+      p_creator_entity_ids: creatorEntityIds,
+      p_creator_profile_ids: creatorProfileIds,
+    });
+    if (error) throw error;
+    return data ?? [];
   },
 
   async listCandidates(profileId: string): Promise<Candidate[]> {
