@@ -150,6 +150,7 @@ const independentPermissionItems: PermissionItem[] = [
     level: 0,
   },
 ];
+const scoutAssignmentEligiblePermissionKey = 'scout-assignment-eligible';
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -682,6 +683,7 @@ function PermissionManagementPanel() {
   const [attendanceRequired, setAttendanceRequired] = useState(true);
   const [managedRegionIds, setManagedRegionIds] = useState<string[]>([]);
   const [ownedSpecialPermissionAccess, setOwnedSpecialPermissionAccess] = useState<PermissionState>({});
+  const [scoutAssignmentEligible, setScoutAssignmentEligible] = useState(false);
   const [specialTemplatePermissionMap, setSpecialTemplatePermissionMap] = useState<Record<string, PermissionState>>({});
   const [newSpecialName, setNewSpecialName] = useState('');
   const [employeePermissionSearch, setEmployeePermissionSearch] = useState('');
@@ -723,9 +725,10 @@ function PermissionManagementPanel() {
         attendanceRequired,
         managedRegionIds,
         ownedSpecialPermissionAccess,
+        scoutAssignmentEligible,
         specialName: getCurrentSpecialPermissionName(modalTarget, newSpecialName),
       }),
-    [attendanceRequired, managedRegionIds, modalPermissions, modalTarget, newSpecialName, ownedSpecialPermissionAccess],
+    [attendanceRequired, managedRegionIds, modalPermissions, modalTarget, newSpecialName, ownedSpecialPermissionAccess, scoutAssignmentEligible],
   );
   const isDirty = Boolean(modalTarget) && currentPermissionSnapshot !== initialPermissionSnapshot;
 
@@ -778,12 +781,14 @@ function PermissionManagementPanel() {
     attendanceRequired: boolean;
     managedRegionIds: string[];
     ownedSpecialPermissionAccess: PermissionState;
+    scoutAssignmentEligible: boolean;
     specialName: string;
   }) {
     setModalPermissions(input.permissions);
     setAttendanceRequired(input.attendanceRequired);
     setManagedRegionIds(input.managedRegionIds);
     setOwnedSpecialPermissionAccess(input.ownedSpecialPermissionAccess);
+    setScoutAssignmentEligible(input.scoutAssignmentEligible);
     setInitialPermissionSnapshot(createPermissionSnapshot(input));
   }
 
@@ -803,6 +808,7 @@ function PermissionManagementPanel() {
           attendanceRequired: true,
           managedRegionIds: [],
           ownedSpecialPermissionAccess: {},
+          scoutAssignmentEligible: false,
           specialName: '',
         });
         return;
@@ -815,6 +821,7 @@ function PermissionManagementPanel() {
           attendanceRequired: true,
           managedRegionIds: [],
           ownedSpecialPermissionAccess: {},
+          scoutAssignmentEligible: false,
           specialName: target.title,
         });
         return;
@@ -827,6 +834,12 @@ function PermissionManagementPanel() {
           attendanceRequired: savedProfile.requireAttendance,
           managedRegionIds: savedProfile.regionIds,
           ownedSpecialPermissionAccess: savedProfile.specialPermissionAccess,
+          scoutAssignmentEligible: savedProfile.directOverrides.some((override) =>
+            override.permission_key === scoutAssignmentEligiblePermissionKey
+            && override.effect === 'grant'
+            && override.can_view
+            && override.can_use,
+          ),
           specialName: '',
         });
         return;
@@ -837,6 +850,7 @@ function PermissionManagementPanel() {
         attendanceRequired: true,
         managedRegionIds: [],
         ownedSpecialPermissionAccess: {},
+        scoutAssignmentEligible: false,
         specialName: '',
       });
     } catch (loadError) {
@@ -848,6 +862,7 @@ function PermissionManagementPanel() {
   function closePermissionModal() {
     setModalTarget(null);
     setModalPermissions({});
+    setScoutAssignmentEligible(false);
     setNewSpecialName('');
     setInitialPermissionSnapshot('');
   }
@@ -860,7 +875,10 @@ function PermissionManagementPanel() {
     setMessage('');
 
     try {
-      assertKnownPermissionKeys(modalPermissions, permissionItems);
+      const employeePermissions = modalTarget.type === 'employee'
+        ? withScoutAssignmentEligiblePermission(modalPermissions, scoutAssignmentEligible)
+        : modalPermissions;
+      assertKnownPermissionKeys(employeePermissions, permissionItems, modalTarget.type === 'employee');
 
       if (modalTarget.type === 'jobTitle') {
         await permissionManagementService.saveJobTitlePermissions(modalTarget.id, modalPermissions);
@@ -887,7 +905,7 @@ function PermissionManagementPanel() {
           regionIds: managedRegionIds,
           specialPermissionAccess: ownedSpecialPermissionAccess,
           specialPermissionTemplates,
-          permissions: modalPermissions,
+          permissions: employeePermissions,
         });
         setEmployees((current) =>
           current.map((employee) =>
@@ -903,6 +921,7 @@ function PermissionManagementPanel() {
           attendanceRequired,
           managedRegionIds,
           ownedSpecialPermissionAccess,
+          scoutAssignmentEligible,
           specialName: modalTarget.type === 'special' ? getCurrentSpecialPermissionName(modalTarget, newSpecialName) : '',
         }),
       );
@@ -1175,6 +1194,18 @@ function PermissionManagementPanel() {
                   ))}
                 </div>
               </PermissionBlock>
+
+              <PermissionBlock title="星探指定资格">
+                <p>允许该员工被指定为主播的主星探或协同星探，不代表页面访问权限。</p>
+                <label className="permission-check">
+                  <input
+                    checked={scoutAssignmentEligible}
+                    type="checkbox"
+                    onChange={(event) => setScoutAssignmentEligible(event.target.checked)}
+                  />
+                  <span>允许指定为星探</span>
+                </label>
+              </PermissionBlock>
             </div>
           ) : null}
 
@@ -1384,8 +1415,9 @@ function mergePermissionState(defaultState: PermissionState, savedState: Permiss
   }, {});
 }
 
-function assertKnownPermissionKeys(permissions: PermissionState, items: PermissionItem[]) {
+function assertKnownPermissionKeys(permissions: PermissionState, items: PermissionItem[], allowScoutAssignmentEligible = false) {
   const knownKeys = new Set(items.map((item) => item.key));
+  if (allowScoutAssignmentEligible) knownKeys.add(scoutAssignmentEligiblePermissionKey);
   const unknownKeys = Object.keys(permissions).filter((key) => !knownKeys.has(key));
 
   if (unknownKeys.length > 0) {
@@ -1398,6 +1430,7 @@ function createPermissionSnapshot(input: {
   attendanceRequired: boolean;
   managedRegionIds: string[];
   ownedSpecialPermissionAccess: PermissionState;
+  scoutAssignmentEligible: boolean;
   specialName: string;
 }) {
   const permissions = Object.keys(input.permissions)
@@ -1425,8 +1458,19 @@ function createPermissionSnapshot(input: {
         };
         return state;
       }, {}),
+    scoutAssignmentEligible: input.scoutAssignmentEligible,
     specialName: input.specialName.trim(),
   });
+}
+
+function withScoutAssignmentEligiblePermission(permissions: PermissionState, enabled: boolean): PermissionState {
+  return {
+    ...permissions,
+    [scoutAssignmentEligiblePermissionKey]: {
+      view: enabled,
+      use: enabled,
+    },
+  };
 }
 
 function getCurrentSpecialPermissionName(target: PermissionModalTarget | null, newSpecialName: string) {

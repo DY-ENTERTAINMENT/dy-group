@@ -7470,6 +7470,33 @@ button.leave-chip:disabled {
   accent-color: var(--dy-purple);
 }
 
+#creator-form .collaborator-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#creator-form .collaborator-row .collaborator-toggle {
+  flex: 0 0 auto;
+}
+
+#creator-form .collaborator-row .searchable-employee-select {
+  flex: 0 1 calc(50% - 6px);
+  align-self: center;
+  width: calc(50% - 6px);
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  #creator-form .collaborator-row .searchable-employee-select {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+
 .platform-form-section-title {
   margin-top: 12px;
   color: var(--dy-purple-dark);

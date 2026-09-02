@@ -1,5 +1,5 @@
 ﻿import { supabase } from '../lib/supabase';
-import type { CandidateFollowStatus, Employee, ManagementScoutWorkloadStat, Region, ScoutDailyWorkLog } from '../types/database';
+import type { CandidateFollowStatus, Employee, EmployeeStatus, ManagementScoutWorkloadStat, Region, ScoutDailyWorkLog } from '../types/database';
 
 export type CandidateStatus = 'pending' | 'accepted' | 'rejected';
 export type FollowStatus = CandidateFollowStatus;
@@ -166,6 +166,7 @@ export type OnboardingScoutOption = {
   id: string;
   display_name: string;
   region_id: string;
+  employee_status?: EmployeeStatus;
 };
 
 export type OnboardingCollaboratorOption = OnboardingScoutOption;
@@ -276,14 +277,17 @@ export const scoutService = {
     }));
   },
 
-  async listOnboardingScoutOptions(): Promise<OnboardingScoutOption[]> {
-    const { data, error } = await db.rpc('get_scout_onboarding_scout_options');
+  async listOnboardingScoutOptions(registrationType: CreatorRegistrationType): Promise<OnboardingScoutOption[]> {
+    const { data, error } = await db.rpc('get_scout_onboarding_scout_options', {
+      p_registration_type: registrationType,
+    });
     if (error) throw error;
 
-    return ((data ?? []) as Array<{ employee_id: string; display_name: string; region_id: string }>).map((employee) => ({
+    return ((data ?? []) as Array<{ employee_id: string; display_name: string; region_id: string; employee_status: EmployeeStatus }>).map((employee) => ({
       id: employee.employee_id,
       display_name: employee.display_name,
       region_id: employee.region_id,
+      employee_status: employee.employee_status,
     }));
   },
 

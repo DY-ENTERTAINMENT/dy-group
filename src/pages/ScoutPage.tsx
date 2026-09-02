@@ -37,6 +37,7 @@ import {
   type ScoutOptions,
   type WorkloadGranularity,
 } from '../services/scout.service';
+import type { EmployeeStatus } from '../types/database';
 
 type ScoutPageMode = 'personal-recruiting' | 'recruit-list' | 'onboarding' | 'personal-streamers' | 'management-recruiting' | 'management-streamers';
 
@@ -170,6 +171,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
   const [onboardingScoutOptions, setOnboardingScoutOptions] = useState<OnboardingScoutOption[]>([]);
+  const [historicalOnboardingScoutOptions, setHistoricalOnboardingScoutOptions] = useState<OnboardingScoutOption[]>([]);
   const [secondaryManagerOptions, setSecondaryManagerOptions] = useState<OnboardingCollaboratorOption[]>([]);
   const [creatorManagerNames, setCreatorManagerNames] = useState<CreatorManagerDisplayName[]>([]);
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
@@ -306,10 +308,16 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       }
 
       try {
-        setOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions());
+        setOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions('new_onboarding'));
       } catch (scoutOptionsError) {
         console.error('Failed to load onboarding scout options', scoutOptionsError);
         setOnboardingScoutOptions([]);
+      }
+      try {
+        setHistoricalOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions('existing_creator'));
+      } catch (historicalScoutOptionsError) {
+        console.error('Failed to load historical onboarding scout options', historicalScoutOptionsError);
+        setHistoricalOnboardingScoutOptions([]);
       }
       try {
         setSecondaryManagerOptions(await scoutService.listOnboardingCollaboratorOptions('manager'));
@@ -741,7 +749,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           values={creatorForm}
           entityValues={creatorEntityForm}
           options={options}
-          scoutOptions={onboardingScoutOptions}
+          scoutOptions={creatorEntityForm.registration_type === 'existing_creator' ? historicalOnboardingScoutOptions : onboardingScoutOptions}
           secondaryManagerOptions={secondaryManagerOptions}
           managerOptions={managerOptions}
           editingCreator={editingCreator}
@@ -3168,20 +3176,18 @@ function CreatorModal(props: {
             </SelectField>
             <SearchableEmployeeSelect label="星探" value={props.entityValues.scout_employee_id} options={props.scoutOptions} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ scout_employee_id: value })} placeholder="搜索星探" required />
             <SearchableEmployeeSelect label="经纪人" value={props.entityValues.manager_employee_id} options={props.managerOptions} onChange={(value) => updateEntity({ manager_employee_id: value })} placeholder="搜索经纪人" required />
-            <label className="form-field collaborator-toggle-field">
-              <span>协同星探</span>
-              <span className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_scout} onChange={(event) => updateEntity({ has_secondary_scout: event.target.checked })} /> 还有第二位星探</span>
-            </label>
-            {props.entityValues.has_secondary_scout ? (
-              <SearchableEmployeeSelect label="第二位星探" value={props.entityValues.secondary_scout_employee_id} options={props.scoutOptions.filter((scout) => scout.id !== props.entityValues.scout_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_scout_employee_id: value })} placeholder="搜索星探" required />
-            ) : null}
-            <label className="form-field collaborator-toggle-field">
-              <span>协同经纪人</span>
-              <span className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_manager} onChange={(event) => updateEntity({ has_secondary_manager: event.target.checked })} /> 还有第二位经纪人</span>
-            </label>
-            {props.entityValues.has_secondary_manager ? (
-              <SearchableEmployeeSelect label="第二位经纪人" value={props.entityValues.secondary_manager_employee_id} options={props.secondaryManagerOptions.filter((manager) => manager.id !== props.entityValues.manager_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_manager_employee_id: value })} placeholder="搜索经纪人" required />
-            ) : null}
+            <div className="form-field-wide collaborator-row">
+              <label className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_scout} onChange={(event) => updateEntity({ has_secondary_scout: event.target.checked })} /> 还有第二位星探</label>
+              {props.entityValues.has_secondary_scout ? (
+                <SearchableEmployeeSelect label="第二位星探" hideLabel value={props.entityValues.secondary_scout_employee_id} options={props.scoutOptions.filter((scout) => scout.id !== props.entityValues.scout_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_scout_employee_id: value })} placeholder="搜索星探" required />
+              ) : null}
+            </div>
+            <div className="form-field-wide collaborator-row">
+              <label className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_manager} onChange={(event) => updateEntity({ has_secondary_manager: event.target.checked })} /> 还有第二位经纪人</label>
+              {props.entityValues.has_secondary_manager ? (
+                <SearchableEmployeeSelect label="第二位经纪人" hideLabel value={props.entityValues.secondary_manager_employee_id} options={props.secondaryManagerOptions.filter((manager) => manager.id !== props.entityValues.manager_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_manager_employee_id: value })} placeholder="搜索经纪人" required />
+              ) : null}
+            </div>
 
             <div className="form-section-title">平台</div>
             <div className="platform-checkbox-grid">
@@ -3354,6 +3360,7 @@ type SearchableEmployeeOption = {
   id: string;
   display_name: string;
   region_id?: string;
+  employee_status?: EmployeeStatus;
 };
 
 function SearchableEmployeeSelect({
@@ -3364,6 +3371,7 @@ function SearchableEmployeeSelect({
   onChange,
   placeholder,
   required,
+  hideLabel = false,
 }: {
   label: string;
   value: string;
@@ -3372,6 +3380,7 @@ function SearchableEmployeeSelect({
   onChange: (value: string) => void;
   placeholder: string;
   required?: boolean;
+  hideLabel?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -3381,13 +3390,15 @@ function SearchableEmployeeSelect({
     && (!normalizedQuery || option.display_name.toLowerCase().includes(normalizedQuery)),
   );
   const selectedOption = options.find((option) => option.id === value);
-  const inputValue = isOpen ? query : selectedOption?.display_name ?? query;
+  const formatDisplayName = (option: SearchableEmployeeOption) => option.employee_status === 'left' ? `${option.display_name}（已离职）` : option.display_name;
+  const inputValue = isOpen ? query : selectedOption ? formatDisplayName(selectedOption) : query;
 
   return (
     <div className="form-field searchable-employee-select">
-      <span>{label}</span>
+      {hideLabel ? null : <span>{label}</span>}
       <input
         type="search"
+        aria-label={hideLabel ? label : undefined}
         value={inputValue}
         placeholder={placeholder}
         required={required}
@@ -3399,7 +3410,7 @@ function SearchableEmployeeSelect({
         <div className="searchable-employee-options" role="listbox" aria-label={label}>
           {visibleOptions.length ? visibleOptions.map((option) => (
             <button key={option.id} type="button" role="option" aria-selected={option.id === value} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(option.id); setQuery(''); setIsOpen(false); }}>
-              {option.display_name}
+              {formatDisplayName(option)}
             </button>
           )) : <p>没有符合条件的人员</p>}
         </div>

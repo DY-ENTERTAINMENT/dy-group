@@ -20,12 +20,17 @@ export type EmployeePermissionProfile = {
   regionIds: string[];
   specialPermissionAccess: PermissionState;
   permissions: PermissionState;
+  directOverrides: EmployeePermissionOverride[];
 };
 
 type PermissionRow = {
   permission_key: string;
   can_view: boolean;
   can_use: boolean;
+};
+
+export type EmployeePermissionOverride = PermissionRow & {
+  effect: 'grant' | 'deny';
 };
 
 type SpecialPermissionRow = SpecialPermissionTemplate;
@@ -145,7 +150,7 @@ export const permissionManagementService = {
         .select('can_view, can_use, special_permission_templates(name)')
         .eq('employee_id', employeeId)
         .eq('is_enabled', true),
-      db.from('employee_permission_overrides').select('permission_key, can_view, can_use').eq('employee_id', employeeId),
+      db.from('employee_permission_overrides').select('permission_key, can_view, can_use, effect').eq('employee_id', employeeId),
     ]);
 
     if (settingsResult.error) throw settingsResult.error;
@@ -158,6 +163,7 @@ export const permissionManagementService = {
       regionIds: (regionsResult.data ?? []).map((row: { region_id: string }) => row.region_id),
       specialPermissionAccess: rowsToSpecialPermissionAccess(specialResult.data ?? []),
       permissions: rowsToPermissionState(overridesResult.data ?? []),
+      directOverrides: (overridesResult.data ?? []) as EmployeePermissionOverride[],
     };
   },
 
