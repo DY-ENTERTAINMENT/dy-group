@@ -33,6 +33,9 @@ create table public.replacement_work_change_requests (
 create unique index replacement_work_change_one_pending_per_source_idx
   on public.replacement_work_change_requests(source_replacement_leave_request_id)
   where status = 'pending';
+create unique index replacement_work_change_one_approved_per_source_idx
+  on public.replacement_work_change_requests(source_replacement_leave_request_id)
+  where status = 'approved';
 create index replacement_work_change_employee_created_idx
   on public.replacement_work_change_requests(employee_id, created_at desc);
 create index replacement_work_change_pending_created_idx
@@ -107,6 +110,7 @@ begin
   where lr.id = p_source_replacement_leave_request_id for update;
   if source_row.id is null or source_row.leave_type <> 'replacement' or source_row.status <> 'approved' then raise exception 'Only approved replacement leave can be changed.'; end if;
   if source_row.profile_id <> auth.uid() then raise exception 'Employees can only change their own replacement leave.'; end if;
+  if exists (select 1 from public.replacement_work_change_requests c where c.source_replacement_leave_request_id = source_row.id and c.status = 'approved') then raise exception '该调休补班已完成变更，如需再次调整请联系 HR。'; end if;
   if not public.current_user_has_region_feature_permission('replacement-leave', 'use') then raise exception 'Replacement leave is not enabled in this region.'; end if;
   select coalesce((select c.requested_makeup_date from public.replacement_work_change_requests c
     where c.source_replacement_leave_request_id = source_row.id and c.status = 'approved' and c.change_type = 'reschedule'
@@ -134,13 +138,15 @@ create or replace function public.review_replacement_work_change_request(p_reque
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare change_row record; source_row record; effective_date date; adjustment_id uuid; adjusted_end time;
 begin
-  select c.*, lr.id source_id, lr.status source_status, lr.leave_type, e.region_id, e.profile_id, e.start_work_time, e.end_work_time into change_row
+  select c.*, lr.id source_id, lr.employee_id source_employee_id, lr.status source_status, lr.leave_type, e.region_id, e.profile_id, e.start_work_time, e.end_work_time into change_row
   from public.replacement_work_change_requests c join public.leave_requests lr on lr.id=c.source_replacement_leave_request_id join public.employees e on e.id=c.employee_id and e.deleted_at is null
   where c.id=p_request_id for update;
   if change_row.id is null or change_row.status <> 'pending' then raise exception 'Only pending replacement work changes can be reviewed.'; end if;
   if not public.current_user_can_review_leave_requests() or not public.current_user_can_access_region(change_row.region_id) then raise exception 'No permission to review this replacement work change.'; end if;
   if p_status not in ('approved','rejected') then raise exception 'Invalid review status.'; end if;
   if p_status='rejected' and length(btrim(coalesce(p_note,'')))=0 then raise exception 'Review note is required when rejecting.'; end if;
+  if p_status='approved' and change_row.employee_id is distinct from change_row.source_employee_id then raise exception 'Replacement work change employee does not match the source leave request.'; end if;
+  if p_status='approved' and exists (select 1 from public.replacement_work_change_requests c where c.source_replacement_leave_request_id=change_row.source_replacement_leave_request_id and c.status='approved' and c.id <> change_row.id) then raise exception '该调休补班已完成其他变更，如需再次调整请联系 HR。'; end if;
   select coalesce((select c.requested_makeup_date from public.replacement_work_change_requests c where c.source_replacement_leave_request_id=change_row.source_replacement_leave_request_id and c.status='approved' and c.change_type='reschedule' order by c.reviewed_at desc, c.created_at desc limit 1), change_row.original_makeup_date) into effective_date;
   if change_row.source_status <> 'approved' or change_row.leave_type <> 'replacement' then raise exception 'Source replacement leave is no longer valid.'; end if;
   if public.replacement_makeup_has_clock_in(change_row.employee_id, effective_date) then raise exception 'Make-up work has already started and cannot be changed from the employee portal.'; end if;
@@ -175,7 +181,6 @@ revoke all on function public.replacement_makeup_has_clock_in(uuid,date) from pu
 revoke all on function public.get_effective_replacement_work_changes(date,date,uuid) from public, anon, authenticated;
 revoke all on function public.create_replacement_work_change_request(uuid,text,date,time,text) from public, anon, authenticated;
 revoke all on function public.review_replacement_work_change_request(uuid,text,text) from public, anon, authenticated;
-grant execute on function public.replacement_makeup_has_clock_in(uuid,date) to authenticated;
 grant execute on function public.get_effective_replacement_work_changes(date,date,uuid) to authenticated;
 grant execute on function public.create_replacement_work_change_request(uuid,text,date,time,text) to authenticated;
 grant execute on function public.review_replacement_work_change_request(uuid,text,text) to authenticated;

@@ -85,6 +85,13 @@ export function LeavePage() {
     });
     return dates;
   }, [replacementChanges]);
+  const approvedChangesBySource = useMemo(() => {
+    const changes = new Map<string, (typeof replacementChanges)[number]>();
+    replacementChanges.filter((change) => change.status === 'approved').forEach((change) => {
+      if (!changes.has(change.source_replacement_leave_request_id)) changes.set(change.source_replacement_leave_request_id, change);
+    });
+    return changes;
+  }, [replacementChanges]);
   const isCurrentRestCycle = restCycle === getCurrentRestCycle();
   const restLocked =
     !isCurrentRestCycle ||
@@ -361,7 +368,7 @@ export function LeavePage() {
             ) : requests.length === 0 ? (
               <div className="table-state">暂无请假申请。</div>
             ) : (
-              <LeaveRequestTable requests={requests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable requests={requests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -545,7 +552,7 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
   </SystemModal>;
 }
 
-function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeFormValues['changeType'] }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
   return (
     <div className="staff-table-wrap">
       <table className="staff-table">
@@ -569,7 +576,7 @@ function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesByS
                 <span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span>
               </td>
               <td>{request.review_note || '-'}</td>
-              <td>{request.leave_type === 'replacement' && request.status === 'approved' && !pendingSourceIds.has(request.id) && !clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date) ? <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button> : '-'}</td>
+              <td>{request.leave_type === 'replacement' && request.status === 'approved' && approvedChangesBySource.has(request.id) ? replacementWorkChangeLabels[approvedChangesBySource.get(request.id)!.change_type] : request.leave_type === 'replacement' && request.status === 'approved' && !pendingSourceIds.has(request.id) && !clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date) ? <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button> : '-'}</td>
             </tr>
           ))}
         </tbody>
