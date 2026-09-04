@@ -7460,6 +7460,20 @@ button.leave-chip:disabled {
   background: var(--dy-purple-soft);
 }
 
+#creator-entity-shared-form .searchable-employee-clear {
+  margin-top: 6px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+#creator-entity-shared-form .searchable-employee-clear:hover {
+  color: var(--dy-purple);
+}
+
 #creator-form .collaborator-toggle {
   display: inline-flex;
   align-items: center;

@@ -29,6 +29,11 @@ export type AgentOptions = {
   currentEmployee: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'> | null;
 };
 
+export type PersonalManagerCreatorProfile = CreatorProfile & {
+  secondary_manager_employee_id?: string | null;
+  secondary_manager_display_name?: string | null;
+};
+
 export type AdjustmentTargetEmployee = Pick<Employee, 'id' | 'employee_code' | 'full_name' | 'nickname' | 'email' | 'region_id'>;
 export type AdjustmentTargetType = 'manager' | 'scout';
 
@@ -363,6 +368,16 @@ export const agentService = {
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).filter((row: any) => !filters.month || String(row.joined_date).startsWith(filters.month)).map(mapCreatorRow);
+  },
+
+  async listPersonalManagerCreatorProfiles(filters: { month?: string; platform?: string; regionId?: string } = {}): Promise<PersonalManagerCreatorProfile[]> {
+    const { data, error } = await db.rpc('list_personal_manager_creator_profiles', { p_status: 'active' });
+    if (error) throw error;
+    return (data ?? [])
+      .filter((row: any) => !filters.month || String(row.joined_date).startsWith(filters.month))
+      .filter((row: any) => !filters.platform || row.platform === filters.platform)
+      .filter((row: any) => !filters.regionId || row.region_id === filters.regionId)
+      .map(mapPersonalManagerCreatorRow);
   },
 
   async listRevenueData(input: { profileId?: string; month: string; platform?: string; regionId?: string; management?: boolean }) {
@@ -708,6 +723,8 @@ function mapCreatorRow(row: any): CreatorProfile {
     scout_profile_id: row.scout_profile_id,
     manager_employee_id: row.manager_employee_id,
     creator_type: row.creator_type,
+    status: row.status,
+    bank_account_name: row.bank_account_name,
     bank_name: row.bank_name,
     bank_account: row.bank_account,
     created_at: row.created_at,
@@ -715,6 +732,19 @@ function mapCreatorRow(row: any): CreatorProfile {
     region: row.regions,
     scout: row.scout,
     manager: row.manager,
+  };
+}
+
+function mapPersonalManagerCreatorRow(row: any): PersonalManagerCreatorProfile {
+  return {
+    ...mapCreatorRow({
+      ...row,
+      regions: row.region_id ? { id: row.region_id, code: row.region_code, name: row.region_name } : null,
+      scout: row.scout_employee_id ? { id: row.scout_employee_id, full_name: row.scout_full_name, nickname: row.scout_nickname } : null,
+      manager: row.manager_employee_id ? { id: row.manager_employee_id, full_name: row.manager_full_name, nickname: row.manager_nickname } : null,
+    }),
+    secondary_manager_employee_id: row.secondary_manager_employee_id ?? null,
+    secondary_manager_display_name: row.secondary_manager_display_name ?? null,
   };
 }
 
