@@ -26,6 +26,7 @@ import {
   type DesignRequest,
   type DesignRequestType,
   type ManagementRevenueRecord,
+  type PersonalManagerCreatorProfile,
   type RevenuePeriodSetting,
   type RevenuePeriodSettingSaveInput,
   type WeeklyRevenueRecord,
@@ -85,7 +86,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [reviewPlatform, setReviewPlatform] = useState('');
   const [reviewType, setReviewType] = useState('');
   const [reviewSearch, setReviewSearch] = useState('');
-  const [creators, setCreators] = useState<CreatorProfile[]>([]);
+  const [creators, setCreators] = useState<PersonalManagerCreatorProfile[]>([]);
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [adjustments, setAdjustments] = useState<AdjustmentRequest[]>([]);
   const [adjustmentReviews, setAdjustmentReviews] = useState<AdjustmentReviewRequest[]>([]);
@@ -124,8 +125,11 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       const defaultRegion = regionId || nextOptions.currentEmployee?.region_id || '';
       if (!regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
 
-      if ((mode === 'revenue' || mode === 'creators') && profile?.id) {
+      if (mode === 'revenue' && profile?.id) {
         setCreators(await agentService.listManagedCreators(profile.id, { regionId: defaultRegion }));
+      }
+      if (mode === 'creators') {
+        setCreators(await agentService.listPersonalManagerCreatorProfiles({ regionId: defaultRegion }));
       }
       if (mode === 'adjustments' && profile?.id) {
         setAdjustments(await agentService.listAdjustments(profile.id));
@@ -285,6 +289,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
           regionId={regionId}
           options={options}
           creators={creators}
+          currentEmployeeId={options.currentEmployee?.id ?? null}
           onSearch={setCreatorSearch}
           onPlatform={setCreatorPlatform}
           onCreatorType={setCreatorType}
@@ -319,6 +324,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       {selectedCreatorGroup ? (
         <CreatorDetailDrawer
           group={selectedCreatorGroup}
+          currentEmployeeId={options.currentEmployee?.id ?? null}
           onClose={() => setSelectedCreatorGroup(null)}
           onAdjustment={(creatorProfile) => openAdjustmentForCreator(selectedCreatorGroup, creatorProfile)}
         />
@@ -1449,6 +1455,7 @@ function CreatorDataPanel(props: {
   regionId: string;
   options: AgentOptions;
   creators: CreatorProfile[];
+  currentEmployeeId: string | null;
   onSearch: (value: string) => void;
   onPlatform: (value: string) => void;
   onCreatorType: (value: string) => void;
@@ -1459,7 +1466,7 @@ function CreatorDataPanel(props: {
   onAdjustment: (group: CreatorProfileGroup, creatorProfile?: CreatorProfile) => void;
 }) {
   const creatorGroups = useMemo(() => {
-    const groups = groupCreatorProfiles(props.creators);
+    const groups = groupCreatorProfiles(props.creators, props.currentEmployeeId);
     return filterCreatorGroups(groups, {
       search: props.search,
       platform: props.platform,
@@ -1467,7 +1474,7 @@ function CreatorDataPanel(props: {
       status: props.status,
       completeness: props.completeness,
     });
-  }, [props.completeness, props.creatorType, props.creators, props.platform, props.search, props.status]);
+  }, [props.completeness, props.creatorType, props.creators, props.currentEmployeeId, props.platform, props.search, props.status]);
   const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
 
   return (
@@ -1542,7 +1549,7 @@ type CreatorCompleteness = 'complete' | 'missing' | 'critical';
 type CreatorProfileGroup = {
   id: string;
   displayName: string;
-  profiles: CreatorProfile[];
+  profiles: PersonalManagerCreatorProfile[];
   platforms: Set<CreatorPlatform>;
   regionName: string;
   scoutName: string;
@@ -1662,7 +1669,8 @@ function CompletenessBadge({ completeness }: { completeness: CreatorCompleteness
   return <span className={`agent-creator-completeness-badge agent-creator-completeness-badge--${completeness}`}>{getCompletenessLabel(completeness)}</span>;
 }
 
-function CreatorDetailDrawer({ group, onClose, onAdjustment }: { group: CreatorProfileGroup; onClose: () => void; onAdjustment: (creatorProfile?: CreatorProfile) => void }) {
+function CreatorDetailDrawer({ group, currentEmployeeId, onClose, onAdjustment }: { group: CreatorProfileGroup; currentEmployeeId: string | null; onClose: () => void; onAdjustment: (creatorProfile?: CreatorProfile) => void }) {
+  const secondaryManagerName = group.profiles.find((creator) => creator.secondary_manager_display_name)?.secondary_manager_display_name ?? '—';
   return (
     <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
       <aside className="agent-creator-drawer" role="dialog" aria-modal="true" aria-label="主播资料" onMouseDown={(event) => event.stopPropagation()}>
@@ -1678,7 +1686,8 @@ function CreatorDetailDrawer({ group, onClose, onAdjustment }: { group: CreatorP
             <div className="agent-creator-drawer-grid">
               <DrawerField label="主播名" value={group.displayName} />
               <DrawerField label="区域" value={group.regionName} />
-              <DrawerField label="经纪人" value={group.managerName} />
+              <DrawerField label="主经纪人" value={group.managerName} />
+              <DrawerField label="第二位经纪人" value={secondaryManagerName} />
               <DrawerField label="星探" value={group.scoutName} />
               <DrawerField label="主播状态" value={<CreatorStatusBadge status={group.status} />} />
               <DrawerField label="资料完整度" value={<CompletenessBadge completeness={group.completeness} />} />
@@ -1700,8 +1709,8 @@ function CreatorDetailDrawer({ group, onClose, onAdjustment }: { group: CreatorP
                 <DrawerField label="公会状态" value={getOptionalCreatorField(creator, 'membership_status') || '-'} />
                 <DrawerField label="退出日期" value={getOptionalCreatorField(creator, 'exited_date') || '-'} />
                 <DrawerField label="退出原因" value={getOptionalCreatorField(creator, 'exited_reason') || '-'} />
-                <DrawerField label="银行" value={creator.bank_name || '-'} />
-                <DrawerField label="银行户口" value={creator.bank_account || '-'} />
+                <DrawerField label="银行" value={creator.manager_employee_id === currentEmployeeId ? creator.bank_name || '-' : '-'} />
+                <DrawerField label="银行户口" value={creator.manager_employee_id === currentEmployeeId ? creator.bank_account || '-' : '-'} />
               </div>
               <button className="secondary-button compact-button" type="button" onClick={() => onAdjustment(creator)}>申请修改资料</button>
             </DrawerSection>
@@ -2971,8 +2980,8 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
   return <label className="form-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
 }
 
-function groupCreatorProfiles(creators: CreatorProfile[]): CreatorProfileGroup[] {
-  const groups = new Map<string, CreatorProfile[]>();
+function groupCreatorProfiles(creators: PersonalManagerCreatorProfile[], currentEmployeeId: string | null): CreatorProfileGroup[] {
+  const groups = new Map<string, PersonalManagerCreatorProfile[]>();
   creators.forEach((creator) => {
     const key = creator.creator_entity_id ? `entity:${creator.creator_entity_id}` : `profile:${creator.id}`;
     groups.set(key, [...(groups.get(key) ?? []), creator]);
@@ -2980,7 +2989,7 @@ function groupCreatorProfiles(creators: CreatorProfile[]): CreatorProfileGroup[]
 
   return Array.from(groups.entries()).map(([id, profiles]) => {
     const sortedProfiles = sortCreatorProfiles(profiles);
-    const completeness = getCreatorCompleteness(sortedProfiles);
+    const completeness = getCreatorCompleteness(sortedProfiles, currentEmployeeId);
     return {
       id,
       displayName: getConsistentValue(sortedProfiles, (creator) => creator.creator_name),
@@ -3031,7 +3040,7 @@ function summarizeCreatorGroups(groups: CreatorProfileGroup[]): CreatorGroupSumm
   }, { total: 0, tiktok: 0, douyin: 0, dualPlatform: 0, incomplete: 0 });
 }
 
-function getCreatorCompleteness(profiles: CreatorProfile[]): CreatorCompleteness {
+function getCreatorCompleteness(profiles: CreatorProfile[], currentEmployeeId: string | null): CreatorCompleteness {
   const hasCriticalMissing = profiles.some((creator) =>
     !creator.creator_name
     || !creator.region_id
@@ -3046,7 +3055,8 @@ function getCreatorCompleteness(profiles: CreatorProfile[]): CreatorCompleteness
   if (hasCriticalMissing) return 'critical';
 
   const hasMissingBank = profiles.some((creator) =>
-    ['5+1', 'online', 'offline', 'company'].includes(creator.creator_type)
+    creator.manager_employee_id === currentEmployeeId
+    && ['5+1', 'online', 'offline', 'company'].includes(creator.creator_type)
     && (!creator.bank_account_name || !creator.bank_name || !creator.bank_account),
   );
   return hasMissingBank ? 'missing' : 'complete';

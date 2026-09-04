@@ -23,6 +23,7 @@ import {
   type CreatorEntityFormValues,
   type CreatorEntitySharedFormValues,
   type CreatorAdditionalPlatformFormValues,
+  type CreatorEntityCollaborator,
   type CreatorManagerDisplayName,
   type CreatorRegistrationType,
   type CreatorFormValues,
@@ -154,6 +155,8 @@ const emptyCreatorEntitySharedForm: CreatorEntitySharedFormValues = {
   bank_account_name: '',
   bank_name: '',
   bank_account: '',
+  secondary_scout_employee_id: '',
+  secondary_manager_employee_id: '',
 };
 
 const emptyCreatorAdditionalPlatformForm: CreatorAdditionalPlatformFormValues = {
@@ -226,6 +229,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorEntitySharedForm, setCreatorEntitySharedForm] = useState<CreatorEntitySharedFormValues>(emptyCreatorEntitySharedForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
   const [editingCreatorEntityId, setEditingCreatorEntityId] = useState<string | null>(null);
+  const [creatorEntityCollaborators, setCreatorEntityCollaborators] = useState<CreatorEntityCollaborator[]>([]);
   const [addingCreatorPlatform, setAddingCreatorPlatform] = useState<{ creatorEntityId: string; platform: CreatorPlatform } | null>(null);
   const [creatorAdditionalPlatformForm, setCreatorAdditionalPlatformForm] = useState<CreatorAdditionalPlatformFormValues>(emptyCreatorAdditionalPlatformForm);
   const [statusCreator, setStatusCreator] = useState<CreatorProfile | null>(null);
@@ -453,7 +457,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
     try {
       if (editingCreatorEntityId) {
-        await scoutService.updateCreatorEntitySharedProfileData(editingCreatorEntityId, creatorEntitySharedForm);
+        await scoutService.saveCreatorEntitySharedData(editingCreatorEntityId, creatorEntitySharedForm);
         setMessage('主播共同资料已更新。');
       } else if (editingCreator) {
         await scoutService.updateCreator(editingCreator.id, creatorForm);
@@ -628,26 +632,36 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorModalOpen(true);
   }
 
-  function openCreatorEdit(creator: CreatorProfile) {
+  async function openCreatorEdit(creator: CreatorProfile) {
     if (creator.creator_entity_id) {
-      setEditingCreator(null);
-      setEditingCreatorEntityId(creator.creator_entity_id);
-      setCreatorEntitySharedForm({
-        display_name: creator.creator_name,
-        registration_type: creator.registration_type ?? 'new_onboarding',
-        guild_joined_date: creator.guild_joined_date ?? creator.joined_date,
-        region_id: creator.region_id ?? '',
-        scout_employee_id: creator.scout_employee_id ?? '',
-        manager_employee_id: creator.manager_employee_id ?? '',
-        bank_account_name: creator.bank_account_name ?? '',
-        bank_name: creator.bank_name ?? '',
-        bank_account: creator.bank_account ?? '',
-      });
-      setCreatorModalOpen(true);
+      setError('');
+      try {
+        const collaborators = await scoutService.getCreatorEntityCollaborators(creator.creator_entity_id);
+        setCreatorEntityCollaborators(collaborators);
+        setEditingCreator(null);
+        setEditingCreatorEntityId(creator.creator_entity_id);
+        setCreatorEntitySharedForm({
+          display_name: creator.creator_name,
+          registration_type: creator.registration_type ?? 'new_onboarding',
+          guild_joined_date: creator.guild_joined_date ?? creator.joined_date,
+          region_id: creator.region_id ?? '',
+          scout_employee_id: creator.scout_employee_id ?? '',
+          manager_employee_id: creator.manager_employee_id ?? '',
+          bank_account_name: creator.bank_account_name ?? '',
+          bank_name: creator.bank_name ?? '',
+          bank_account: creator.bank_account ?? '',
+          secondary_scout_employee_id: collaborators.find((collaborator) => collaborator.assignment_type === 'scout')?.employee_id ?? '',
+          secondary_manager_employee_id: collaborators.find((collaborator) => collaborator.assignment_type === 'manager')?.employee_id ?? '',
+        });
+        setCreatorModalOpen(true);
+      } catch (collaboratorError) {
+        setError(`读取第二协作者失败：${getErrorMessage(collaboratorError)}`);
+      }
       return;
     }
 
     setEditingCreatorEntityId(null);
+    setCreatorEntityCollaborators([]);
     setEditingCreator(creator);
     setCreatorForm({
       joined_date: creator.joined_date,
@@ -674,6 +688,25 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorForm(emptyCreatorForm);
     setCreatorEntityForm(emptyCreatorEntityForm);
     setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
+    setCreatorEntityCollaborators([]);
+  }
+
+  async function openCreatorDetails(group: CreatorProfileGroup) {
+    setCreatorEntityCollaborators([]);
+    setSelectedCreatorGroup(group);
+    const creatorEntityId = group.profiles[0]?.creator_entity_id;
+    if (!creatorEntityId || !permissions.canView('management-streamer-stats')) return;
+
+    try {
+      setCreatorEntityCollaborators(await scoutService.getCreatorEntityCollaborators(creatorEntityId));
+    } catch (collaboratorError) {
+      console.error('Failed to load creator collaborators', collaboratorError);
+    }
+  }
+
+  function closeCreatorDetails() {
+    setSelectedCreatorGroup(null);
+    setCreatorEntityCollaborators([]);
   }
 
   function openCreatorAdditionalPlatform(group: CreatorProfileGroup, platform: CreatorPlatform) {
@@ -814,17 +847,18 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
-          onView={setSelectedCreatorGroup}
+          onView={openCreatorDetails}
         />
       ) : null}
 
       {selectedCreatorGroup ? (
         <CreatorDetailDrawer
           group={selectedCreatorGroup}
+          collaborators={creatorEntityCollaborators}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           canEdit={mode === 'management-streamers' && canManageCreators}
           canManageStatus={canManageCreatorStatus}
-          onClose={() => setSelectedCreatorGroup(null)}
+          onClose={closeCreatorDetails}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
           onAddPlatform={openCreatorAdditionalPlatform}
@@ -882,6 +916,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
             options={options}
             scoutOptions={creatorEntitySharedForm.registration_type === 'existing_creator' ? historicalOnboardingScoutOptions : onboardingScoutOptions}
             managerOptions={managerOptions}
+            collaborators={creatorEntityCollaborators}
             saving={saving}
             onChange={setCreatorEntitySharedForm}
             onClose={closeCreatorModal}
@@ -1890,6 +1925,7 @@ function PlatformLogo({ platform }: { platform: CreatorPlatform }) {
 
 function CreatorDetailDrawer({
   group,
+  collaborators,
   managerDisplayNameByCreatorId,
   canEdit,
   canManageStatus,
@@ -1899,6 +1935,7 @@ function CreatorDetailDrawer({
   onAddPlatform,
 }: {
   group: CreatorProfileGroup;
+  collaborators: CreatorEntityCollaborator[];
   managerDisplayNameByCreatorId: Record<string, string>;
   canEdit: boolean;
   canManageStatus: boolean;
@@ -1908,6 +1945,8 @@ function CreatorDetailDrawer({
   onAddPlatform: (group: CreatorProfileGroup, platform: CreatorPlatform) => void;
 }) {
   const primaryCreator = group.profiles[0];
+  const secondaryScoutName = collaborators.find((collaborator) => collaborator.assignment_type === 'scout')?.display_name ?? '—';
+  const secondaryManagerName = collaborators.find((collaborator) => collaborator.assignment_type === 'manager')?.display_name ?? '—';
   const platforms = new Set(group.profiles.map((creator) => creator.platform));
   const missingPlatform = primaryCreator.creator_entity_id && group.profiles.length === 1
     ? platforms.has('tiktok') ? 'douyin' : 'tiktok'
@@ -1989,8 +2028,10 @@ function CreatorDetailDrawer({
           <DrawerSection title="所属资料">
             <div className="creator-drawer-field-grid">
               <DrawerField label="区域" value={getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')} />
-              <DrawerField label="星探" value={getConsistentValue(group.profiles, (creator) => getEmployeeName(creator.scout))} />
-              <DrawerField label="经纪人" value={getConsistentValue(group.profiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId))} />
+              <DrawerField label="主星探" value={getConsistentValue(group.profiles, (creator) => getEmployeeName(creator.scout))} />
+              <DrawerField label="第二位星探" value={secondaryScoutName} />
+              <DrawerField label="主经纪人" value={getConsistentValue(group.profiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId))} />
+              <DrawerField label="第二位经纪人" value={secondaryManagerName} />
             </div>
           </DrawerSection>
 
@@ -3389,6 +3430,7 @@ function CreatorEntitySharedModal(props: {
   options: ScoutOptions;
   scoutOptions: OnboardingScoutOption[];
   managerOptions: OnboardingManagerOption[];
+  collaborators: CreatorEntityCollaborator[];
   saving: boolean;
   onChange: (values: CreatorEntitySharedFormValues) => void;
   onClose: () => void;
@@ -3397,6 +3439,13 @@ function CreatorEntitySharedModal(props: {
   const updateValues = (values: Partial<CreatorEntitySharedFormValues>) => {
     props.onChange({ ...props.values, ...values });
   };
+  const collaboratorOptions = props.collaborators.map((collaborator) => ({
+    id: collaborator.employee_id,
+    display_name: collaborator.display_name,
+    employee_status: collaborator.employee_status,
+  }));
+  const secondaryScoutOptions = [...props.scoutOptions, ...collaboratorOptions.filter((collaborator) => collaborator.id === props.values.secondary_scout_employee_id)];
+  const secondaryManagerOptions = [...props.managerOptions, ...collaboratorOptions.filter((collaborator) => collaborator.id === props.values.secondary_manager_employee_id)];
 
   return (
     <SystemModal
@@ -3433,7 +3482,9 @@ function CreatorEntitySharedModal(props: {
             ))}
           </SelectField>
           <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} regionId={props.values.region_id} onChange={(value) => updateValues({ scout_employee_id: value })} placeholder="搜索星探" requireQueryBeforeResults excludeLeftOptions required />
+          <SearchableEmployeeSelect label="第二位星探" value={props.values.secondary_scout_employee_id} options={secondaryScoutOptions.filter((scout) => scout.id !== props.values.scout_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_scout_employee_id: value })} onClear={() => updateValues({ secondary_scout_employee_id: '' })} placeholder="搜索第二位星探" requireQueryBeforeResults excludeLeftOptions />
           <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => updateValues({ manager_employee_id: value })} placeholder="搜索经纪人" requireQueryBeforeResults excludeLeftOptions required />
+          <SearchableEmployeeSelect label="第二位经纪人" value={props.values.secondary_manager_employee_id} options={secondaryManagerOptions.filter((manager) => manager.id !== props.values.manager_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_manager_employee_id: value })} onClear={() => updateValues({ secondary_manager_employee_id: '' })} placeholder="搜索第二位经纪人" requireQueryBeforeResults excludeLeftOptions />
           <div className="form-section-title">银行资料</div>
           <TextField label="银行账户名字" value={props.values.bank_account_name} onChange={(value) => updateValues({ bank_account_name: value })} required />
           <TextField label="银行名字" value={props.values.bank_name} onChange={(value) => updateValues({ bank_name: value })} required />
@@ -3731,6 +3782,7 @@ function SearchableEmployeeSelect({
   hideLabel = false,
   requireQueryBeforeResults = false,
   excludeLeftOptions = false,
+  onClear,
 }: {
   label: string;
   value: string;
@@ -3742,6 +3794,7 @@ function SearchableEmployeeSelect({
   hideLabel?: boolean;
   requireQueryBeforeResults?: boolean;
   excludeLeftOptions?: boolean;
+  onClear?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -3776,6 +3829,11 @@ function SearchableEmployeeSelect({
             </button>
           )) : <p>没有符合条件的人员</p>}
         </div>
+      ) : null}
+      {onClear && value ? (
+        <button className="searchable-employee-clear" type="button" onClick={() => { onClear(); setQuery(''); setIsOpen(false); }}>
+          清除
+        </button>
       ) : null}
     </div>
   );

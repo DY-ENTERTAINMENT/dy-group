@@ -134,6 +134,15 @@ export type CreatorEntitySharedFormValues = {
   bank_account_name: string;
   bank_name: string;
   bank_account: string;
+  secondary_scout_employee_id: string;
+  secondary_manager_employee_id: string;
+};
+
+export type CreatorEntityCollaborator = {
+  assignment_type: 'scout' | 'manager';
+  employee_id: string;
+  display_name: string;
+  employee_status: EmployeeStatus;
 };
 
 export type CreatorAdditionalPlatformFormValues = {
@@ -529,8 +538,8 @@ export const scoutService = {
     if (error) throw error;
   },
 
-  async updateCreatorEntitySharedProfileData(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
-    const { error } = await db.rpc('update_creator_entity_shared_profile_data', {
+  async saveCreatorEntitySharedData(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
+    const { error } = await db.rpc('save_creator_entity_shared_data', {
       p_creator_entity_id: creatorEntityId,
       p_display_name: values.display_name.trim(),
       p_region_id: values.region_id || null,
@@ -541,9 +550,19 @@ export const scoutService = {
       p_bank_account_name: values.bank_account_name.trim() || null,
       p_bank_name: values.bank_name.trim() || null,
       p_bank_account: values.bank_account.trim() || null,
+      p_secondary_scout_employee_id: values.secondary_scout_employee_id || null,
+      p_secondary_manager_employee_id: values.secondary_manager_employee_id || null,
     });
 
     if (error) throw error;
+  },
+
+  async getCreatorEntityCollaborators(creatorEntityId: string): Promise<CreatorEntityCollaborator[]> {
+    const { data, error } = await db.rpc('get_creator_entity_collaborators', {
+      p_creator_entity_id: creatorEntityId,
+    });
+    if (error) throw error;
+    return data ?? [];
   },
 
   async addCreatorEntityPlatformProfile(creatorEntityId: string, platform: CreatorPlatform, values: CreatorAdditionalPlatformFormValues) {
