@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { CalendarCheck2, FileClock, Plus, Wand2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { MonthSelect } from '../components/MonthSelect';
@@ -553,9 +553,19 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
 }
 
 function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeFormValues['changeType'] }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+  const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
+    const approvedChange = approvedChangesBySource.get(request.id);
+    if (request.leave_type !== 'replacement' || request.status !== 'approved') return null;
+    if (approvedChange) return <span className="leave-change-result">{replacementWorkChangeLabels[approvedChange.change_type]}</span>;
+    if (pendingSourceIds.has(request.id)) return showPending ? <span className="leave-change-pending">变更审核中</span> : null;
+    if (clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date)) return null;
+    return <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button>;
+  };
+
   return (
-    <div className="staff-table-wrap">
-      <table className="staff-table">
+    <>
+      <div className="staff-table-wrap leave-request-desktop-table">
+        <table className="staff-table">
         <thead>
           <tr>
             <th>假期类型</th>
@@ -576,13 +586,30 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
                 <span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span>
               </td>
               <td>{request.review_note || '-'}</td>
-              <td>{request.leave_type === 'replacement' && request.status === 'approved' && approvedChangesBySource.has(request.id) ? replacementWorkChangeLabels[approvedChangesBySource.get(request.id)!.change_type] : request.leave_type === 'replacement' && request.status === 'approved' && !pendingSourceIds.has(request.id) && !clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date) ? <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button> : '-'}</td>
+              <td>{renderChangeAction(request) ?? '-'}</td>
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+      <div className="leave-request-mobile-list">
+        {requests.map((request) => (
+          <article className="leave-request-mobile-card" key={request.id}>
+            <MobileLeaveField label="假期类型" value={leaveTypeLabels[request.leave_type]} />
+            {request.leave_type === 'replacement' ? <><MobileLeaveField label="调休日" value={request.end_date} /><MobileLeaveField label="补班日" value={effectiveMakeupDatesBySource.get(request.id) ?? request.start_date} /></> : <MobileLeaveField label="日期" value={formatLeaveDate(request)} />}
+            <MobileLeaveField label="原因" value={request.reason} />
+            <MobileLeaveField label="状态" value={<span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span>} />
+            <MobileLeaveField label="审核备注" value={request.review_note || '-'} />
+            {request.leave_type === 'replacement' ? <div className="leave-request-mobile-action">{renderChangeAction(request, true)}</div> : null}
+          </article>
+        ))}
+      </div>
+    </>
   );
+}
+
+function MobileLeaveField({ label, value }: { label: string; value: ReactNode }) {
+  return <div className="leave-request-mobile-field"><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function formatLeaveDate(request: LeaveRequestItem) {

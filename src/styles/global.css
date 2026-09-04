@@ -2674,6 +2674,62 @@ a {
   background: #fee2e2;
 }
 
+.leave-request-mobile-list {
+  display: none;
+}
+
+.leave-change-result,
+.leave-change-pending {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+@media (max-width: 767px) {
+  .leave-request-desktop-table {
+    display: none;
+  }
+
+  .leave-request-mobile-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .leave-request-mobile-card {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+
+  .leave-request-mobile-field {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .leave-request-mobile-field > span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .leave-request-mobile-field > strong {
+    min-width: 0;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .leave-request-mobile-action {
+    padding-top: 2px;
+  }
+}
+
 .attendance-page {
   display: grid;
   gap: 22px;
