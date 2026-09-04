@@ -3005,6 +3005,7 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
             <table className="staff-table scout-compact-summary-table">
               <colgroup>
                 <col className="scout-compact-name-col" />
+                <col className="scout-compact-combined-col" />
                 <col className="scout-compact-metric-col" />
                 <col className="scout-compact-metric-col" />
                 <col className="scout-compact-metric-col" />
@@ -3017,6 +3018,9 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
                   <th rowSpan={2} className="scout-compact-name-head">
                     星探
                   </th>
+                  <th rowSpan={2} className="scout-compact-combined-head scout-compact-cell--combined">
+                    双平台总数
+                  </th>
                   <th colSpan={3} className="scout-compact-platform-head scout-compact-platform-head--tiktok">
                     <PlatformLogoTitle logoUrl={tiktokLogoUrl} title="TikTok" logoSize={22} fontSize={13} />
                   </th>
@@ -3025,10 +3029,10 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
                   </th>
                 </tr>
                 <tr>
-                  <th className="scout-compact-metric-head scout-compact-cell--tiktok">招募总数</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--tiktok">TikTok 总数</th>
                   <th className="scout-compact-metric-head scout-compact-cell--tiktok">5+1</th>
                   <th className="scout-compact-metric-head scout-compact-cell--tiktok">非5+1</th>
-                  <th className="scout-compact-metric-head scout-compact-cell--douyin">招募总数</th>
+                  <th className="scout-compact-metric-head scout-compact-cell--douyin">抖音 总数</th>
                   <th className="scout-compact-metric-head scout-compact-cell--douyin">5+1</th>
                   <th className="scout-compact-metric-head scout-compact-cell--douyin">非5+1</th>
                 </tr>
@@ -3037,6 +3041,7 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
                 {sortedRows.map((row) => (
                   <tr key={row.key}>
                     <td className="scout-compact-name-cell">{row.label}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--combined">{getRecruitBreakdownTotal(row.breakdown)}</td>
                     <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.total}</td>
                     <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.plusFiveOne}</td>
                     <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.nonFiveOne}</td>
@@ -3049,11 +3054,30 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
             </table>
           </div>
           <div className="scout-compact-mobile-list" hidden>
+            <ScoutRecruitMobileCombinedTable rows={sortedRows} />
             <ScoutRecruitMobilePlatformTable title="TikTok" platform="tiktok" rows={sortedRows} logoUrl={tiktokLogoUrl} />
             <ScoutRecruitMobilePlatformTable title="抖音" platform="douyin" rows={sortedRows} logoUrl={douyinLogoUrl} />
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+function ScoutRecruitMobileCombinedTable({ rows }: { rows: RecruitBreakdownRow[] }) {
+  return (
+    <section className="scout-compact-mobile-platform-card scout-compact-mobile-platform-card--combined">
+      <span className="scout-compact-mobile-combined-title">双平台总数</span>
+      <div className="scout-compact-mobile-combined-table">
+        <span className="scout-compact-mobile-name-head">星探</span>
+        <span>双平台总数</span>
+        {rows.map((row) => (
+          <Fragment key={`combined-${row.key}`}>
+            <b className="scout-compact-mobile-name-cell">{row.label}</b>
+            <b className="scout-compact-mobile-combined-value">{getRecruitBreakdownTotal(row.breakdown)}</b>
+          </Fragment>
+        ))}
+      </div>
     </section>
   );
 }
@@ -3074,7 +3098,7 @@ function ScoutRecruitMobilePlatformTable({
       <PlatformLogoTitle logoUrl={logoUrl} title={title} logoSize={20} fontSize={13} />
       <div className="scout-compact-mobile-platform-table">
         <span className="scout-compact-mobile-name-head">星探</span>
-        <span>招募总数</span>
+        <span>{title} 总数</span>
         <span>5+1</span>
         <span>非5+1</span>
         {rows.map((row) => {
@@ -3115,9 +3139,23 @@ function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<
 function RecruitPlatformCardGrid({ tiktok, douyin }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary }) {
   return (
     <div className="recruit-platform-card-grid">
+      <RecruitCombinedSummaryCard tiktok={tiktok} douyin={douyin} />
       <RecruitPlatformSummaryCard title="TikTok" breakdown={tiktok} platform="tiktok" logoUrl={tiktokLogoUrl} />
       <RecruitPlatformSummaryCard title="抖音" breakdown={douyin} platform="douyin" logoUrl={douyinLogoUrl} />
     </div>
+  );
+}
+
+function RecruitCombinedSummaryCard({ tiktok, douyin }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary }) {
+  return (
+    <section className="recruit-platform-summary-card recruit-platform-summary-card--combined">
+      <span className="recruit-combined-title">双平台总数</span>
+      <div className="recruit-platform-total">
+        <span>总数</span>
+        <strong>{tiktok.total + douyin.total}</strong>
+      </div>
+      <small className="recruit-combined-note">TikTok {tiktok.total} + 抖音 {douyin.total}</small>
+    </section>
   );
 }
 
@@ -3138,7 +3176,7 @@ function RecruitPlatformSummaryCard({
     <section className={`recruit-platform-summary-card recruit-platform-summary-card--${platform}`}>
       <PlatformLogoTitle logoUrl={logoUrl} title={title} logoSize={34} fontSize={18} />
       <div className="recruit-platform-total">
-        <span>招募总数</span>
+        <span>{title} 总数</span>
         <strong>{breakdown.total}</strong>
       </div>
       <div className="recruit-platform-breakdown">
