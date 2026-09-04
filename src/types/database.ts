@@ -16,6 +16,8 @@ export type CreatorType = '5+1' | 'online' | 'offline' | 'company';
 export type CandidateFollowStatus = 'pending' | 'following' | 'interview' | 'ready_onboarding' | 'stopped';
 export type CandidateFollowUpActionType = 'follow_up' | 'stopped' | 'reopened';
 export type WorkTimeAdjustmentDetailStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'revoked';
+export type ReplacementWorkChangeType = 'reschedule' | 'annual_leave' | 'unpaid_leave' | 'work_time';
+export type ReplacementWorkChangeStatus = 'pending' | 'approved' | 'rejected';
 export type WorkTimeAdjustmentAuditAction =
   | 'request_created'
   | 'detail_updated'
@@ -290,6 +292,25 @@ export type WorkTimeAdjustmentRequestDate = {
   revoked_at: string | null;
   revoke_note: string | null;
   cancelled_at: string | null;
+  source_replacement_leave_request_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReplacementWorkChangeRequest = {
+  id: string;
+  source_replacement_leave_request_id: string;
+  employee_id: string;
+  change_type: ReplacementWorkChangeType;
+  original_makeup_date: string;
+  requested_makeup_date: string | null;
+  original_start_time: string;
+  requested_start_time: string | null;
+  reason: string;
+  status: ReplacementWorkChangeStatus;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -856,6 +877,12 @@ export type Database = {
           },
         ];
       };
+      replacement_work_change_requests: {
+        Row: ReplacementWorkChangeRequest;
+        Insert: Pick<ReplacementWorkChangeRequest, 'source_replacement_leave_request_id' | 'employee_id' | 'change_type' | 'original_makeup_date' | 'original_start_time' | 'reason'> & Partial<Pick<ReplacementWorkChangeRequest, 'id' | 'requested_makeup_date' | 'requested_start_time' | 'status' | 'review_note' | 'reviewed_by' | 'reviewed_at' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<ReplacementWorkChangeRequest, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [];
+      };
       work_time_adjustment_audit_history: {
         Row: WorkTimeAdjustmentAuditHistory;
         Insert: Pick<WorkTimeAdjustmentAuditHistory, 'request_id' | 'action'> &
@@ -1282,6 +1309,18 @@ export type Database = {
           request_id: string;
           approved_at: string;
         }[];
+      };
+      get_effective_replacement_work_changes: {
+        Args: { p_start_date: string; p_end_date: string; p_region_id?: string | null };
+        Returns: { source_replacement_leave_request_id: string; employee_id: string; effective_makeup_date: string; leave_effect: 'none' | 'annual_leave' | 'unpaid_leave'; change_request_id: string | null; change_type: ReplacementWorkChangeType | null; requested_start_time: string | null }[];
+      };
+      create_replacement_work_change_request: {
+        Args: { p_source_replacement_leave_request_id: string; p_change_type: ReplacementWorkChangeType; p_requested_makeup_date?: string | null; p_requested_start_time?: string | null; p_reason: string };
+        Returns: string;
+      };
+      review_replacement_work_change_request: {
+        Args: { p_request_id: string; p_status: Extract<ReplacementWorkChangeStatus, 'approved' | 'rejected'>; p_note?: string | null };
+        Returns: void;
       };
       cancel_calendar_leave_item: {
         Args: {

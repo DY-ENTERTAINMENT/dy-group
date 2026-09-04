@@ -14,6 +14,8 @@ import type {
 
 export type AttendanceEffectiveWorkTime =
   Database['public']['Functions']['get_attendance_effective_work_times']['Returns'][number];
+export type AttendanceEffectiveReplacementWorkChange =
+  Database['public']['Functions']['get_effective_replacement_work_changes']['Returns'][number];
 
 export type AttendanceEmployee = Pick<
   Employee,
@@ -42,6 +44,7 @@ export type AttendancePeriodData = {
   restDays: AttendanceRestDay[];
   publicHolidays: PublicHoliday[];
   effectiveWorkTimes: AttendanceEffectiveWorkTime[];
+  effectiveReplacementWorkChanges: AttendanceEffectiveReplacementWorkChange[];
   regions: Region[];
   range: AttendancePeriodRange;
 };
@@ -166,6 +169,7 @@ export const attendanceManagementService = {
       abnormalReviewHistoryResult,
       publicHolidaysResult,
       effectiveWorkTimesResult,
+      effectiveReplacementWorkChangesResult,
       regionsResult,
     ] = await Promise.all([
       scopedEmployeesQuery,
@@ -201,6 +205,11 @@ export const attendanceManagementService = {
         p_end_date: range.endDate,
         p_region_id: regionId || null,
       }),
+      supabase.rpc('get_effective_replacement_work_changes', {
+        p_start_date: range.startDate,
+        p_end_date: range.endDate,
+        p_region_id: regionId || null,
+      }),
       supabase.rpc('current_user_authorized_region_ids'),
     ]);
 
@@ -231,6 +240,9 @@ export const attendanceManagementService = {
     if (effectiveWorkTimesResult.error) {
       throw effectiveWorkTimesResult.error;
     }
+    if (effectiveReplacementWorkChangesResult.error) {
+      throw effectiveReplacementWorkChangesResult.error;
+    }
 
     if (regionsResult.error) {
       throw regionsResult.error;
@@ -258,6 +270,7 @@ export const attendanceManagementService = {
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
       effectiveWorkTimes: effectiveWorkTimesResult.data ?? [],
+      effectiveReplacementWorkChanges: effectiveReplacementWorkChangesResult.data ?? [],
       regions: accessibleRegionsResult.data ?? [],
       range,
     };

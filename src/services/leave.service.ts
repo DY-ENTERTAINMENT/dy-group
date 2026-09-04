@@ -258,8 +258,22 @@ export const leaveService = {
       { annual: 0, medical: 0 },
     );
 
+    // A Saturday is normally excluded by countWorkingLeaveDays. This narrowly scoped
+    // exception is only for an approved change tied to one of this employee's approved
+    // replacement leave records; ordinary Saturday annual leave remains excluded.
+    const approvedReplacementIds = new Set(
+      approvedRequests.filter((request) => request.leave_type === 'replacement' && request.status === 'approved').map((request) => request.id),
+    );
+    const { data: annualChanges, error: annualChangesError } = await supabase
+      .from('replacement_work_change_requests')
+      .select('source_replacement_leave_request_id')
+      .eq('status', 'approved')
+      .eq('change_type', 'annual_leave');
+    if (annualChangesError) throw annualChangesError;
+    const replacementAnnualDays = (annualChanges ?? []).filter((change) => approvedReplacementIds.has(change.source_replacement_leave_request_id)).length;
+
     return {
-      annualRemaining: Math.max(0, entitlement.annual - used.annual),
+      annualRemaining: Math.max(0, entitlement.annual - used.annual - replacementAnnualDays),
       medicalRemaining: Math.max(0, entitlement.medical - used.medical),
     };
   },

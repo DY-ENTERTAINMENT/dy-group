@@ -5,11 +5,14 @@ import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { type LeaveRequestItem, leaveService } from '../services/leave.service';
 import { leaveStatusLabels, leaveTypeLabels } from './LeavePage';
+import { replacementWorkChangeLabels, replacementWorkChangeService, type ReplacementWorkChangeReviewItem } from '../services/replacement-work-change.service';
 
 export function LeaveReviewPage() {
   const permissions = usePermissions();
   const canUseLeaveReview = permissions.canUse('leave-review');
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
+  const [replacementChanges, setReplacementChanges] = useState<ReplacementWorkChangeReviewItem[]>([]);
+  const [selectedReplacementChange, setSelectedReplacementChange] = useState<ReplacementWorkChangeReviewItem | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequestItem | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,8 +31,9 @@ export function LeaveReviewPage() {
     setError('');
 
     try {
-      const pendingRequests = await leaveService.listPendingLeaveRequests();
+      const [pendingRequests, pendingChanges] = await Promise.all([leaveService.listPendingLeaveRequests(), replacementWorkChangeService.listPending()]);
       setRequests(pendingRequests);
+      setReplacementChanges(pendingChanges);
       setSelectedRequest((current) =>
         current && pendingRequests.some((request) => request.id === current.id) ? current : null,
       );
@@ -38,6 +42,15 @@ export function LeaveReviewPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function reviewReplacementChange(status: 'approved' | 'rejected') {
+    if (!selectedReplacementChange) return;
+    if (status === 'rejected' && !reviewNote.trim()) { setError('请填写拒绝原因。'); return; }
+    setSubmitting(true); setError('');
+    try { await replacementWorkChangeService.review(selectedReplacementChange.id, status, reviewNote); setSelectedReplacementChange(null); setReviewNote(''); setMessage('调休补班变更申请已处理。'); await loadPendingRequests(); }
+    catch (reviewError) { setError(reviewError instanceof Error ? reviewError.message : '审核失败。'); }
+    finally { setSubmitting(false); }
   }
 
   function openReview(request: LeaveRequestItem) {
@@ -133,6 +146,11 @@ export function LeaveReviewPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="staff-list-panel">
+        <div className="list-header"><div><span>调休补班变更</span><h3>{replacementChanges.length} 条待审核申请</h3></div></div>
+        {loading ? <div className="table-state">正在读取变更申请...</div> : replacementChanges.length === 0 ? <div className="table-state">暂无待审核调休补班变更。</div> : <div className="registration-list">{replacementChanges.map((change) => <button key={change.id} className="registration-item" type="button" onClick={() => { setSelectedReplacementChange(change); setReviewNote(''); setError(''); }}><span><strong>{replacementWorkChangeLabels[change.change_type]}</strong><small>原补班：{change.original_makeup_date} · 员工：{change.employee?.full_name ?? '未关联员工'}{change.employee?.employee_code ? `（${change.employee.employee_code}）` : ''}</small></span><em>待审核</em></button>)}</div>}
       </div>
 
       {selectedRequest ? (
@@ -249,6 +267,7 @@ export function LeaveReviewPage() {
             </form>
         </SystemModal>
       ) : null}
+      {selectedReplacementChange ? <SystemModal title="审核调休补班变更" subtitle={replacementWorkChangeLabels[selectedReplacementChange.change_type]} ariaLabel="审核调休补班变更" onClose={() => setSelectedReplacementChange(null)} footer={<><button className="secondary-button compact-button" type="button" onClick={() => setSelectedReplacementChange(null)}>关闭</button><button className="primary-button compact-button" type="button" onClick={() => reviewReplacementChange('approved')} disabled={submitting}>审核通过</button><button className="secondary-button compact-button danger-text-button" type="submit" form="replacement-change-reject-form" disabled={submitting}>拒绝</button></>}><div className="detail-list"><div><span>原补班日期</span><strong>{selectedReplacementChange.original_makeup_date}</strong></div><div><span>新补班日期</span><strong>{selectedReplacementChange.requested_makeup_date || '-'}</strong></div><div><span>新开始时间</span><strong>{selectedReplacementChange.requested_start_time?.slice(0, 5) || '-'}</strong></div><div><span>原因</span><strong>{selectedReplacementChange.reason}</strong></div></div><form id="replacement-change-reject-form" className="reject-form" onSubmit={(event) => { event.preventDefault(); void reviewReplacementChange('rejected'); }}><label className="form-field"><span>审核备注 / 拒绝原因</span><textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /></label></form>{error ? <p className="form-alert">{error}</p> : null}</SystemModal> : null}
     </section>
   );
 }

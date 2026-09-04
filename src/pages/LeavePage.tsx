@@ -14,6 +14,7 @@ import {
   leaveService,
 } from '../services/leave.service';
 import type { LeaveRequestStatus, LeaveType } from '../types/database';
+import { replacementWorkChangeLabels, replacementWorkChangeService, type ReplacementWorkChangeFormValues } from '../services/replacement-work-change.service';
 
 const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
@@ -44,6 +45,10 @@ export function LeavePage() {
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
   const [balances, setBalances] = useState<LeaveBalance>({ annualRemaining: 0, medicalRemaining: 0 });
   const [restDays, setRestDays] = useState<RestDayCalendarItem[]>([]);
+  const [replacementChanges, setReplacementChanges] = useState<Awaited<ReturnType<typeof replacementWorkChangeService.listMyChanges>>>([]);
+  const [clockInDates, setClockInDates] = useState<Set<string>>(new Set());
+  const [selectedReplacement, setSelectedReplacement] = useState<LeaveRequestItem | null>(null);
+  const [changeValues, setChangeValues] = useState<ReplacementWorkChangeFormValues>({ changeType: 'reschedule', reason: '' });
   const [restCycle, setRestCycle] = useState(getCurrentRestCycle());
   const [selectedRestDates, setSelectedRestDates] = useState<string[]>([]);
   const [formValues, setFormValues] = useState<LeaveFormValues>(emptyForm);
@@ -73,6 +78,13 @@ export function LeavePage() {
     () => restDays.filter((restDay) => restDay.profile_id === profile?.id).map((restDay) => restDay.rest_date),
     [profile?.id, restDays],
   );
+  const effectiveMakeupDatesBySource = useMemo(() => {
+    const dates = new Map<string, string>();
+    replacementChanges.filter((change) => change.status === 'approved' && change.change_type === 'reschedule' && change.requested_makeup_date).forEach((change) => {
+      if (!dates.has(change.source_replacement_leave_request_id)) dates.set(change.source_replacement_leave_request_id, change.requested_makeup_date!);
+    });
+    return dates;
+  }, [replacementChanges]);
   const isCurrentRestCycle = restCycle === getCurrentRestCycle();
   const restLocked =
     !isCurrentRestCycle ||
@@ -112,14 +124,29 @@ export function LeavePage() {
     setError('');
 
     try {
-      const leaveRequests = await leaveService.listMyLeaveRequests(profileId);
+      const [leaveRequests, changes, clockIns] = await Promise.all([leaveService.listMyLeaveRequests(profileId), replacementWorkChangeService.listMyChanges(), replacementWorkChangeService.listMyClockInDates(profileId)]);
       setRequests(leaveRequests);
+      setReplacementChanges(changes);
+      setClockInDates(clockIns);
       setBalances(await leaveService.getMyLeaveBalances(profileId, leaveRequests));
     } catch (loadError) {
       setError(`读取请假记录失败：${getErrorMessage(loadError)}`);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submitReplacementChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedReplacement) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await replacementWorkChangeService.create(selectedReplacement.id, changeValues);
+      setSelectedReplacement(null); setChangeValues({ changeType: 'reschedule', reason: '' });
+      setMessage('调休补班变更申请已提交。');
+      await loadLeaveRequests();
+    } catch (submitError) { setError(`提交变更申请失败：${getErrorMessage(submitError)}`); }
+    finally { setSaving(false); }
   }
 
   async function loadRestDays() {
@@ -334,7 +361,7 @@ export function LeavePage() {
             ) : requests.length === 0 ? (
               <div className="table-state">暂无请假申请。</div>
             ) : (
-              <LeaveRequestTable requests={requests} />
+              <LeaveRequestTable requests={requests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -354,6 +381,7 @@ export function LeavePage() {
           canViewReplacementLeave={canViewReplacementLeave}
         />
       ) : null}
+      {selectedReplacement ? <ReplacementWorkChangeModal request={selectedReplacement} values={changeValues} saving={saving} onChange={setChangeValues} onClose={() => setSelectedReplacement(null)} onSubmit={submitReplacementChange} /> : null}
     </section>
   );
 }
@@ -504,7 +532,20 @@ function LeaveRequestModal({
   );
 }
 
-function LeaveRequestTable({ requests }: { requests: LeaveRequestItem[] }) {
+function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose, onSubmit }: { request: LeaveRequestItem; values: ReplacementWorkChangeFormValues; saving: boolean; onChange: (values: ReplacementWorkChangeFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const needsDate = values.changeType === 'reschedule';
+  const needsTime = values.changeType === 'work_time';
+  return <SystemModal title="调休补班变更申请" subtitle={`原补班日期：${request.start_date}`} ariaLabel="调休补班变更申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="replacement-work-change-form" disabled={saving}>提交申请</button></>}>
+    <form id="replacement-work-change-form" onSubmit={onSubmit}><div className="form-grid single">
+      <label className="form-field"><span>变更类型</span><select value={values.changeType} onChange={(event) => onChange({ changeType: event.target.value as ReplacementWorkChangeFormValues['changeType'], reason: values.reason })}>{Object.entries(replacementWorkChangeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {needsDate ? <label className="form-field"><span>新的补班日期</span><input type="date" value={values.requestedMakeupDate ?? ''} onChange={(event) => onChange({ ...values, requestedMakeupDate: event.target.value })} required /></label> : null}
+      {needsTime ? <label className="form-field"><span>调整后开始时间</span><input type="time" step="900" value={values.requestedStartTime ?? ''} onChange={(event) => onChange({ ...values, requestedStartTime: event.target.value })} required /><small>结束时间将按现有规则自动计算为开始时间后 8 小时 30 分。</small></label> : null}
+      <label className="form-field"><span>原因</span><textarea value={values.reason} onChange={(event) => onChange({ ...values, reason: event.target.value })} required /></label>
+    </div></form>
+  </SystemModal>;
+}
+
+function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
   return (
     <div className="staff-table-wrap">
       <table className="staff-table">
@@ -515,6 +556,7 @@ function LeaveRequestTable({ requests }: { requests: LeaveRequestItem[] }) {
             <th>原因</th>
             <th>状态</th>
             <th>审核备注</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -527,6 +569,7 @@ function LeaveRequestTable({ requests }: { requests: LeaveRequestItem[] }) {
                 <span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span>
               </td>
               <td>{request.review_note || '-'}</td>
+              <td>{request.leave_type === 'replacement' && request.status === 'approved' && !pendingSourceIds.has(request.id) && !clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date) ? <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button> : '-'}</td>
             </tr>
           ))}
         </tbody>

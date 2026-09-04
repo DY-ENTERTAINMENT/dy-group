@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import {
   type AttendanceEffectiveWorkTime,
+  type AttendanceEffectiveReplacementWorkChange,
   type AttendanceEmployee,
   type AttendanceRestDay,
   attendanceManagementService,
@@ -152,6 +153,7 @@ export function AttendanceManagementPage() {
           data.restDays,
           data.publicHolidays,
           data.effectiveWorkTimes,
+          data.effectiveReplacementWorkChanges,
           data.range.startDate,
           data.range.endDate,
         ),
@@ -932,6 +934,7 @@ function buildSummaries(
   restDays: AttendanceRestDay[],
   publicHolidays: PublicHoliday[],
   effectiveWorkTimes: AttendanceEffectiveWorkTime[],
+  effectiveReplacementWorkChanges: AttendanceEffectiveReplacementWorkChange[],
   startDate: string,
   endDate: string,
 ) {
@@ -940,7 +943,8 @@ function buildSummaries(
   const recordsByEmployeeDate = groupAttendanceRecords(attendanceRecords);
   const latestReviewByRecordId = getLatestReviewByRecordId(abnormalReviewHistory);
   const leavesByEmployeeDate = groupLeaveRequests(leaveRequests, dates);
-  const replacementMakeUpDatesByEmployeeDate = groupApprovedReplacementMakeUpDates(leaveRequests, dates);
+  const replacementMakeUpDatesByEmployeeDate = groupEffectiveReplacementMakeUpDates(leaveRequests, effectiveReplacementWorkChanges, dates);
+  const replacementLeaveEffectsByEmployeeDate = groupReplacementLeaveEffects(effectiveReplacementWorkChanges);
   const restDaysByEmployeeDate = groupRestDays(restDays);
   const publicHolidaysByRegionDate = groupPublicHolidays(publicHolidays);
   const effectiveWorkTimesByEmployeeDate = groupEffectiveWorkTimes(effectiveWorkTimes);
@@ -974,6 +978,7 @@ function buildSummaries(
       const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out') ?? null;
       const leave = leavesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const replacementMakeUpDate = replacementMakeUpDatesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
+      const replacementLeaveEffect = replacementLeaveEffectsByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const restDay = restDaysByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const publicHoliday = getPublicHolidayForDate(publicHolidaysByRegionDate, employee.region_id, date);
       const effectiveWorkTime = effectiveWorkTimesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
@@ -985,7 +990,7 @@ function buildSummaries(
       const shouldCountAttendance = shouldCountAttendanceDate(employee, date);
       const isPastOrToday = date <= today;
       const weekend = isWeekend(date);
-      const nonWorkingDay = Boolean(publicHoliday) || (weekend && !replacementMakeUpDate);
+      const nonWorkingDay = Boolean(publicHoliday) || (weekend && (!replacementMakeUpDate || replacementLeaveEffect));
 
       if (!shouldCountAttendance) {
         return {
@@ -1006,7 +1011,10 @@ function buildSummaries(
         statuses.push('周末');
       }
 
-      if (!nonWorkingDay && leave?.status === 'approved') {
+      if (replacementLeaveEffect) {
+        statuses.push(replacementLeaveEffect === 'annual_leave' ? '补班来源年假已通过' : '补班来源无薪假已通过');
+        leaveCounts[replacementLeaveEffect === 'annual_leave' ? 'annual' : 'unpaid'] += 1;
+      } else if (!nonWorkingDay && leave?.status === 'approved') {
         statuses.push(`${leaveTypeLabels[leave.leave_type]}已通过`);
         leaveCounts[leave.leave_type] += 1;
       }
@@ -1178,23 +1186,40 @@ function groupLeaveRequests(requests: LeaveRequest[], dates: string[]) {
   return map;
 }
 
-function groupApprovedReplacementMakeUpDates(requests: LeaveRequest[], dates: string[]) {
+function groupEffectiveReplacementMakeUpDates(
+  requests: LeaveRequest[],
+  effectiveChanges: AttendanceEffectiveReplacementWorkChange[],
+  dates: string[],
+) {
   const map = new Map<string, LeaveRequest>();
   const dateSet = new Set(dates);
+
+  const effectiveBySource = new Map(effectiveChanges.map((change) => [change.source_replacement_leave_request_id, change]));
 
   requests.forEach((request) => {
     if (
       !request.employee_id ||
       request.leave_type !== 'replacement' ||
       request.status !== 'approved' ||
-      !dateSet.has(request.start_date)
+      !dateSet.has(effectiveBySource.get(request.id)?.effective_makeup_date ?? request.start_date)
     ) {
       return;
     }
 
-    map.set(`${request.employee_id}:${request.start_date}`, request);
+    const effectiveDate = effectiveBySource.get(request.id)?.effective_makeup_date ?? request.start_date;
+    map.set(`${request.employee_id}:${effectiveDate}`, request);
   });
 
+  return map;
+}
+
+function groupReplacementLeaveEffects(effectiveChanges: AttendanceEffectiveReplacementWorkChange[]) {
+  const map = new Map<string, 'annual_leave' | 'unpaid_leave'>();
+  effectiveChanges.forEach((change) => {
+    if (change.leave_effect === 'annual_leave' || change.leave_effect === 'unpaid_leave') {
+      map.set(`${change.employee_id}:${change.effective_makeup_date}`, change.leave_effect);
+    }
+  });
   return map;
 }
 
