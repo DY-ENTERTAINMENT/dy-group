@@ -49,6 +49,8 @@ export function LeavePage() {
   const [clockInDates, setClockInDates] = useState<Set<string>>(new Set());
   const [selectedReplacement, setSelectedReplacement] = useState<LeaveRequestItem | null>(null);
   const [changeValues, setChangeValues] = useState<ReplacementWorkChangeFormValues>({ changeType: 'reschedule', reason: '' });
+  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(getCurrentMonth());
+  const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | 'all'>('all');
   const [restCycle, setRestCycle] = useState(getCurrentRestCycle());
   const [selectedRestDates, setSelectedRestDates] = useState<string[]>([]);
   const [formValues, setFormValues] = useState<LeaveFormValues>(emptyForm);
@@ -92,6 +94,19 @@ export function LeavePage() {
     });
     return changes;
   }, [replacementChanges]);
+  const filteredRequests = useMemo(() => {
+    const [yearText, monthText] = selectedLeaveMonth.split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const monthStart = `${selectedLeaveMonth}-01`;
+    const monthEnd = `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+
+    return requests.filter((request) => {
+      const matchesMonth = request.start_date <= monthEnd && request.end_date >= monthStart;
+      const matchesType = selectedLeaveType === 'all' || request.leave_type === selectedLeaveType;
+      return matchesMonth && matchesType;
+    });
+  }, [requests, selectedLeaveMonth, selectedLeaveType]);
   const isCurrentRestCycle = restCycle === getCurrentRestCycle();
   const restLocked =
     !isCurrentRestCycle ||
@@ -321,7 +336,7 @@ export function LeavePage() {
           <h2>请假</h2>
         </div>
 
-        <button className="secondary-action" type="button" onClick={() => setShowLeaveModal(true)}>
+        <button className="secondary-action leave-apply-button" type="button" onClick={() => setShowLeaveModal(true)}>
           <Plus size={17} />
           <span>提交申请</span>
         </button>
@@ -357,18 +372,31 @@ export function LeavePage() {
 
           <div className="staff-list-panel">
             <div className="list-header">
-              <div>
+              <div className="leave-request-header-title">
                 <span>申请记录</span>
-                <h3>{requests.length} 条记录</h3>
+                <h3>{filteredRequests.length} 条记录</h3>
+              </div>
+              <div className="attendance-filters leave-request-filters">
+                <label className="form-field">
+                  <span>月份</span>
+                  <MonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
+                </label>
+                <label className="form-field">
+                  <span>请假类型</span>
+                  <select value={selectedLeaveType} onChange={(event) => setSelectedLeaveType(event.target.value as LeaveType | 'all')}>
+                    <option value="all">全部</option>
+                    {Object.entries(leaveTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
               </div>
             </div>
 
             {loading ? (
               <div className="table-state">正在读取请假记录...</div>
-            ) : requests.length === 0 ? (
+            ) : filteredRequests.length === 0 ? (
               <div className="table-state">暂无请假申请。</div>
             ) : (
-              <LeaveRequestTable requests={requests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable requests={filteredRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -405,7 +433,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function BalanceCard({ label, days }: { label: string; days: number }) {
   return (
-    <div className="leave-stat-card">
+    <div className="leave-stat-card leave-balance-card">
       <CalendarCheck2 size={20} />
       <span>{label}</span>
       <strong>剩余 {days} 天</strong>
@@ -553,6 +581,7 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
 }
 
 function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeFormValues['changeType'] }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+  const isMobile = useMobileLeaveRequestLayout();
   const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
     const approvedChange = approvedChangesBySource.get(request.id);
     if (request.leave_type !== 'replacement' || request.status !== 'approved') return null;
@@ -562,8 +591,8 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
     return <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button>;
   };
 
-  return (
-    <>
+  if (!isMobile) {
+    return (
       <div className="staff-table-wrap leave-request-desktop-table">
         <table className="staff-table">
         <thead>
@@ -592,6 +621,10 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
         </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
       <div className="leave-request-mobile-list">
         {requests.map((request) => (
           <article className="leave-request-mobile-card" key={request.id}>
@@ -604,8 +637,21 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
           </article>
         ))}
       </div>
-    </>
   );
+}
+
+function useMobileLeaveRequestLayout() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767.98px)').matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767.98px)');
+    const syncLayout = () => setIsMobile(mediaQuery.matches);
+    syncLayout();
+    mediaQuery.addEventListener('change', syncLayout);
+    return () => mediaQuery.removeEventListener('change', syncLayout);
+  }, []);
+
+  return isMobile;
 }
 
 function MobileLeaveField({ label, value }: { label: string; value: ReactNode }) {
@@ -759,6 +805,11 @@ function getCurrentRestCycle() {
   const month = today.getMonth() + 1;
   const target = today.getDate() < 26 ? new Date(year, month, 1) : new Date(year, month + 1, 1);
   return `${target.getFullYear()}-${`${target.getMonth() + 1}`.padStart(2, '0')}`;
+}
+
+function getCurrentMonth() {
+  const today = new Date();
+  return `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}`;
 }
 
 function getRestCycleRange(cycle: string) {
