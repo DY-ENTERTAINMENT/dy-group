@@ -553,6 +553,7 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
 }
 
 function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeFormValues['changeType'] }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+  const isMobile = useMobileLeaveRequestLayout();
   const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
     const approvedChange = approvedChangesBySource.get(request.id);
     if (request.leave_type !== 'replacement' || request.status !== 'approved') return null;
@@ -562,8 +563,8 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
     return <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button>;
   };
 
-  return (
-    <>
+  if (!isMobile) {
+    return (
       <div className="staff-table-wrap leave-request-desktop-table">
         <table className="staff-table">
         <thead>
@@ -592,6 +593,10 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
         </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
       <div className="leave-request-mobile-list">
         {requests.map((request) => (
           <article className="leave-request-mobile-card" key={request.id}>
@@ -604,8 +609,21 @@ function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource
           </article>
         ))}
       </div>
-    </>
   );
+}
+
+function useMobileLeaveRequestLayout() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767.98px)').matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767.98px)');
+    const syncLayout = () => setIsMobile(mediaQuery.matches);
+    syncLayout();
+    mediaQuery.addEventListener('change', syncLayout);
+    return () => mediaQuery.removeEventListener('change', syncLayout);
+  }, []);
+
+  return isMobile;
 }
 
 function MobileLeaveField({ label, value }: { label: string; value: ReactNode }) {

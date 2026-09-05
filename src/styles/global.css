@@ -2675,7 +2675,11 @@ a {
 }
 
 .leave-request-mobile-list {
-  display: none;
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 12px;
 }
 
 .leave-change-result,
@@ -2685,18 +2689,17 @@ a {
   font-weight: 800;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .leave-request-desktop-table {
-    display: none;
-  }
-
-  .leave-request-mobile-list {
-    display: grid;
-    gap: 12px;
+    display: none !important;
   }
 
   .leave-request-mobile-card {
     display: grid;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     gap: 10px;
     padding: 14px;
     border: 1px solid var(--border);
@@ -2726,7 +2729,13 @@ a {
   }
 
   .leave-request-mobile-action {
+    min-width: 0;
     padding-top: 2px;
+  }
+
+  .leave-request-mobile-action .secondary-button {
+    max-width: 100%;
+    white-space: normal;
   }
 }
 
