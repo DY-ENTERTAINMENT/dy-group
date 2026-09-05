@@ -336,7 +336,7 @@ export function LeavePage() {
           <h2>请假</h2>
         </div>
 
-        <button className="secondary-action" type="button" onClick={() => setShowLeaveModal(true)}>
+        <button className="secondary-action leave-apply-button" type="button" onClick={() => setShowLeaveModal(true)}>
           <Plus size={17} />
           <span>提交申请</span>
         </button>
@@ -372,11 +372,11 @@ export function LeavePage() {
 
           <div className="staff-list-panel">
             <div className="list-header">
-              <div>
+              <div className="leave-request-header-title">
                 <span>申请记录</span>
                 <h3>{filteredRequests.length} 条记录</h3>
               </div>
-              <div className="attendance-filters">
+              <div className="attendance-filters leave-request-filters">
                 <label className="form-field">
                   <span>月份</span>
                   <MonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
@@ -433,7 +433,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function BalanceCard({ label, days }: { label: string; days: number }) {
   return (
-    <div className="leave-stat-card">
+    <div className="leave-stat-card leave-balance-card">
       <CalendarCheck2 size={20} />
       <span>{label}</span>
       <strong>剩余 {days} 天</strong>

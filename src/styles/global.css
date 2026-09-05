@@ -2659,6 +2659,28 @@ a {
   line-height: 1;
 }
 
+.leave-balance-card {
+  justify-items: center;
+  text-align: center;
+}
+
+.leave-page .leave-apply-button {
+  border-color: transparent;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--primary), #ec4899);
+  box-shadow: 0 10px 22px rgba(124, 58, 237, 0.22);
+}
+
+.leave-page .leave-apply-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: linear-gradient(135deg, #6d28d9, #db2777);
+  box-shadow: 0 14px 28px rgba(124, 58, 237, 0.3);
+}
+
+.leave-page .leave-apply-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .leave-status-pending {
   color: #7a4d0b;
   background: #fff4dc;
@@ -2690,6 +2712,28 @@ a {
 }
 
 @media (max-width: 767.98px) {
+  .leave-page .list-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: end;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .leave-page .leave-request-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .leave-page .leave-request-filters .form-field,
+  .leave-page .leave-request-filters select {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
   .leave-request-desktop-table {
     display: none !important;
   }
