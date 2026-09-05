@@ -49,6 +49,8 @@ export function LeavePage() {
   const [clockInDates, setClockInDates] = useState<Set<string>>(new Set());
   const [selectedReplacement, setSelectedReplacement] = useState<LeaveRequestItem | null>(null);
   const [changeValues, setChangeValues] = useState<ReplacementWorkChangeFormValues>({ changeType: 'reschedule', reason: '' });
+  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(getCurrentMonth());
+  const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | 'all'>('all');
   const [restCycle, setRestCycle] = useState(getCurrentRestCycle());
   const [selectedRestDates, setSelectedRestDates] = useState<string[]>([]);
   const [formValues, setFormValues] = useState<LeaveFormValues>(emptyForm);
@@ -92,6 +94,19 @@ export function LeavePage() {
     });
     return changes;
   }, [replacementChanges]);
+  const filteredRequests = useMemo(() => {
+    const [yearText, monthText] = selectedLeaveMonth.split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const monthStart = `${selectedLeaveMonth}-01`;
+    const monthEnd = `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+
+    return requests.filter((request) => {
+      const matchesMonth = request.start_date <= monthEnd && request.end_date >= monthStart;
+      const matchesType = selectedLeaveType === 'all' || request.leave_type === selectedLeaveType;
+      return matchesMonth && matchesType;
+    });
+  }, [requests, selectedLeaveMonth, selectedLeaveType]);
   const isCurrentRestCycle = restCycle === getCurrentRestCycle();
   const restLocked =
     !isCurrentRestCycle ||
@@ -359,16 +374,29 @@ export function LeavePage() {
             <div className="list-header">
               <div>
                 <span>申请记录</span>
-                <h3>{requests.length} 条记录</h3>
+                <h3>{filteredRequests.length} 条记录</h3>
+              </div>
+              <div className="attendance-filters">
+                <label className="form-field">
+                  <span>月份</span>
+                  <MonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
+                </label>
+                <label className="form-field">
+                  <span>请假类型</span>
+                  <select value={selectedLeaveType} onChange={(event) => setSelectedLeaveType(event.target.value as LeaveType | 'all')}>
+                    <option value="all">全部</option>
+                    {Object.entries(leaveTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
               </div>
             </div>
 
             {loading ? (
               <div className="table-state">正在读取请假记录...</div>
-            ) : requests.length === 0 ? (
+            ) : filteredRequests.length === 0 ? (
               <div className="table-state">暂无请假申请。</div>
             ) : (
-              <LeaveRequestTable requests={requests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable requests={filteredRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -777,6 +805,11 @@ function getCurrentRestCycle() {
   const month = today.getMonth() + 1;
   const target = today.getDate() < 26 ? new Date(year, month, 1) : new Date(year, month + 1, 1);
   return `${target.getFullYear()}-${`${target.getMonth() + 1}`.padStart(2, '0')}`;
+}
+
+function getCurrentMonth() {
+  const today = new Date();
+  return `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}`;
 }
 
 function getRestCycleRange(cycle: string) {
