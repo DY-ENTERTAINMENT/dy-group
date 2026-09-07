@@ -5,12 +5,11 @@ export type ReplacementWorkChangeReviewItem = ReplacementWorkChangeRequest & {
   employee: { full_name: string; employee_code: string | null } | null;
 };
 
-export type NewReplacementWorkChangeType = Extract<ReplacementWorkChangeType, 'reschedule' | 'work_time'>;
+export type NewReplacementWorkChangeType = Extract<ReplacementWorkChangeType, 'reschedule'>;
 
 export type ReplacementWorkChangeFormValues = {
   changeType: NewReplacementWorkChangeType;
   requestedMakeupDate?: string;
-  requestedStartTime?: string;
   reason: string;
 };
 
@@ -20,12 +19,16 @@ export const replacementWorkChangeLabels: Record<ReplacementWorkChangeType, stri
 
 export const newReplacementWorkChangeLabels: Record<NewReplacementWorkChangeType, string> = {
   reschedule: replacementWorkChangeLabels.reschedule,
-  work_time: replacementWorkChangeLabels.work_time,
 };
 
 export const replacementWorkChangeService = {
   async listMyChanges() {
-    const { data, error } = await supabase.from('replacement_work_change_requests').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('replacement_work_change_requests')
+      .select('*')
+      .order('reviewed_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
     if (error) throw error;
     return (data ?? []) as ReplacementWorkChangeRequest[];
   },
@@ -35,15 +38,15 @@ export const replacementWorkChangeService = {
     return new Set((data ?? []).map((record) => new Date(record.punched_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' })));
   },
   async create(sourceId: string, values: ReplacementWorkChangeFormValues) {
-    if (values.changeType !== 'reschedule' && values.changeType !== 'work_time') {
-      throw new Error('调休补班变更仅支持更换补班日期或调整补班工时。');
+    if (values.changeType !== 'reschedule') {
+      throw new Error('调休补班变更仅支持更换补班日期。');
     }
 
     const { data, error } = await supabase.rpc('create_replacement_work_change_request', {
       p_source_replacement_leave_request_id: sourceId,
       p_change_type: values.changeType,
       p_requested_makeup_date: values.requestedMakeupDate || null,
-      p_requested_start_time: values.requestedStartTime || null,
+      p_requested_start_time: null,
       p_reason: values.reason,
     });
     if (error) throw error;

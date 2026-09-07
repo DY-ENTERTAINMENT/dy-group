@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarCheck2, FileClock, Plus, Wand2 } from 'lucide-react';
+import { CalendarCheck2, Plus, Wand2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { MonthSelect } from '../components/MonthSelect';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
@@ -13,10 +13,8 @@ import {
   type RestDayCalendarItem,
   leaveService,
 } from '../services/leave.service';
-import type { LeaveRequestStatus, LeaveType, ReplacementWorkChangeType } from '../types/database';
+import type { LeaveRequestStatus, LeaveType } from '../types/database';
 import {
-  newReplacementWorkChangeLabels,
-  replacementWorkChangeLabels,
   replacementWorkChangeService,
   type ReplacementWorkChangeFormValues,
 } from '../services/replacement-work-change.service';
@@ -91,13 +89,6 @@ export function LeavePage() {
       if (!dates.has(change.source_replacement_leave_request_id)) dates.set(change.source_replacement_leave_request_id, change.requested_makeup_date!);
     });
     return dates;
-  }, [replacementChanges]);
-  const approvedChangesBySource = useMemo(() => {
-    const changes = new Map<string, (typeof replacementChanges)[number]>();
-    replacementChanges.filter((change) => change.status === 'approved').forEach((change) => {
-      if (!changes.has(change.source_replacement_leave_request_id)) changes.set(change.source_replacement_leave_request_id, change);
-    });
-    return changes;
   }, [replacementChanges]);
   const filteredRequests = useMemo(() => {
     const [yearText, monthText] = selectedLeaveMonth.split('-');
@@ -401,7 +392,7 @@ export function LeavePage() {
             ) : filteredRequests.length === 0 ? (
               <div className="table-state">暂无请假申请。</div>
             ) : (
-              <LeaveRequestTable requests={filteredRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} approvedChangesBySource={approvedChangesBySource} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable requests={filteredRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -421,7 +412,7 @@ export function LeavePage() {
           canViewReplacementLeave={canViewReplacementLeave}
         />
       ) : null}
-      {selectedReplacement ? <ReplacementWorkChangeModal request={selectedReplacement} values={changeValues} saving={saving} onChange={setChangeValues} onClose={() => setSelectedReplacement(null)} onSubmit={submitReplacementChange} /> : null}
+      {selectedReplacement ? <ReplacementWorkChangeModal request={selectedReplacement} currentMakeupDate={effectiveMakeupDatesBySource.get(selectedReplacement.id) ?? selectedReplacement.start_date} values={changeValues} saving={saving} onChange={setChangeValues} onClose={() => setSelectedReplacement(null)} onSubmit={submitReplacementChange} /> : null}
     </section>
   );
 }
@@ -572,25 +563,21 @@ function LeaveRequestModal({
   );
 }
 
-function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose, onSubmit }: { request: LeaveRequestItem; values: ReplacementWorkChangeFormValues; saving: boolean; onChange: (values: ReplacementWorkChangeFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  const needsDate = values.changeType === 'reschedule';
-  const needsTime = values.changeType === 'work_time';
-  return <SystemModal title="调休补班变更申请" subtitle={`原补班日期：${request.start_date}`} ariaLabel="调休补班变更申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="replacement-work-change-form" disabled={saving}>提交申请</button></>}>
+function ReplacementWorkChangeModal({ request, currentMakeupDate, values, saving, onChange, onClose, onSubmit }: { request: LeaveRequestItem; currentMakeupDate: string; values: ReplacementWorkChangeFormValues; saving: boolean; onChange: (values: ReplacementWorkChangeFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <SystemModal title="调休补班变更申请" subtitle={`调休日：${request.end_date}`} ariaLabel="调休补班变更申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="replacement-work-change-form" disabled={saving}>提交申请</button></>}>
     <form id="replacement-work-change-form" onSubmit={onSubmit}><div className="form-grid single">
-      <label className="form-field"><span>变更类型</span><select value={values.changeType} onChange={(event) => onChange({ changeType: event.target.value as ReplacementWorkChangeFormValues['changeType'], reason: values.reason })}>{Object.entries(newReplacementWorkChangeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      {needsDate ? <label className="form-field"><span>新的补班日期</span><input type="date" value={values.requestedMakeupDate ?? ''} onChange={(event) => onChange({ ...values, requestedMakeupDate: event.target.value })} required /></label> : null}
-      {needsTime ? <label className="form-field"><span>调整后开始时间</span><input type="time" step="900" value={values.requestedStartTime ?? ''} onChange={(event) => onChange({ ...values, requestedStartTime: event.target.value })} required /><small>结束时间将按现有规则自动计算为开始时间后 8 小时 30 分。</small></label> : null}
+      <div className="form-field"><span>原补班日</span><div className="location-preview"><strong>{request.start_date}</strong></div></div>
+      <div className="form-field"><span>当前补班日</span><div className="location-preview"><strong>{currentMakeupDate}</strong></div></div>
+      <label className="form-field"><span>新补班日期</span><input type="date" value={values.requestedMakeupDate ?? ''} onChange={(event) => onChange({ ...values, requestedMakeupDate: event.target.value })} required /></label>
       <label className="form-field"><span>原因</span><textarea value={values.reason} onChange={(event) => onChange({ ...values, reason: event.target.value })} required /></label>
     </div></form>
   </SystemModal>;
 }
 
-function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeType }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
   const isMobile = useMobileLeaveRequestLayout();
   const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
-    const approvedChange = approvedChangesBySource.get(request.id);
     if (request.leave_type !== 'replacement' || request.status !== 'approved') return null;
-    if (approvedChange) return <span className="leave-change-result">{replacementWorkChangeLabels[approvedChange.change_type]}</span>;
     if (pendingSourceIds.has(request.id)) return showPending ? <span className="leave-change-pending">变更审核中</span> : null;
     if (clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date)) return null;
     return <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button>;
