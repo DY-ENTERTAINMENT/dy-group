@@ -19,6 +19,7 @@ import type {
   AttendanceRecord,
   LeaveRequest,
   LeaveType,
+  CompanyActivityDay,
   PublicHoliday,
   Region,
 } from '../types/database';
@@ -152,6 +153,7 @@ export function AttendanceManagementPage() {
           data.leaveRequests,
           data.restDays,
           data.publicHolidays,
+          data.companyActivities,
           data.effectiveWorkTimes,
           data.effectiveReplacementWorkChanges,
           data.range.startDate,
@@ -933,6 +935,7 @@ function buildSummaries(
   leaveRequests: LeaveRequest[],
   restDays: AttendanceRestDay[],
   publicHolidays: PublicHoliday[],
+  companyActivities: CompanyActivityDay[],
   effectiveWorkTimes: AttendanceEffectiveWorkTime[],
   effectiveReplacementWorkChanges: AttendanceEffectiveReplacementWorkChange[],
   startDate: string,
@@ -947,6 +950,7 @@ function buildSummaries(
   const replacementLeaveEffectsByEmployeeDate = groupReplacementLeaveEffects(effectiveReplacementWorkChanges);
   const restDaysByEmployeeDate = groupRestDays(restDays);
   const publicHolidaysByRegionDate = groupPublicHolidays(publicHolidays);
+  const companyActivitiesByRegionDate = groupCompanyActivities(companyActivities);
   const effectiveWorkTimesByEmployeeDate = groupEffectiveWorkTimes(effectiveWorkTimes);
 
   return employees.map((employee) => {
@@ -981,6 +985,7 @@ function buildSummaries(
       const replacementLeaveEffect = replacementLeaveEffectsByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const restDay = restDaysByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const publicHoliday = getPublicHolidayForDate(publicHolidaysByRegionDate, employee.region_id, date);
+      const companyActivity = getCompanyActivityForDate(companyActivitiesByRegionDate, employee.region_id, date);
       const effectiveWorkTime = effectiveWorkTimesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const effectiveStartTime = effectiveWorkTime?.effective_start_time ?? employee.start_work_time;
       const effectiveEndTime = effectiveWorkTime?.effective_end_time ?? employee.end_work_time;
@@ -991,6 +996,8 @@ function buildSummaries(
       const isPastOrToday = date <= today;
       const weekend = isWeekend(date);
       const nonWorkingDay = Boolean(publicHoliday) || (weekend && (!replacementMakeUpDate || replacementLeaveEffect));
+      const activityExempt = Boolean(companyActivity?.id) && !publicHoliday;
+      const exemptFromRules = nonWorkingDay || activityExempt;
 
       if (!shouldCountAttendance) {
         return {
@@ -1007,43 +1014,45 @@ function buildSummaries(
 
       if (publicHoliday) {
         statuses.push('公共假期');
+      } else if (activityExempt) {
+        statuses.push('公司活动');
       } else if (weekend && !replacementMakeUpDate) {
         statuses.push('周末');
       }
 
-      if (replacementLeaveEffect) {
+      if (replacementLeaveEffect && !publicHoliday && !activityExempt) {
         statuses.push(replacementLeaveEffect === 'annual_leave' ? '补班来源年假已通过' : '补班来源无薪假已通过');
         leaveCounts[replacementLeaveEffect === 'annual_leave' ? 'annual' : 'unpaid'] += 1;
-      } else if (!nonWorkingDay && leave?.status === 'approved') {
+      } else if (!exemptFromRules && leave?.status === 'approved') {
         statuses.push(`${leaveTypeLabels[leave.leave_type]}已通过`);
         leaveCounts[leave.leave_type] += 1;
       }
 
-      if (restDay) {
+      if (!exemptFromRules && restDay) {
         statuses.push('排休');
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !leave && !restDay && isPastOrToday && !clockIn) {
+      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && isPastOrToday && !clockIn) {
         statuses.push('旷工');
         absentCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !leave && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
+      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
         statuses.push('迟到');
         lateCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && !leave && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
+      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
         statuses.push('早退');
         earlyLeaveCount += 1;
       }
 
-      if (employee.require_attendance && !nonWorkingDay && breakMinutes > 60 && breakEnd) {
+      if (employee.require_attendance && !exemptFromRules && breakMinutes > 60 && breakEnd) {
         statuses.push('超时休息');
         overtimeBreakCount += 1;
       }
 
-      if (!nonWorkingDay) {
+      if (!exemptFromRules) {
         records.forEach((record) => {
           const abnormalTypes = getDeviceAbnormalTypes(record, expectedIp, expectedGps, expectedDevice);
 
@@ -1239,6 +1248,21 @@ function getPublicHolidayForDate(
   date: string,
 ) {
   return publicHolidaysByRegionDate.get(`all:${date}`) ?? (regionId ? publicHolidaysByRegionDate.get(`${regionId}:${date}`) : null);
+}
+
+function groupCompanyActivities(companyActivities: CompanyActivityDay[]) {
+  const map = new Map<string, CompanyActivityDay>();
+  companyActivities.forEach((activity) => map.set(`${activity.region_id ?? 'all'}:${activity.activity_date}`, activity));
+  return map;
+}
+
+function getCompanyActivityForDate(
+  companyActivitiesByRegionDate: Map<string, CompanyActivityDay>,
+  regionId: string | null,
+  date: string,
+) {
+  return companyActivitiesByRegionDate.get(`all:${date}`)
+    ?? (regionId ? companyActivitiesByRegionDate.get(`${regionId}:${date}`) : null);
 }
 
 function getDateRange(startDate: string, endDate: string) {

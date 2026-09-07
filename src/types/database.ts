@@ -253,6 +253,20 @@ export type PublicHoliday = {
   updated_at: string;
 };
 
+export type CompanyActivityDay = {
+  id: string;
+  activity_name: string;
+  activity_date: string;
+  region_id: string | null;
+  attendance_exempt: boolean;
+  notes: string | null;
+  status: 'active' | 'voided';
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkTimeAdjustmentRequest = {
   id: string;
   profile_id: string;
@@ -748,6 +762,12 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      company_activity_days: {
+        Row: CompanyActivityDay;
+        Insert: Pick<CompanyActivityDay, 'activity_name' | 'activity_date'> & Partial<Omit<CompanyActivityDay, 'id' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by'>>;
+        Update: Partial<Omit<CompanyActivityDay, 'id' | 'created_at' | 'updated_at'>>;
+        Relationships: [];
       };
       work_time_adjustment_requests: {
         Row: WorkTimeAdjustmentRequest;

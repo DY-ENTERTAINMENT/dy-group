@@ -8,6 +8,7 @@ import type {
   EmploymentType,
   JobTitle,
   LeaveRequest,
+  CompanyActivityDay,
   PublicHoliday,
   Region,
 } from '../types/database';
@@ -43,6 +44,7 @@ export type AttendancePeriodData = {
   leaveRequests: LeaveRequest[];
   restDays: AttendanceRestDay[];
   publicHolidays: PublicHoliday[];
+  companyActivities: CompanyActivityDay[];
   effectiveWorkTimes: AttendanceEffectiveWorkTime[];
   effectiveReplacementWorkChanges: AttendanceEffectiveReplacementWorkChange[];
   regions: Region[];
@@ -159,6 +161,11 @@ export const attendanceManagementService = {
     if (regionId) {
       publicHolidaysQuery = publicHolidaysQuery.or(`region_id.is.null,region_id.eq.${regionId}`);
     }
+    const companyActivitiesQuery = supabase.rpc('get_attendance_company_activity_days' as never, {
+      p_start_date: range.startDate,
+      p_end_date: range.endDate,
+      p_region_id: regionId || null,
+    } as never);
 
     const [
       employeesResult,
@@ -168,6 +175,7 @@ export const attendanceManagementService = {
       restResult,
       abnormalReviewHistoryResult,
       publicHolidaysResult,
+      companyActivitiesResult,
       effectiveWorkTimesResult,
       effectiveReplacementWorkChangesResult,
       regionsResult,
@@ -200,6 +208,7 @@ export const attendanceManagementService = {
         p_region_id: regionId || null,
       }),
       publicHolidaysQuery,
+      companyActivitiesQuery,
       supabase.rpc('get_attendance_effective_work_times', {
         p_start_date: range.startDate,
         p_end_date: range.endDate,
@@ -236,6 +245,7 @@ export const attendanceManagementService = {
     if (publicHolidaysResult.error) {
       throw publicHolidaysResult.error;
     }
+    if (companyActivitiesResult.error) throw companyActivitiesResult.error;
 
     if (effectiveWorkTimesResult.error) {
       throw effectiveWorkTimesResult.error;
@@ -269,6 +279,7 @@ export const attendanceManagementService = {
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
       publicHolidays: publicHolidaysResult.data ?? [],
+      companyActivities: companyActivitiesResult.data ?? [],
       effectiveWorkTimes: effectiveWorkTimesResult.data ?? [],
       effectiveReplacementWorkChanges: effectiveReplacementWorkChangesResult.data ?? [],
       regions: accessibleRegionsResult.data ?? [],
