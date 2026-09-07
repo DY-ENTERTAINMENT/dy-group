@@ -6479,7 +6479,8 @@ button.leave-chip:disabled {
 }
 
 .agent-period-table {
-  min-width: 1100px;
+  width: 100%;
+  min-width: 0;
   table-layout: fixed;
 }
 
@@ -6505,31 +6506,31 @@ button.leave-chip:disabled {
 }
 
 .agent-period-col-creator {
-  width: 150px;
+  width: 8%;
 }
 
 .agent-period-col-platform {
-  width: 118px;
+  width: 7%;
 }
 
 .agent-period-col-type {
-  width: 88px;
+  width: 5%;
 }
 
 .agent-period-col-period {
-  width: 124px;
+  width: auto;
 }
 
 .agent-period-col-month {
-  width: 158px;
+  width: 10%;
 }
 
 .agent-period-col-status {
-  width: 92px;
+  width: 7%;
 }
 
 .agent-period-col-note {
-  width: 116px;
+  width: 8%;
 }
 
 .agent-period-header-label {
@@ -6571,7 +6572,7 @@ button.leave-chip:disabled {
 }
 
 .agent-period-cell {
-  padding: 10px 8px;
+  padding: 8px 5px;
 }
 
 .agent-period-cell--selected {
@@ -6586,12 +6587,12 @@ button.leave-chip:disabled {
   color: var(--text);
   cursor: pointer;
   display: grid;
-  gap: 3px;
+  gap: 2px;
   justify-items: center;
   line-height: 1.35;
   margin: 0;
   min-width: 0;
-  padding: 7px 4px;
+  padding: 6px 3px;
   text-align: center;
   width: 100%;
 }
@@ -6602,7 +6603,7 @@ button.leave-chip:disabled {
 
 .agent-period-entry span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -6632,7 +6633,7 @@ button.leave-chip:disabled {
 
 .agent-period-entry .agent-period-revenue-amount b {
   color: var(--text);
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 950;
   line-height: 1.05;
 }
