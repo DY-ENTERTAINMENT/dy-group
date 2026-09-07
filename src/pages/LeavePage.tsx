@@ -13,8 +13,13 @@ import {
   type RestDayCalendarItem,
   leaveService,
 } from '../services/leave.service';
-import type { LeaveRequestStatus, LeaveType } from '../types/database';
-import { replacementWorkChangeLabels, replacementWorkChangeService, type ReplacementWorkChangeFormValues } from '../services/replacement-work-change.service';
+import type { LeaveRequestStatus, LeaveType, ReplacementWorkChangeType } from '../types/database';
+import {
+  newReplacementWorkChangeLabels,
+  replacementWorkChangeLabels,
+  replacementWorkChangeService,
+  type ReplacementWorkChangeFormValues,
+} from '../services/replacement-work-change.service';
 
 const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
@@ -572,7 +577,7 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
   const needsTime = values.changeType === 'work_time';
   return <SystemModal title="调休补班变更申请" subtitle={`原补班日期：${request.start_date}`} ariaLabel="调休补班变更申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="replacement-work-change-form" disabled={saving}>提交申请</button></>}>
     <form id="replacement-work-change-form" onSubmit={onSubmit}><div className="form-grid single">
-      <label className="form-field"><span>变更类型</span><select value={values.changeType} onChange={(event) => onChange({ changeType: event.target.value as ReplacementWorkChangeFormValues['changeType'], reason: values.reason })}>{Object.entries(replacementWorkChangeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label className="form-field"><span>变更类型</span><select value={values.changeType} onChange={(event) => onChange({ changeType: event.target.value as ReplacementWorkChangeFormValues['changeType'], reason: values.reason })}>{Object.entries(newReplacementWorkChangeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       {needsDate ? <label className="form-field"><span>新的补班日期</span><input type="date" value={values.requestedMakeupDate ?? ''} onChange={(event) => onChange({ ...values, requestedMakeupDate: event.target.value })} required /></label> : null}
       {needsTime ? <label className="form-field"><span>调整后开始时间</span><input type="time" step="900" value={values.requestedStartTime ?? ''} onChange={(event) => onChange({ ...values, requestedStartTime: event.target.value })} required /><small>结束时间将按现有规则自动计算为开始时间后 8 小时 30 分。</small></label> : null}
       <label className="form-field"><span>原因</span><textarea value={values.reason} onChange={(event) => onChange({ ...values, reason: event.target.value })} required /></label>
@@ -580,7 +585,7 @@ function ReplacementWorkChangeModal({ request, values, saving, onChange, onClose
   </SystemModal>;
 }
 
-function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeFormValues['changeType'] }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+function LeaveRequestTable({ requests, pendingSourceIds, approvedChangesBySource, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; approvedChangesBySource: Map<string, { change_type: ReplacementWorkChangeType }>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
   const isMobile = useMobileLeaveRequestLayout();
   const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
     const approvedChange = approvedChangesBySource.get(request.id);

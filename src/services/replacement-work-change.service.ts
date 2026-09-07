@@ -5,8 +5,10 @@ export type ReplacementWorkChangeReviewItem = ReplacementWorkChangeRequest & {
   employee: { full_name: string; employee_code: string | null } | null;
 };
 
+export type NewReplacementWorkChangeType = Extract<ReplacementWorkChangeType, 'reschedule' | 'work_time'>;
+
 export type ReplacementWorkChangeFormValues = {
-  changeType: ReplacementWorkChangeType;
+  changeType: NewReplacementWorkChangeType;
   requestedMakeupDate?: string;
   requestedStartTime?: string;
   reason: string;
@@ -14,6 +16,11 @@ export type ReplacementWorkChangeFormValues = {
 
 export const replacementWorkChangeLabels: Record<ReplacementWorkChangeType, string> = {
   reschedule: '更换补班日期', annual_leave: '申请年假', unpaid_leave: '申请无薪假', work_time: '调整补班工时',
+};
+
+export const newReplacementWorkChangeLabels: Record<NewReplacementWorkChangeType, string> = {
+  reschedule: replacementWorkChangeLabels.reschedule,
+  work_time: replacementWorkChangeLabels.work_time,
 };
 
 export const replacementWorkChangeService = {
@@ -28,6 +35,10 @@ export const replacementWorkChangeService = {
     return new Set((data ?? []).map((record) => new Date(record.punched_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' })));
   },
   async create(sourceId: string, values: ReplacementWorkChangeFormValues) {
+    if (values.changeType !== 'reschedule' && values.changeType !== 'work_time') {
+      throw new Error('调休补班变更仅支持更换补班日期或调整补班工时。');
+    }
+
     const { data, error } = await supabase.rpc('create_replacement_work_change_request', {
       p_source_replacement_leave_request_id: sourceId,
       p_change_type: values.changeType,

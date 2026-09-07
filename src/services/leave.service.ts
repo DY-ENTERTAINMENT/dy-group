@@ -121,7 +121,16 @@ export const leaveService = {
     }
 
     const publicHolidays = await listPublicHolidaysForRange(values.start_date, values.end_date, employee?.region_id ?? null);
-    const workingDays = countWorkingLeaveDays(values.start_date, values.end_date, employee?.region_id ?? null, publicHolidays);
+    const effectiveMakeupDates = values.leave_type === 'annual' || values.leave_type === 'unpaid'
+      ? new Set((await getMyEffectiveReplacementMakeupDates(profileId)).values())
+      : new Set<string>();
+    const workingDays = countWorkingLeaveDays(
+      values.start_date,
+      values.end_date,
+      employee?.region_id ?? null,
+      publicHolidays,
+      effectiveMakeupDates,
+    );
 
     if (workingDays <= 0) {
       throw new Error('请假日期范围内没有需要扣假的工作日。');
@@ -238,43 +247,60 @@ export const leaveService = {
     const currentYear = new Date().getFullYear();
     const publicHolidaysByYear = await listPublicHolidaysForYear(currentYear, employee?.region_id ?? null);
 
-    const used = approvedRequests.reduce(
-      (total, request) => {
-        if (request.status !== 'approved') return total;
-        if (request.leave_type !== 'annual' && request.leave_type !== 'medical') return total;
+    const effectiveMakeupDatesBySource = await getMyEffectiveReplacementMakeupDates(profileId);
+    const effectiveMakeupDates = new Set(effectiveMakeupDatesBySource.values());
+    const annualLeaveDates = new Set<string>();
+    let medicalDays = 0;
 
-        const days = countLeaveWorkingDaysInYear(
+    approvedRequests.forEach((request) => {
+      if (request.status !== 'approved') return;
+
+      const regionId = request.employee?.region_id ?? employee?.region_id ?? null;
+      if (request.leave_type === 'annual') {
+        getLeaveWorkingDatesInYear(
           request.start_date,
           request.end_date,
           currentYear,
-          request.employee?.region_id ?? employee?.region_id ?? null,
+          regionId,
+          publicHolidaysByYear,
+          effectiveMakeupDates,
+        ).forEach((date) => annualLeaveDates.add(date));
+      }
+
+      if (request.leave_type === 'medical') {
+        medicalDays += countLeaveWorkingDaysInYear(
+          request.start_date,
+          request.end_date,
+          currentYear,
+          regionId,
           publicHolidaysByYear,
         );
-        return {
-          ...total,
-          [request.leave_type]: total[request.leave_type] + days,
-        };
-      },
-      { annual: 0, medical: 0 },
-    );
+      }
+    });
 
-    // A Saturday is normally excluded by countWorkingLeaveDays. This narrowly scoped
-    // exception is only for an approved change tied to one of this employee's approved
-    // replacement leave records; ordinary Saturday annual leave remains excluded.
     const approvedReplacementIds = new Set(
       approvedRequests.filter((request) => request.leave_type === 'replacement' && request.status === 'approved').map((request) => request.id),
     );
-    const { data: annualChanges, error: annualChangesError } = await supabase
-      .from('replacement_work_change_requests')
-      .select('source_replacement_leave_request_id')
-      .eq('status', 'approved')
-      .eq('change_type', 'annual_leave');
-    if (annualChangesError) throw annualChangesError;
-    const replacementAnnualDays = (annualChanges ?? []).filter((change) => approvedReplacementIds.has(change.source_replacement_leave_request_id)).length;
+    if (approvedReplacementIds.size > 0) {
+      const { data: annualChanges, error: annualChangesError } = await supabase
+        .from('replacement_work_change_requests')
+        .select('source_replacement_leave_request_id')
+        .in('source_replacement_leave_request_id', [...approvedReplacementIds])
+        .eq('status', 'approved')
+        .eq('change_type', 'annual_leave');
+      if (annualChangesError) throw annualChangesError;
+
+      (annualChanges ?? []).forEach((change) => {
+        const effectiveMakeupDate = effectiveMakeupDatesBySource.get(change.source_replacement_leave_request_id);
+        if (effectiveMakeupDate?.startsWith(`${currentYear}-`)) {
+          annualLeaveDates.add(effectiveMakeupDate);
+        }
+      });
+    }
 
     return {
-      annualRemaining: Math.max(0, entitlement.annual - used.annual - replacementAnnualDays),
-      medicalRemaining: Math.max(0, entitlement.medical - used.medical),
+      annualRemaining: Math.max(0, entitlement.annual - annualLeaveDates.size),
+      medicalRemaining: Math.max(0, entitlement.medical - medicalDays),
     };
   },
 
@@ -413,6 +439,50 @@ async function findEmployeeByProfileId(profileId: string) {
   }
 
   return data;
+}
+
+async function getMyEffectiveReplacementMakeupDates(profileId: string) {
+  const { data: replacementRequests, error: replacementRequestsError } = await supabase
+    .from('leave_requests')
+    .select('id, start_date')
+    .eq('profile_id', profileId)
+    .eq('leave_type', 'replacement')
+    .eq('status', 'approved');
+
+  if (replacementRequestsError) {
+    throw replacementRequestsError;
+  }
+
+  const effectiveDatesBySource = new Map((replacementRequests ?? []).map((request) => [request.id, request.start_date]));
+  const sourceIds = [...effectiveDatesBySource.keys()];
+
+  if (sourceIds.length === 0) {
+    return effectiveDatesBySource;
+  }
+
+  const { data: rescheduleChanges, error: rescheduleChangesError } = await supabase
+    .from('replacement_work_change_requests')
+    .select('source_replacement_leave_request_id, requested_makeup_date')
+    .in('source_replacement_leave_request_id', sourceIds)
+    .eq('status', 'approved')
+    .eq('change_type', 'reschedule')
+    .order('reviewed_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+
+  if (rescheduleChangesError) {
+    throw rescheduleChangesError;
+  }
+
+  const rescheduledSourceIds = new Set<string>();
+  (rescheduleChanges ?? []).forEach((change) => {
+    if (change.requested_makeup_date && !rescheduledSourceIds.has(change.source_replacement_leave_request_id)) {
+      effectiveDatesBySource.set(change.source_replacement_leave_request_id, change.requested_makeup_date);
+      rescheduledSourceIds.add(change.source_replacement_leave_request_id);
+    }
+  });
+
+  return effectiveDatesBySource;
 }
 
 async function validateReplacementLeaveRequest(
@@ -653,28 +723,72 @@ function countLeaveWorkingDaysInYear(
   const effectiveStart = start < yearStart ? yearStart : start;
   const effectiveEnd = end > yearEnd ? yearEnd : end;
 
-  return countWorkingLeaveDays(toDateKeyFromDate(effectiveStart), toDateKeyFromDate(effectiveEnd), regionId, publicHolidays);
+  return getWorkingLeaveDates(toDateKeyFromDate(effectiveStart), toDateKeyFromDate(effectiveEnd), regionId, publicHolidays).length;
 }
 
-function countWorkingLeaveDays(startDate: string, endDate: string, regionId: string | null, publicHolidays: PublicHoliday[]) {
+function getLeaveWorkingDatesInYear(
+  startDate: string,
+  endDate: string,
+  year: number,
+  regionId: string | null,
+  publicHolidays: PublicHoliday[],
+  effectiveMakeupDates: ReadonlySet<string>,
+) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < yearStart || start > yearEnd) {
+    return [] as string[];
+  }
+
+  const effectiveStart = start < yearStart ? yearStart : start;
+  const effectiveEnd = end > yearEnd ? yearEnd : end;
+  return getWorkingLeaveDates(
+    toDateKeyFromDate(effectiveStart),
+    toDateKeyFromDate(effectiveEnd),
+    regionId,
+    publicHolidays,
+    effectiveMakeupDates,
+  );
+}
+
+function countWorkingLeaveDays(
+  startDate: string,
+  endDate: string,
+  regionId: string | null,
+  publicHolidays: PublicHoliday[],
+  effectiveMakeupDates: ReadonlySet<string> = new Set<string>(),
+) {
+  return getWorkingLeaveDates(startDate, endDate, regionId, publicHolidays, effectiveMakeupDates).length;
+}
+
+function getWorkingLeaveDates(
+  startDate: string,
+  endDate: string,
+  regionId: string | null,
+  publicHolidays: PublicHoliday[],
+  effectiveMakeupDates: ReadonlySet<string> = new Set<string>(),
+) {
   const holidayDates = new Set(
     publicHolidays
       .filter((holiday) => !holiday.region_id || holiday.region_id === regionId)
       .map((holiday) => holiday.holiday_date),
   );
-  let count = 0;
+  const workingDates: string[] = [];
   const current = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
 
   while (current <= end) {
     const dateKey = toDateKeyFromDate(current);
-    if (!isWeekend(dateKey) && !holidayDates.has(dateKey)) {
-      count += 1;
+    if ((!isWeekend(dateKey) || (isSaturday(dateKey) && effectiveMakeupDates.has(dateKey))) && !holidayDates.has(dateKey)) {
+      workingDates.push(dateKey);
     }
     current.setDate(current.getDate() + 1);
   }
 
-  return count;
+  return workingDates;
 }
 
 function isWeekend(date: string) {
