@@ -126,7 +126,7 @@ export type CreatorEntityFormValues = {
 
 export type CreatorEntitySharedFormValues = {
   display_name: string;
-  registration_type: CreatorRegistrationType;
+  registration_type: CreatorRegistrationType | null;
   guild_joined_date: string;
   region_id: string;
   scout_employee_id: string;
@@ -136,6 +136,17 @@ export type CreatorEntitySharedFormValues = {
   bank_account: string;
   secondary_scout_employee_id: string;
   secondary_manager_employee_id: string;
+  platforms: CreatorEntityPlatformEditValues[];
+};
+
+export type CreatorEntityPlatformEditValues = {
+  id: string;
+  platform: CreatorPlatform;
+  joined_date: string;
+  platform_user_id: string;
+  platform_account: string;
+  platform_public_id: string;
+  creator_type: CreatorType;
 };
 
 export type CreatorEntityCollaborator = {
@@ -557,12 +568,75 @@ export const scoutService = {
     if (error) throw error;
   },
 
+  async updateCreatorEntityPlatformProfiles(creatorEntityId: string, profiles: CreatorEntityPlatformEditValues[]) {
+    const seenProfileIds = new Set<string>();
+    const seenPlatforms = new Set<CreatorPlatform>();
+
+    for (const profile of profiles) {
+      if (!profile.id || seenProfileIds.has(profile.id) || seenPlatforms.has(profile.platform)) {
+        throw new Error('平台资料无效，请关闭后重新打开编辑窗口。');
+      }
+      if (!profile.joined_date || !profile.platform_user_id.trim() || !profile.platform_account.trim() || !profile.platform_public_id.trim()) {
+        throw new Error(`${platformLabels[profile.platform]} 平台资料未填写完整。`);
+      }
+      seenProfileIds.add(profile.id);
+      seenPlatforms.add(profile.platform);
+    }
+
+    for (const profile of profiles) {
+      const { data, error } = await db
+        .from('creator_profiles')
+        .update({
+          joined_date: profile.joined_date,
+          platform_user_id: profile.platform_user_id.trim(),
+          platform_account: profile.platform_account.trim(),
+          platform_public_id: profile.platform_public_id.trim(),
+          creator_type: profile.creator_type,
+        })
+        .eq('id', profile.id)
+        .eq('creator_entity_id', creatorEntityId)
+        .eq('status', 'active')
+        .eq('membership_status', 'active')
+        .select('id')
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === '23505') throw new Error(`${platformLabels[profile.platform]} User ID 已被其他主播使用，请检查后重试。`);
+        throw new Error(`${platformLabels[profile.platform]} 平台资料保存失败：${error.message}`);
+      }
+      if (!data) throw new Error(`${platformLabels[profile.platform]} 平台资料已变更或不再有效，请刷新后重试。`);
+    }
+  },
+
   async getCreatorEntityCollaborators(creatorEntityId: string): Promise<CreatorEntityCollaborator[]> {
     const { data, error } = await db.rpc('get_creator_entity_collaborators', {
       p_creator_entity_id: creatorEntityId,
     });
     if (error) throw error;
     return data ?? [];
+  },
+
+  async listCreatorEntityActivePlatformProfiles(creatorEntityId: string): Promise<CreatorEntityPlatformEditValues[]> {
+    const { data, error } = await db
+      .from('creator_profiles')
+      .select('id, platform, joined_date, platform_user_id, platform_account, platform_public_id, creator_type')
+      .eq('creator_entity_id', creatorEntityId)
+      .eq('status', 'active')
+      .eq('membership_status', 'active');
+
+    if (error) throw error;
+    const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
+    return (data ?? [])
+      .map((profile: any) => ({
+        id: profile.id,
+        platform: profile.platform as CreatorPlatform,
+        joined_date: profile.joined_date,
+        platform_user_id: profile.platform_user_id,
+        platform_account: profile.platform_account,
+        platform_public_id: profile.platform_public_id ?? '',
+        creator_type: profile.creator_type as CreatorType,
+      }))
+      .sort((first: CreatorEntityPlatformEditValues, second: CreatorEntityPlatformEditValues) => platformOrder[first.platform] - platformOrder[second.platform]);
   },
 
   async addCreatorEntityPlatformProfile(creatorEntityId: string, platform: CreatorPlatform, values: CreatorAdditionalPlatformFormValues) {
