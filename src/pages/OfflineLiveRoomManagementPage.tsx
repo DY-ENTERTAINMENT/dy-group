@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Edit3, Plus, Power, RefreshCw, Search, UserPlus, X } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
@@ -73,6 +73,14 @@ export function OfflineLiveRoomManagementPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [roomModal, setRoomModal] = useState<{ mode: 'create' | 'edit'; room: OfflineLiveRoom | null } | null>(null);
+  const [roomSaving, setRoomSaving] = useState(false);
+  const [roomSubmitError, setRoomSubmitError] = useState('');
+  const [inactiveRoomsModalOpen, setInactiveRoomsModalOpen] = useState(false);
+  const [inactiveRooms, setInactiveRooms] = useState<OfflineLiveRoom[]>([]);
+  const [inactiveRoomsLoading, setInactiveRoomsLoading] = useState(false);
+  const [inactiveRoomsError, setInactiveRoomsError] = useState('');
+  const [restoreConfirmation, setRestoreConfirmation] = useState<{ room: OfflineLiveRoom; closeRoomModal: boolean } | null>(null);
+  const inactiveRoomsRequestIdRef = useRef(0);
   const [assignmentRoom, setAssignmentRoom] = useState<OfflineLiveRoomDashboardRoom | null>(null);
 
   const selectedRange = useMemo(() => getSelectedDateRange(quickRange, todayIso, customStart, customEnd), [customEnd, customStart, quickRange, todayIso]);
@@ -145,21 +153,98 @@ export function OfflineLiveRoomManagementPage() {
 
   async function saveRoom(values: RoomFormValues) {
     const payload = normalizeRoomForm(values);
-    if (roomModal?.mode === 'edit' && roomModal.room) {
-      await offlineLiveRoomService.updateRoom(roomModal.room.id, payload);
-      setMessage('直播间已更新。');
-    } else {
+    setRoomSubmitError('');
+    setRoomSaving(true);
+    try {
+      if (roomModal?.mode === 'edit' && roomModal.room) {
+        await offlineLiveRoomService.updateRoom(roomModal.room.id, payload);
+        setMessage('直播间已更新。');
+        setRoomSubmitError('');
+        setRoomModal(null);
+        await loadDashboard();
+        return;
+      }
+
+      const existingRoom = await offlineLiveRoomService.findRoomByRegionAndNumber(payload.regionId, payload.roomNumber);
+      if (existingRoom?.status === 'active') {
+        setRoomSubmitError(`该区域的 ${payload.roomNumber}号直播间已存在。`);
+        return;
+      }
+      if (existingRoom?.status === 'inactive') {
+        setRestoreConfirmation({ room: existingRoom, closeRoomModal: true });
+        return;
+      }
+
       await offlineLiveRoomService.createRoom(payload);
       setMessage('直播间已添加。');
+      setRoomSubmitError('');
+      setRoomModal(null);
+      await loadDashboard();
+    } catch (saveError) {
+      setRoomSubmitError(isDuplicateRoomError(saveError)
+        ? `该区域的 ${payload.roomNumber}号直播间已存在，请刷新后重试。`
+        : `保存直播间失败：${getErrorMessage(saveError)}`);
+    } finally {
+      setRoomSaving(false);
     }
-    setRoomModal(null);
-    await loadDashboard();
   }
 
   async function deactivateRoom(room: OfflineLiveRoom) {
     await offlineLiveRoomService.deactivateRoom(room.id);
     setMessage('直播间已停用。');
     await loadDashboard();
+  }
+
+  async function loadInactiveRooms() {
+    const requestedRegionId = regionId;
+    if (!requestedRegionId) return;
+    const requestId = ++inactiveRoomsRequestIdRef.current;
+    setInactiveRoomsLoading(true);
+    setInactiveRoomsError('');
+    try {
+      const rooms = await offlineLiveRoomService.listRooms({ includeInactive: true, regionId: requestedRegionId });
+      if (requestId !== inactiveRoomsRequestIdRef.current) return;
+      setInactiveRooms(rooms.filter((room) => room.status === 'inactive'));
+    } catch (loadError) {
+      if (requestId !== inactiveRoomsRequestIdRef.current) return;
+      setInactiveRoomsError(`读取已停用直播间失败：${getErrorMessage(loadError)}`);
+    } finally {
+      if (requestId !== inactiveRoomsRequestIdRef.current) return;
+      setInactiveRoomsLoading(false);
+    }
+  }
+
+  function openInactiveRooms() {
+    setInactiveRoomsModalOpen(true);
+    void loadInactiveRooms();
+  }
+
+  function closeInactiveRooms() {
+    inactiveRoomsRequestIdRef.current += 1;
+    setInactiveRoomsModalOpen(false);
+    setInactiveRooms([]);
+    setInactiveRoomsError('');
+  }
+
+  async function confirmRestoreRoom() {
+    if (!restoreConfirmation) return;
+    if (restoreConfirmation.closeRoomModal) setRoomSubmitError('');
+    setInactiveRoomsError('');
+    setRoomSaving(true);
+    try {
+      await offlineLiveRoomService.restoreRoom(restoreConfirmation.room.id);
+      setRestoreConfirmation(null);
+      if (restoreConfirmation.closeRoomModal) setRoomModal(null);
+      setMessage('直播间已恢复启用。');
+      setRoomSubmitError('');
+      await Promise.all([loadDashboard(), inactiveRoomsModalOpen ? loadInactiveRooms() : Promise.resolve()]);
+    } catch (restoreError) {
+      const message = `恢复直播间失败：${getErrorMessage(restoreError)}`;
+      if (restoreConfirmation.closeRoomModal) setRoomSubmitError(message);
+      else setInactiveRoomsError(message);
+    } finally {
+      setRoomSaving(false);
+    }
   }
 
   async function assignCreator(roomId: string, creatorEntityId: string) {
@@ -221,7 +306,10 @@ export function OfflineLiveRoomManagementPage() {
           <button className="secondary-button compact-button" type="button" onClick={loadDashboard} disabled={busy || !regionId}>
             <RefreshCw size={16} /> 刷新
           </button>
-          <button className="primary-button compact-button" type="button" onClick={() => setRoomModal({ mode: 'create', room: null })} disabled={!canUse || !regionId}>
+          <button className="secondary-button compact-button" type="button" onClick={openInactiveRooms} disabled={!regionId}>
+            已停用直播间
+          </button>
+          <button className="primary-button compact-button" type="button" onClick={() => { setRoomSubmitError(''); setRoomModal({ mode: 'create', room: null }); }} disabled={!canUse || !regionId}>
             <Plus size={16} /> 添加直播间
           </button>
         </div>
@@ -242,7 +330,7 @@ export function OfflineLiveRoomManagementPage() {
             key={room.room.id}
             item={room}
             canUse={canUse}
-            onEdit={() => setRoomModal({ mode: 'edit', room: room.room })}
+            onEdit={() => { setRoomSubmitError(''); setRoomModal({ mode: 'edit', room: room.room }); }}
             onDeactivate={() => void deactivateRoom(room.room)}
             onManageCreators={() => setAssignmentRoom(room)}
           />
@@ -254,10 +342,35 @@ export function OfflineLiveRoomManagementPage() {
           regions={regions}
           room={roomModal.room}
           defaultRegionId={regionId}
-          saving={loading}
-          onClose={() => setRoomModal(null)}
+          saving={roomSaving}
+          submitError={roomSubmitError}
+          onClose={() => { if (!roomSaving) { setRoomSubmitError(''); setRoomModal(null); } }}
           onSubmit={(values) => void saveRoom(values)}
         />
+      ) : null}
+
+      {inactiveRoomsModalOpen ? (
+        <InactiveRoomsModal
+          rooms={inactiveRooms}
+          loading={inactiveRoomsLoading}
+          error={inactiveRoomsError}
+          canUse={canUse}
+          saving={roomSaving}
+          onClose={() => { if (!roomSaving) closeInactiveRooms(); }}
+          onRestore={(room) => setRestoreConfirmation({ room, closeRoomModal: false })}
+        />
+      ) : null}
+
+      {restoreConfirmation ? (
+        <SystemModal
+          title={`确认恢复 ${restoreConfirmation.room.room_number}号直播间？`}
+          ariaLabel="确认恢复直播间"
+          onClose={() => { if (!roomSaving) setRestoreConfirmation(null); }}
+          footer={<><button className="secondary-button compact-button" type="button" onClick={() => setRestoreConfirmation(null)} disabled={roomSaving}>取消</button><button className="primary-button compact-button" type="button" onClick={() => void confirmRestoreRoom()} disabled={!canUse || roomSaving}>{roomSaving ? '恢复中...' : '恢复启用'}</button></>}
+        >
+          {restoreConfirmation.closeRoomModal ? roomSubmitError ? <p className="form-alert">{roomSubmitError}</p> : null : inactiveRoomsError ? <p className="form-alert">{inactiveRoomsError}</p> : null}
+          <p>恢复后将保留原直播间资料，不会自动恢复历史主播绑定。</p>
+        </SystemModal>
       ) : null}
 
       {assignmentRoom ? (
@@ -371,11 +484,12 @@ function StatusBadge({ status }: { status: OfflineLiveRoomUpdateStatus }) {
   return <span className={`offline-live-room-status offline-live-room-status--${status}`}>{statusLabels[status]}</span>;
 }
 
-function RoomModal({ regions, room, defaultRegionId, saving, onClose, onSubmit }: {
+function RoomModal({ regions, room, defaultRegionId, saving, submitError, onClose, onSubmit }: {
   regions: Region[];
   room: OfflineLiveRoom | null;
   defaultRegionId: string;
   saving: boolean;
+  submitError: string;
   onClose: () => void;
   onSubmit: (values: RoomFormValues) => void;
 }) {
@@ -404,7 +518,7 @@ function RoomModal({ regions, room, defaultRegionId, saving, onClose, onSubmit }
       onClose={onClose}
       footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="offline-live-room-form" disabled={saving}>保存</button></>}
     >
-      {error ? <p className="form-alert">{error}</p> : null}
+      {error || submitError ? <p className="form-alert">{error || submitError}</p> : null}
       <form id="offline-live-room-form" className="form-grid" onSubmit={submit}>
         <label className="form-field">
           <span>区域</span>
@@ -416,6 +530,38 @@ function RoomModal({ regions, room, defaultRegionId, saving, onClose, onSubmit }
         <TextField label="房间名称" value={values.name} onChange={(name) => setValues({ ...values, name })} required />
         <TextField label="排序" type="number" value={values.sortOrder} onChange={(sortOrder) => setValues({ ...values, sortOrder })} />
       </form>
+    </SystemModal>
+  );
+}
+
+function InactiveRoomsModal({ rooms, loading, error, canUse, saving, onClose, onRestore }: {
+  rooms: OfflineLiveRoom[];
+  loading: boolean;
+  error: string;
+  canUse: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onRestore: (room: OfflineLiveRoom) => void;
+}) {
+  return (
+    <SystemModal
+      title="已停用直播间"
+      ariaLabel="已停用直播间"
+      onClose={onClose}
+      footer={<button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>关闭</button>}
+    >
+      {error ? <p className="form-alert">{error}</p> : null}
+      {loading ? <p className="offline-live-room-empty-line">正在读取已停用直播间...</p> : null}
+      {!loading && rooms.length === 0 ? <p className="offline-live-room-empty-line">当前区域暂无已停用直播间。</p> : null}
+      {!loading && rooms.map((room) => (
+        <div className="offline-live-room-assigned-creator" key={room.id}>
+          <div>
+            <strong>{room.room_number}号直播间</strong>
+            <span>{room.region?.code || room.region?.name || '-'} · {room.name} · 排序 {room.sort_order} · 已停用</span>
+          </div>
+          <button className="primary-button compact-button" type="button" onClick={() => onRestore(room)} disabled={!canUse || saving}>恢复启用</button>
+        </div>
+      ))}
     </SystemModal>
   );
 }
@@ -653,4 +799,9 @@ function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') return error.message;
   return '操作失败。';
+}
+
+function isDuplicateRoomError(error: unknown) {
+  if (typeof error !== 'object' || !error) return false;
+  return 'code' in error && error.code === '23505';
 }

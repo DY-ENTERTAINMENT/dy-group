@@ -161,6 +161,17 @@ export const offlineLiveRoomService = {
     return (data ?? []).map(mapRoomRow);
   },
 
+  async findRoomByRegionAndNumber(regionId: string, roomNumber: string): Promise<OfflineLiveRoom | null> {
+    const { data, error } = await db
+      .from('offline_live_rooms')
+      .select(roomSelect)
+      .eq('region_id', regionId)
+      .eq('room_number', roomNumber.trim())
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapRoomRow(data) : null;
+  },
+
   async createRoom(input: OfflineLiveRoomFormInput): Promise<OfflineLiveRoom> {
     const { data, error } = await db
       .from('offline_live_rooms')
@@ -184,6 +195,11 @@ export const offlineLiveRoomService = {
 
   async deactivateRoom(roomId: string): Promise<void> {
     const { error } = await db.from('offline_live_rooms').update({ status: 'inactive' }).eq('id', roomId);
+    if (error) throw error;
+  },
+
+  async restoreRoom(roomId: string): Promise<void> {
+    const { error } = await db.from('offline_live_rooms').update({ status: 'active' }).eq('id', roomId);
     if (error) throw error;
   },
 
