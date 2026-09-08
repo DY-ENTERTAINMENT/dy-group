@@ -306,7 +306,7 @@ export function OfflineLiveRoomManagementPage() {
           <button className="secondary-button compact-button" type="button" onClick={loadDashboard} disabled={busy || !regionId}>
             <RefreshCw size={16} /> 刷新
           </button>
-          <button className="secondary-button compact-button" type="button" onClick={openInactiveRooms} disabled={!regionId}>
+          <button className="secondary-button compact-button" type="button" onClick={openInactiveRooms} disabled={!regionId} style={{ whiteSpace: 'nowrap' }}>
             已停用直播间
           </button>
           <button className="primary-button compact-button" type="button" onClick={() => { setRoomSubmitError(''); setRoomModal({ mode: 'create', room: null }); }} disabled={!canUse || !regionId}>
