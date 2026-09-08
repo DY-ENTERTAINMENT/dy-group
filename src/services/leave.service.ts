@@ -40,6 +40,11 @@ export type LeaveBalance = {
   medicalRemaining: number;
 };
 
+type MyLeaveBalanceRow = {
+  leave_type: 'annual' | 'medical';
+  remaining_days: number;
+};
+
 export type RestDayCalendarItem = {
   rest_day_id: string;
   employee_id: string;
@@ -241,66 +246,24 @@ export const leaveService = {
   },
 
   async getMyLeaveBalances(profileId: string, requests?: LeaveRequestItem[]): Promise<LeaveBalance> {
-    const employee = await findEmployeeByProfileId(profileId);
-    const entitlement = calculateLeaveEntitlement(employee);
-    const approvedRequests = requests ?? (await this.listMyLeaveRequests(profileId));
-    const currentYear = new Date().getFullYear();
-    const publicHolidaysByYear = await listPublicHolidaysForYear(currentYear, employee?.region_id ?? null);
+    void profileId;
+    void requests;
 
-    const effectiveMakeupDatesBySource = await getMyEffectiveReplacementMakeupDates(profileId);
-    const effectiveMakeupDates = new Set(effectiveMakeupDatesBySource.values());
-    const annualLeaveDates = new Set<string>();
-    let medicalDays = 0;
-
-    approvedRequests.forEach((request) => {
-      if (request.status !== 'approved') return;
-
-      const regionId = request.employee?.region_id ?? employee?.region_id ?? null;
-      if (request.leave_type === 'annual') {
-        getLeaveWorkingDatesInYear(
-          request.start_date,
-          request.end_date,
-          currentYear,
-          regionId,
-          publicHolidaysByYear,
-          effectiveMakeupDates,
-        ).forEach((date) => annualLeaveDates.add(date));
-      }
-
-      if (request.leave_type === 'medical') {
-        medicalDays += countLeaveWorkingDaysInYear(
-          request.start_date,
-          request.end_date,
-          currentYear,
-          regionId,
-          publicHolidaysByYear,
-        );
-      }
+    const { data, error } = await (supabase as any).rpc('get_my_leave_balances', {
+      p_year: new Date().getFullYear(),
     });
 
-    const approvedReplacementIds = new Set(
-      approvedRequests.filter((request) => request.leave_type === 'replacement' && request.status === 'approved').map((request) => request.id),
-    );
-    if (approvedReplacementIds.size > 0) {
-      const { data: annualChanges, error: annualChangesError } = await supabase
-        .from('replacement_work_change_requests')
-        .select('source_replacement_leave_request_id')
-        .in('source_replacement_leave_request_id', [...approvedReplacementIds])
-        .eq('status', 'approved')
-        .eq('change_type', 'annual_leave');
-      if (annualChangesError) throw annualChangesError;
-
-      (annualChanges ?? []).forEach((change) => {
-        const effectiveMakeupDate = effectiveMakeupDatesBySource.get(change.source_replacement_leave_request_id);
-        if (effectiveMakeupDate?.startsWith(`${currentYear}-`)) {
-          annualLeaveDates.add(effectiveMakeupDate);
-        }
-      });
+    if (error) {
+      throw error;
     }
 
+    const balances = (data ?? []) as MyLeaveBalanceRow[];
+    const annualBalance = balances.find((balance) => balance.leave_type === 'annual');
+    const medicalBalance = balances.find((balance) => balance.leave_type === 'medical');
+
     return {
-      annualRemaining: Math.max(0, entitlement.annual - annualLeaveDates.size),
-      medicalRemaining: Math.max(0, entitlement.medical - medicalDays),
+      annualRemaining: Math.max(0, annualBalance?.remaining_days ?? 0),
+      medicalRemaining: Math.max(0, medicalBalance?.remaining_days ?? 0),
     };
   },
 

@@ -9,6 +9,7 @@ import { AttendancePage } from '../pages/AttendancePage';
 import { AttendanceLocationPage } from '../pages/AttendanceLocationPage';
 import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
 import { LeavePage } from '../pages/LeavePage';
+import { LeaveBalanceManagementPage } from '../pages/LeaveBalanceManagementPage';
 import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
 import { LeaveReviewPage } from '../pages/LeaveReviewPage';
 import { WorkTimeAdjustmentReviewPage } from '../pages/WorkTimeAdjustmentReviewPage';
@@ -74,6 +75,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="leave-review">
                 <LeaveReviewPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('leave-balance-management'),
+            element: (
+              <RequirePermission permissionKey="leave-balance-management">
+                <LeaveBalanceManagementPage />
               </RequirePermission>
             ),
           },

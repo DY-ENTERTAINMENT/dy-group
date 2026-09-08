@@ -140,6 +140,17 @@ export type LeaveRequest = {
   updated_at: string;
 };
 
+export type LeaveBalanceAdjustment = {
+  id: string;
+  employee_id: string;
+  leave_year: number;
+  leave_type: LeaveType;
+  adjustment_days: number;
+  reason: string;
+  adjusted_by: string | null;
+  created_at: string;
+};
+
 export type AttendanceRecord = {
   id: string;
   profile_id: string;
@@ -582,6 +593,28 @@ export type Database = {
           {
             foreignKeyName: 'leave_requests_profile_id_fkey';
             columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      employee_leave_balance_adjustments: {
+        Row: LeaveBalanceAdjustment;
+        Insert: Pick<LeaveBalanceAdjustment, 'employee_id' | 'leave_year' | 'leave_type' | 'adjustment_days' | 'reason'> &
+          Partial<Pick<LeaveBalanceAdjustment, 'id' | 'adjusted_by' | 'created_at'>>;
+        Update: Partial<Omit<LeaveBalanceAdjustment, 'id' | 'created_at'>>;
+        Relationships: [
+          {
+            foreignKeyName: 'employee_leave_balance_adjustments_employee_id_fkey';
+            columns: ['employee_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'employee_leave_balance_adjustments_adjusted_by_fkey';
+            columns: ['adjusted_by'];
             isOneToOne: false;
             referencedRelation: 'profiles';
             referencedColumns: ['id'];

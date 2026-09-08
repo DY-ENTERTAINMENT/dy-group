@@ -178,6 +178,14 @@ export const menuItems: MenuItem[] = [
     group: '人事部',
   },
   {
+    key: 'leave-balance-management',
+    label: '假期管理',
+    path: '/hr/leave-balances',
+    icon: CalendarDays,
+    section: '工作工具',
+    group: '人事部',
+  },
+  {
     key: 'work-time-adjustment',
     label: '工时调整审核',
     path: '/hr/work-time-adjustments',

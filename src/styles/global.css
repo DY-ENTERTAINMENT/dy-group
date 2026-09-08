@@ -13027,6 +13027,161 @@ button.leave-chip:disabled {
   line-height: 1.55;
 }
 
+.leave-balance-management-page {
+  display: grid;
+  gap: 22px;
+}
+
+.leave-balance-management-panel {
+  overflow: hidden;
+}
+
+.leave-balance-management-header {
+  align-items: center;
+}
+
+.leave-balance-management-header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.leave-balance-management-header .secondary-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.leave-balance-management-filters {
+  grid-template-columns: minmax(120px, 160px) minmax(150px, 210px) minmax(150px, 210px) minmax(240px, 1fr);
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.leave-balance-management-filters .form-field,
+.leave-balance-management-search {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.leave-balance-management-search {
+  width: 100%;
+  align-self: end;
+}
+
+.leave-balance-management-table {
+  min-width: 1180px;
+}
+
+.leave-balance-management-table th {
+  white-space: nowrap;
+}
+
+.leave-balance-management-table td {
+  white-space: nowrap;
+}
+
+.leave-balance-table-number {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.leave-balance-negative {
+  color: #a63825;
+}
+
+.leave-balance-row-actions {
+  flex-wrap: wrap;
+  min-width: 230px;
+}
+
+.leave-balance-row-actions .secondary-button {
+  width: auto;
+}
+
+.leave-balance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.leave-balance-summary-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #eadcf7;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #fbf7ff 100%);
+}
+
+.leave-balance-summary-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.leave-balance-summary-item strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.leave-balance-adjustment-form {
+  display: grid;
+  gap: 0;
+}
+
+.leave-balance-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.leave-balance-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.leave-balance-history-item div,
+.leave-balance-history-item p,
+.leave-balance-history-item small {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+.leave-balance-history-item div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.leave-balance-history-item strong {
+  color: var(--text);
+}
+
+.leave-balance-history-item span,
+.leave-balance-history-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.leave-balance-history-item b {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--primary);
+}
+
+.leave-balance-history-item p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+
 @media (max-width: 900px) {
   .company-activity-toolbar {
     display: grid;
@@ -13037,6 +13192,14 @@ button.leave-chip:disabled {
   }
 
   .company-activity-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leave-balance-management-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leave-balance-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -13066,5 +13229,27 @@ button.leave-chip:disabled {
 
   .company-activity-record-count {
     padding-inline: 14px;
+  }
+
+  .leave-balance-management-filters {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .leave-balance-management-search {
+    height: 40px;
+  }
+
+  .leave-balance-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .leave-balance-history-item div {
+    align-items: flex-start;
+  }
+
+  .leave-balance-management-header .secondary-action {
+    width: fit-content;
   }
 }
