@@ -110,7 +110,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const pendingAdjustments = adjustments.filter((item) => item.status === 'pending').length;
   const unclaimedDesigns = designRequests.filter((item) => item.status === 'unclaimed').length;
   const inProgressDesigns = designRequests.filter((item) => item.status === 'in_progress' || item.status === 'revision').length;
-  const canReviewAdjustments = permissions.canUse('management-streamer-stats');
+  const canReviewAdjustments = permissions.canUse('creator-adjustment-review');
 
   useLayoutEffect(() => {
     if (mode === 'revenue') setMonth(currentMonth);

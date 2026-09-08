@@ -216,7 +216,7 @@ export const router = createBrowserRouter([
           {
             path: getMenuPath('management-creator-adjustment-reviews'),
             element: (
-              <RequirePermission permissionKey="management-streamer-stats">
+              <RequirePermission permissionKey="creator-adjustment-review">
                 <AgentPage mode="management-adjustments" />
               </RequirePermission>
             ),

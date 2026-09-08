@@ -1479,6 +1479,9 @@ function getCurrentSpecialPermissionName(target: PermissionModalTarget | null, n
 }
 
 function getDefaultPermissionKeys(name: string) {
+  if (name.trim().toUpperCase() === 'HR ADMIN') {
+    return ['hr', 'staff', 'registration-review', 'leave-review', 'attendance-management', 'attendance-locations', 'creator-adjustment-review'];
+  }
   if (name.includes('HR')) return ['hr', 'staff', 'registration-review', 'leave-review', 'attendance-management', 'attendance-locations'];
   if (name.includes('高级管理员')) return ['scout', 'agent', 'designer', 'hr'];
   if (name.includes('管理员')) return ['scout', 'agent', 'designer', 'hr'];

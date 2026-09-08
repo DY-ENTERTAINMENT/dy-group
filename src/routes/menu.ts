@@ -240,7 +240,7 @@ export const menuItems: MenuItem[] = [
     icon: ClipboardCheck,
     section: '管理',
     group: '管理',
-    permissionKey: 'management-streamer-stats',
+    permissionKey: 'creator-adjustment-review',
   },
   {
     key: 'management-recruiting-data',
