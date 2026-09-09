@@ -23,10 +23,14 @@ export type DesignRequestStatus = 'unclaimed' | 'in_progress' | 'confirming' | '
 export type DesignRequestType = 'banner' | 'standee' | 'poster' | 'special';
 export type PrintMethod = 'print' | 'no_print' | 'self_print';
 
+export type AgentOptionEmployee = Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email' | 'status'> & {
+  job_title_name: string | null;
+};
+
 export type AgentOptions = {
   regions: Region[];
-  employees: Array<Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'>>;
-  currentEmployee: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'email'> | null;
+  employees: AgentOptionEmployee[];
+  currentEmployee: AgentOptionEmployee | null;
 };
 
 export type PersonalManagerCreatorProfile = CreatorProfile & {
@@ -377,11 +381,20 @@ export const agentService = {
   async getOptions(profileId?: string): Promise<AgentOptions> {
     const [regionsResult, employeesResult] = await Promise.all([
       supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
-      supabase.from('employees').select('id, full_name, nickname, profile_id, region_id, email').is('deleted_at', null).order('full_name', { ascending: true }),
+      supabase.from('employees').select('id, full_name, nickname, profile_id, region_id, email, status, job_titles:job_title_id(name)').is('deleted_at', null).order('full_name', { ascending: true }),
     ]);
     if (regionsResult.error) throw regionsResult.error;
     if (employeesResult.error) throw employeesResult.error;
-    const employees = (employeesResult.data ?? []) as AgentOptions['employees'];
+    const employees = (employeesResult.data ?? []).map((employee: any) => ({
+      id: employee.id,
+      full_name: employee.full_name,
+      nickname: employee.nickname,
+      profile_id: employee.profile_id,
+      region_id: employee.region_id,
+      email: employee.email,
+      status: employee.status,
+      job_title_name: employee.job_titles?.name ?? null,
+    })) as AgentOptions['employees'];
     return { regions: regionsResult.data ?? [], employees, currentEmployee: employees.find((employee) => employee.profile_id === profileId) ?? null };
   },
 

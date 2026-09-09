@@ -453,6 +453,11 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const tablePageSize = 20;
   const canConfirm = permissions.canUse('management-creator-operation-review');
   const canCancel = permissions.isSuperAdmin;
+  const isEligibleManager = (employee: AgentOptions['employees'][number] | undefined) => Boolean(
+    employee
+    && (employee.status === 'active' || employee.status === 'probation')
+    && (employee.job_title_name === 'TALENT AGENT' || employee.job_title_name === 'TALENT AGENT LEAD'),
+  );
   const rankingRosterRows = useMemo(() => {
     if (filters.creatorSearch.trim() || filters.creatorType || filters.status) return [];
     return offlineRows.filter((row) => {
@@ -496,6 +501,8 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const managerOptions = useMemo(() => {
     const normalizedSearch = managerSearch.trim().toLowerCase();
     return props.options.employees.filter((employee) => {
+      if (!isEligibleManager(employee)) return false;
+      if (filters.regionId && employee.region_id !== filters.regionId) return false;
       if (!normalizedSearch) return true;
       return [
         getEmployeeName(employee),
@@ -504,7 +511,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         employee.email,
       ].join(' ').toLowerCase().includes(normalizedSearch);
     });
-  }, [managerSearch, props.options.employees]);
+  }, [filters.regionId, managerSearch, props.options.employees]);
 
   const summary = useMemo(() => summarizeManagementRevenueRecords(records), [records]);
   const trendPoints = useMemo(() => buildManagementTrendPoints(records, filters.startMonth, filters.endMonth), [filters.endMonth, filters.startMonth, records]);
@@ -532,7 +539,18 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   }
 
   function updateFilter<Key extends keyof ManagementRevenuePanelFilters>(key: Key, value: ManagementRevenuePanelFilters[Key]) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    if (key !== 'regionId') {
+      setFilters((current) => ({ ...current, [key]: value }));
+      return;
+    }
+
+    const nextRegionId = value as string;
+    setFilters((current) => {
+      if (!current.managerEmployeeId || !nextRegionId) return { ...current, regionId: nextRegionId };
+      const selectedEmployee = props.options.employees.find((employee) => employee.id === current.managerEmployeeId);
+      const keepManager = selectedEmployee !== undefined && isEligibleManager(selectedEmployee) && selectedEmployee.region_id === nextRegionId;
+      return { ...current, regionId: nextRegionId, managerEmployeeId: keepManager ? current.managerEmployeeId : '' };
+    });
   }
 
   function updateMonthRange(key: 'startMonth' | 'endMonth', value: string) {
@@ -816,9 +834,9 @@ function ManagementAgentRankingChart({ rows, view, onView, offlineRows, offlineL
           <div className="offline-kpi-row offline-kpi-head" role="row"><span>经纪人</span><span>管理主播</span><span>KPI</span><span>已完成</span></div>
           <div className="offline-kpi-body">
             {offlineRows.map((row) => <div className="offline-kpi-row" role="row" key={row.agent_employee_id}>
-              <strong title={row.agent_name}>{row.agent_name}</strong><span>{row.managed_creator_count}</span>
+              <strong title={row.agent_name}>{row.agent_name}</strong><span className="offline-kpi-managed-count">{row.managed_creator_count}</span>
               <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === row.agent_employee_id} onSave={(amount) => onSaveKpi(row.agent_employee_id, amount)} />
-              <b>{formatRevenueAmount(row.completed_amount)}</b>
+              <b className={row.completed_amount > 0 ? 'offline-kpi-completed-positive' : 'offline-kpi-completed-zero'}>{formatRevenueAmount(row.completed_amount)}</b>
             </div>)}
           </div>
         </div> : null}
@@ -840,7 +858,7 @@ function InlineOfflineKpi({ value, editable, saving, onSave }: { value: number |
     submittingRef.current = true;
     try { await onSave(amount); setEditing(false); } catch { setDraft(value === null ? '' : String(value)); } finally { submittingRef.current = false; }
   };
-  if (!editing) return <button className={`offline-kpi-value ${editable ? 'editable' : ''}`} type="button" onClick={open} disabled={!editable || saving}>{value === null ? '—' : formatRevenueAmount(value)}</button>;
+  if (!editing) return <button className={`offline-kpi-value ${editable ? 'editable' : ''} ${value === null ? 'empty' : 'filled'}`} type="button" onClick={open} disabled={!editable || saving}>{value === null ? '—' : formatRevenueAmount(value)}</button>;
   return <input className="offline-kpi-input" autoFocus inputMode="decimal" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => { void submit(); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submit(); } if (event.key === 'Escape') cancel(); }} aria-label="KPI" />;
 }
 
@@ -890,7 +908,7 @@ function ManagementRankingBars({ rows, view, emptyText }: { rows: ManagementRank
 function ManagementRankingBar({ value, max, platform }: { value: number; max: number; platform: CreatorPlatform }) {
   const width = value > 0 ? Math.max(4, (value / max) * 100) : 0;
   return (
-    <div className={`management-revenue-ranking-bar management-revenue-ranking-bar--${platform}`}>
+    <div className={`management-revenue-ranking-bar management-revenue-ranking-bar--${platform} ${value === 0 ? 'is-zero' : ''}`}>
       <i style={{ width: `${width}%` }} />
       <b>{formatRevenueAmount(value)} <small>{getCreatorRevenueUnitLabel(platform)}</small></b>
     </div>
