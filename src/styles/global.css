@@ -12040,6 +12040,92 @@ button.leave-chip:disabled {
   gap: 7px;
 }
 
+.offline-kpi-subsection {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e8f2;
+}
+
+.offline-kpi-subsection .management-revenue-section-head h3 {
+  font-size: 15px;
+}
+
+.offline-kpi-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.offline-kpi-table,
+.offline-kpi-body {
+  display: grid;
+  min-width: 0;
+}
+
+.offline-kpi-body {
+  max-height: 224px;
+  overflow-y: auto;
+}
+
+.offline-kpi-row {
+  display: grid;
+  grid-template-columns: minmax(76px, 1fr) 52px minmax(58px, 0.9fr) minmax(70px, 1fr);
+  align-items: center;
+  min-height: 36px;
+  gap: 6px;
+  border-bottom: 1px solid #edf1f5;
+  color: #344054;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.offline-kpi-row > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offline-kpi-row > span,
+.offline-kpi-row > b,
+.offline-kpi-value,
+.offline-kpi-input {
+  text-align: right;
+}
+
+.offline-kpi-row > b { color: #172033; }
+
+.offline-kpi-head {
+  min-height: 28px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.offline-kpi-value {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.offline-kpi-value.editable { cursor: pointer; color: #5b21b6; }
+.offline-kpi-value.editable:hover { text-decoration: underline; }
+
+.offline-kpi-input {
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  padding: 2px 5px;
+  border: 1px solid #b88cf5;
+  border-radius: 5px;
+  font: inherit;
+}
+
 .management-revenue-ranking-row {
   display: grid;
   grid-template-columns: 26px minmax(68px, 0.8fr) minmax(0, 1fr);

@@ -175,6 +175,15 @@ export type ManagementRevenueFilters = {
   status?: ManagementRevenueStatusFilter;
 };
 
+export type AgentOfflineRevenueKpiSummary = {
+  agent_employee_id: string;
+  agent_name: string;
+  job_title: string;
+  managed_creator_count: number;
+  kpi_amount: number | null;
+  completed_amount: number;
+};
+
 export type WeeklyRevenueSaveInput = {
   recordId?: string;
   creatorProfileId: string;
@@ -343,6 +352,28 @@ export const printMethodLabels: Record<PrintMethod, string> = {
 };
 
 export const agentService = {
+  async listAgentOfflineRevenueKpiSummary(month: string): Promise<AgentOfflineRevenueKpiSummary[]> {
+    const { data, error } = await db.rpc('get_agent_offline_revenue_kpi_summary', { p_month: `${month}-01` });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({
+      agent_employee_id: row.agent_employee_id,
+      agent_name: row.agent_name,
+      job_title: row.job_title,
+      managed_creator_count: Number(row.managed_creator_count) || 0,
+      kpi_amount: row.kpi_amount === null || row.kpi_amount === undefined ? null : Number(row.kpi_amount),
+      completed_amount: Number(row.completed_amount) || 0,
+    }));
+  },
+
+  async upsertAgentOfflineRevenueKpi(agentEmployeeId: string, month: string, kpiAmount: number): Promise<void> {
+    const { error } = await db.rpc('upsert_agent_offline_revenue_kpi', {
+      p_agent_employee_id: agentEmployeeId,
+      p_month: `${month}-01`,
+      p_kpi_amount: kpiAmount,
+    });
+    if (error) throw error;
+  },
+
   async getOptions(profileId?: string): Promise<AgentOptions> {
     const [regionsResult, employeesResult] = await Promise.all([
       supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),

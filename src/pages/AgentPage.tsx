@@ -1,9 +1,11 @@
 ﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Eye, Leaf, Plus, RefreshCw, Send, Settings, Trash2, X } from 'lucide-react';
+import { useRef } from 'react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
+import { profileService } from '../services/profile.service';
 import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
 import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
@@ -22,6 +24,7 @@ import {
   type AdjustmentTargetEmployee,
   type AdjustmentType,
   type AgentOptions,
+  type AgentOfflineRevenueKpiSummary,
   type DesignFormValues,
   type DesignRequest,
   type DesignRequestType,
@@ -36,8 +39,19 @@ import { creatorCalendarMilestoneLabels, getCreatorMilestones, type CreatorCalen
 
 export type AgentPageMode = 'revenue' | 'creators' | 'adjustments' | 'design-requests' | 'management-revenue' | 'management-adjustments';
 
-const currentMonth = new Date().toISOString().slice(0, 7);
+const currentMonth = getMalaysiaDate(new Date()).slice(0, 7);
 const today = new Date().toISOString().slice(0, 10);
+
+function getMalaysiaDate(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const value = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNumber] = month.split('-');
+  return `${year}年${Number(monthNumber)}月`;
+}
 
 const emptyAdjustment: AdjustmentFormValues = {
   platform: 'tiktok',
@@ -411,7 +425,7 @@ const managementMonthShortcutOptions: { value: 'current' | 'previous' | 'last3' 
 function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const permissions = usePermissions();
   const [filters, setFilters] = useState<ManagementRevenuePanelFilters>(() => ({
-    startMonth: shiftMonth(currentMonth, -5),
+    startMonth: currentMonth,
     endMonth: currentMonth,
     managerEmployeeId: '',
     creatorSearch: '',
@@ -424,6 +438,11 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [records, setRecords] = useState<ManagementRevenueRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState('');
+  const [offlineRows, setOfflineRows] = useState<AgentOfflineRevenueKpiSummary[]>([]);
+  const [offlineLoading, setOfflineLoading] = useState(false);
+  const [offlineError, setOfflineError] = useState('');
+  const [offlineSavingId, setOfflineSavingId] = useState('');
+  const [currentUserJobTitle, setCurrentUserJobTitle] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [selectedCreatorRow, setSelectedCreatorRow] = useState<ManagementCreatorRevenueRow | null>(null);
   const [cancelAction, setCancelAction] = useState<{ record: ManagementRevenueRecord; reason: string } | null>(null);
@@ -434,14 +453,45 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const tablePageSize = 20;
   const canConfirm = permissions.canUse('management-creator-operation-review');
   const canCancel = permissions.isSuperAdmin;
+  const rankingRosterRows = useMemo(() => {
+    if (filters.creatorSearch.trim() || filters.creatorType || filters.status) return [];
+    return offlineRows.filter((row) => {
+      if (filters.managerEmployeeId && row.agent_employee_id !== filters.managerEmployeeId) return false;
+      if (filters.regionId && props.options.employees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
+      return true;
+    });
+  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, filters.status, offlineRows, props.options.employees]);
+  const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
+  const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
   useEffect(() => {
     void loadRecords();
   }, [filters]);
 
   useEffect(() => {
+    let active = true;
+
+    profileService.getMyProfile()
+      .then((data) => { if (active) setCurrentUserJobTitle(data.employee?.job_title?.name ?? null); })
+      .catch(() => { if (active) setCurrentUserJobTitle(null); });
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     setTablePage(1);
   }, [filters]);
+
+  useEffect(() => {
+    let active = true;
+    setOfflineLoading(true);
+    setOfflineError('');
+    agentService.listAgentOfflineRevenueKpiSummary(filters.endMonth)
+      .then((rows) => { if (active) setOfflineRows(rows); })
+      .catch(() => { if (active) { setOfflineRows([]); setOfflineError('读取线下直播间流水失败'); } })
+      .finally(() => { if (active) setOfflineLoading(false); });
+    return () => { active = false; };
+  }, [filters.endMonth]);
 
   const managerOptions = useMemo(() => {
     const normalizedSearch = managerSearch.trim().toLowerCase();
@@ -512,7 +562,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   function resetFilters() {
     setManagerSearch('');
     setFilters({
-      startMonth: shiftMonth(currentMonth, -5),
+      startMonth: currentMonth,
       endMonth: currentMonth,
       managerEmployeeId: '',
       creatorSearch: '',
@@ -562,6 +612,21 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       setRecordsError(`取消失败：${getErrorMessage(cancelError)}`);
     } finally {
       setSavingActionId('');
+    }
+  }
+
+  async function saveOfflineKpi(agentEmployeeId: string, amount: number) {
+    if (offlineSavingId) return;
+    setOfflineSavingId(agentEmployeeId);
+    setOfflineError('');
+    try {
+      await agentService.upsertAgentOfflineRevenueKpi(agentEmployeeId, filters.endMonth, amount);
+      setOfflineRows((rows) => rows.map((row) => row.agent_employee_id === agentEmployeeId ? { ...row, kpi_amount: amount } : row));
+    } catch (saveError) {
+      setOfflineError(`保存 KPI 失败：${getErrorMessage(saveError)}`);
+      throw saveError;
+    } finally {
+      setOfflineSavingId('');
     }
   }
 
@@ -644,7 +709,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
       <div className="management-revenue-chart-grid">
         <ManagementRevenueTrendChart points={trendPoints} loading={props.loading || recordsLoading} />
-        <ManagementAgentRankingChart records={records} view={agentRankingView} onView={setAgentRankingView} />
+        <ManagementAgentRankingChart rows={agentRankingRows} view={agentRankingView} onView={setAgentRankingView} offlineRows={offlineRows} offlineLoading={offlineLoading} offlineError={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
         <ManagementCreatorRankingChart records={records} view={creatorRankingView} onView={setCreatorRankingView} />
       </div>
 
@@ -736,15 +801,47 @@ function ManagementRevenueTrendChart({ points, loading }: { points: ManagementTr
   );
 }
 
-function ManagementAgentRankingChart({ records, view, onView }: { records: ManagementRevenueRecord[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
-  const rows = buildManagementAgentRanking(records, view).slice(0, 8);
+function ManagementAgentRankingChart({ rows, view, onView, offlineRows, offlineLoading, offlineError, month, canEditKpi, savingId, onSaveKpi }: { rows: ManagementRankingRow[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void; offlineRows: AgentOfflineRevenueKpiSummary[]; offlineLoading: boolean; offlineError: string; month: string; canEditKpi: boolean; savingId: string; onSaveKpi: (id: string, amount: number) => Promise<void> }) {
   return (
     <section className="management-revenue-card">
       <ManagementRevenueSectionHead title="经纪人流水排行榜" detail={platformLabels[view]} />
       <ManagementRankingTabs view={view} onView={onView} />
       <ManagementRankingBars rows={rows} view={view} emptyText="暂无经纪人流水数据" />
+      <div className="offline-kpi-subsection">
+        <ManagementRevenueSectionHead title="线下直播间流水" detail={formatMonthLabel(month)} />
+        {offlineLoading ? <div className="table-state management-revenue-state">正在读取线下直播间流水...</div> : null}
+        {offlineError ? <p className="offline-kpi-error">{offlineError}</p> : null}
+        {!offlineLoading && !offlineError && offlineRows.length === 0 ? <div className="table-state management-revenue-state">暂无经纪人数据</div> : null}
+        {!offlineLoading && offlineRows.length > 0 ? <div className="offline-kpi-table" role="table" aria-label="线下直播间流水">
+          <div className="offline-kpi-row offline-kpi-head" role="row"><span>经纪人</span><span>管理主播</span><span>KPI</span><span>已完成</span></div>
+          <div className="offline-kpi-body">
+            {offlineRows.map((row) => <div className="offline-kpi-row" role="row" key={row.agent_employee_id}>
+              <strong title={row.agent_name}>{row.agent_name}</strong><span>{row.managed_creator_count}</span>
+              <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === row.agent_employee_id} onSave={(amount) => onSaveKpi(row.agent_employee_id, amount)} />
+              <b>{formatRevenueAmount(row.completed_amount)}</b>
+            </div>)}
+          </div>
+        </div> : null}
+      </div>
     </section>
   );
+}
+
+function InlineOfflineKpi({ value, editable, saving, onSave }: { value: number | null; editable: boolean; saving: boolean; onSave: (amount: number) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const submittingRef = useRef(false);
+  const open = () => { if (editable && !saving) { setDraft(value === null ? '' : String(value)); setEditing(true); } };
+  const cancel = () => { submittingRef.current = false; setEditing(false); setDraft(''); };
+  const submit = async () => {
+    if (!editing || submittingRef.current || saving) return;
+    const amount = Number(draft);
+    if (!draft.trim() || !Number.isFinite(amount) || amount < 0) return;
+    submittingRef.current = true;
+    try { await onSave(amount); setEditing(false); } catch { setDraft(value === null ? '' : String(value)); } finally { submittingRef.current = false; }
+  };
+  if (!editing) return <button className={`offline-kpi-value ${editable ? 'editable' : ''}`} type="button" onClick={open} disabled={!editable || saving}>{value === null ? '—' : formatRevenueAmount(value)}</button>;
+  return <input className="offline-kpi-input" autoFocus inputMode="decimal" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => { void submit(); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submit(); } if (event.key === 'Escape') cancel(); }} aria-label="KPI" />;
 }
 
 function ManagementCreatorRankingChart({ records, view, onView }: { records: ManagementRevenueRecord[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
@@ -1389,8 +1486,9 @@ function createManagementTrendChart(points: ManagementTrendPoint[]) {
   };
 }
 
-function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView): ManagementRankingRow[] {
+function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView, roster: AgentOfflineRevenueKpiSummary[] = []): ManagementRankingRow[] {
   const rows = new Map<string, ManagementRankingRow>();
+  roster.forEach((agent) => rows.set(agent.agent_employee_id, { id: agent.agent_employee_id, label: agent.agent_name, tiktok: 0, douyin: 0, firstCreatedAt: null }));
   records.filter((record) => record.platform === view).forEach((record) => {
     const id = record.creator?.manager_employee_id ?? 'unassigned';
     const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0, firstCreatedAt: null };

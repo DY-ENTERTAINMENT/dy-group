@@ -59,11 +59,11 @@ const quickRangeOptions: { value: QuickRange; label: string }[] = [
 export function OfflineLiveRoomManagementPage() {
   const permissions = usePermissions();
   const canUse = permissions.canUse('management-offline-live-rooms');
-  const todayIso = useMemo(() => formatLocalDate(new Date()), []);
+  const todayIso = useMemo(() => formatMalaysiaDate(new Date()), []);
   const currentMonth = todayIso.slice(0, 7);
   const [regions, setRegions] = useState<Region[]>([]);
   const [regionId, setRegionId] = useState('');
-  const [quickRange, setQuickRange] = useState<QuickRange>('week');
+  const [quickRange, setQuickRange] = useState<QuickRange>('month');
   const [customStart, setCustomStart] = useState(todayIso);
   const [customEnd, setCustomEnd] = useState(todayIso);
   const [periodsByMonth, setPeriodsByMonth] = useState<Record<string, OfflineLiveRoomPeriodRange[]>>({});
@@ -777,6 +777,12 @@ function formatLocalDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function formatMalaysiaDate(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const value = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function formatPeriodDayRange(startIso: string, endIso: string) {
