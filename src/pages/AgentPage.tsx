@@ -375,7 +375,7 @@ type ManagementRevenuePanelFilters = {
   status: '' | 'pending' | 'confirmed';
 };
 
-type ManagementRankingView = 'all' | CreatorPlatform;
+type ManagementRankingView = CreatorPlatform;
 
 type ManagementCreatorRevenueRow = {
   id: string;
@@ -428,8 +428,8 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [selectedCreatorRow, setSelectedCreatorRow] = useState<ManagementCreatorRevenueRow | null>(null);
   const [cancelAction, setCancelAction] = useState<{ record: ManagementRevenueRecord; reason: string } | null>(null);
   const [savingActionId, setSavingActionId] = useState('');
-  const [agentRankingView, setAgentRankingView] = useState<ManagementRankingView>('all');
-  const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('all');
+  const [agentRankingView, setAgentRankingView] = useState<ManagementRankingView>('tiktok');
+  const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('tiktok');
   const [tablePage, setTablePage] = useState(1);
   const tablePageSize = 20;
   const canConfirm = permissions.canUse('management-creator-operation-review');
@@ -740,7 +740,7 @@ function ManagementAgentRankingChart({ records, view, onView }: { records: Manag
   const rows = buildManagementAgentRanking(records, view).slice(0, 8);
   return (
     <section className="management-revenue-card">
-      <ManagementRevenueSectionHead title="经纪人流水排行榜" detail={view === 'all' ? '分平台展示，不混合单位' : platformLabels[view]} />
+      <ManagementRevenueSectionHead title="经纪人流水排行榜" detail={platformLabels[view]} />
       <ManagementRankingTabs view={view} onView={onView} />
       <ManagementRankingBars rows={rows} view={view} emptyText="暂无经纪人流水数据" />
     </section>
@@ -748,22 +748,13 @@ function ManagementAgentRankingChart({ records, view, onView }: { records: Manag
 }
 
 function ManagementCreatorRankingChart({ records, view, onView }: { records: ManagementRevenueRecord[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
-  const tiktokRows = buildManagementCreatorRanking(records, 'tiktok').slice(0, 10);
-  const douyinRows = buildManagementCreatorRanking(records, 'douyin').slice(0, 10);
-  const rows = view === 'all' ? [] : buildManagementCreatorRanking(records, view).slice(0, 10);
+  const rows = buildManagementCreatorRanking(records, view).slice(0, 10);
 
   return (
     <section className="management-revenue-card">
-      <ManagementRevenueSectionHead title="主播流水排行榜" detail={view === 'all' ? 'TikTok / 抖音分别排行' : platformLabels[view]} />
+      <ManagementRevenueSectionHead title="主播流水排行榜" detail={platformLabels[view]} />
       <ManagementRankingTabs view={view} onView={onView} />
-      {view === 'all' ? (
-        <div className="management-revenue-split-ranking">
-          <ManagementRankingList title="TikTok Top 10" rows={tiktokRows} platform="tiktok" />
-          <ManagementRankingList title="抖音 Top 10" rows={douyinRows} platform="douyin" />
-        </div>
-      ) : (
-        <ManagementRankingList title={`${platformLabels[view]} Top 10`} rows={rows} platform={view} />
-      )}
+      <ManagementRankingList title={`${platformLabels[view]} Top 10`} rows={rows} platform={view} />
     </section>
   );
 }
@@ -775,7 +766,6 @@ function ManagementRevenueSectionHead({ title, detail }: { title: string; detail
 function ManagementRankingTabs({ view, onView }: { view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
   return (
     <div className="management-revenue-ranking-tabs" role="group" aria-label="排行平台">
-      <button className={view === 'all' ? 'active' : ''} type="button" onClick={() => onView('all')}>全部</button>
       <button className={view === 'tiktok' ? 'active' : ''} type="button" onClick={() => onView('tiktok')}>TikTok 钻石</button>
       <button className={view === 'douyin' ? 'active' : ''} type="button" onClick={() => onView('douyin')}>抖音音浪</button>
     </div>
@@ -783,7 +773,7 @@ function ManagementRankingTabs({ view, onView }: { view: ManagementRankingView; 
 }
 
 function ManagementRankingBars({ rows, view, emptyText }: { rows: ManagementRankingRow[]; view: ManagementRankingView; emptyText: string }) {
-  const maxValue = Math.max(1, ...rows.flatMap((row) => view === 'all' ? [row.tiktok, row.douyin] : [row[view]]));
+  const maxValue = Math.max(1, ...rows.map((row) => row[view]));
   if (rows.length === 0) return <div className="table-state management-revenue-state">{emptyText}</div>;
   return (
     <div className="management-revenue-ranking-bars">
@@ -792,8 +782,7 @@ function ManagementRankingBars({ rows, view, emptyText }: { rows: ManagementRank
           <ManagementRankBadge rank={index + 1} />
           <span>{row.label}</span>
           <div className="management-revenue-ranking-track">
-            {view === 'all' || view === 'tiktok' ? <ManagementRankingBar value={row.tiktok} max={maxValue} platform="tiktok" /> : null}
-            {view === 'all' || view === 'douyin' ? <ManagementRankingBar value={row.douyin} max={maxValue} platform="douyin" /> : null}
+            <ManagementRankingBar value={row[view]} max={maxValue} platform={view} />
           </div>
         </div>
       ))}
@@ -1210,6 +1199,7 @@ type ManagementRankingRow = {
   label: string;
   tiktok: number;
   douyin: number;
+  firstCreatedAt: number | null;
 };
 
 function buildManagementCreatorRows(records: ManagementRevenueRecord[]): ManagementCreatorRevenueRow[] {
@@ -1249,7 +1239,14 @@ function buildManagementCreatorRows(records: ManagementRevenueRecord[]): Managem
     }),
     platforms: sortCreatorPlatforms(row.platforms),
     periodCount: new Set(row.records.map((record) => record.week_start_date)).size,
-  })).sort((first, second) => first.displayName.localeCompare(second.displayName, 'zh-Hans'));
+  })).sort((first, second) => {
+    const firstValue = Math.max(first.tiktokTotal, first.douyinTotal);
+    const secondValue = Math.max(second.tiktokTotal, second.douyinTotal);
+    if (secondValue !== firstValue) return secondValue - firstValue;
+    const firstCreatedAtCompare = compareFirstCreatedAt(getFirstCreatedAt(first.records), getFirstCreatedAt(second.records));
+    if (firstCreatedAtCompare !== 0) return firstCreatedAtCompare;
+    return first.id.localeCompare(second.id);
+  });
 }
 
 function addUniqueValue<T>(values: T[], value: T) {
@@ -1394,11 +1391,12 @@ function createManagementTrendChart(points: ManagementTrendPoint[]) {
 
 function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView): ManagementRankingRow[] {
   const rows = new Map<string, ManagementRankingRow>();
-  records.forEach((record) => {
+  records.filter((record) => record.platform === view).forEach((record) => {
     const id = record.creator?.manager_employee_id ?? 'unassigned';
-    const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0 };
+    const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0, firstCreatedAt: null };
     if (record.platform === 'tiktok') current.tiktok += record.revenue_amount;
     if (record.platform === 'douyin') current.douyin += record.revenue_amount;
+    current.firstCreatedAt = getEarlierCreatedAt(current.firstCreatedAt, record.created_at);
     rows.set(id, current);
   });
   return sortManagementRankingRows(Array.from(rows.values()), view);
@@ -1408,8 +1406,9 @@ function buildManagementCreatorRanking(records: ManagementRevenueRecord[], platf
   const rows = new Map<string, ManagementRankingRow>();
   records.filter((record) => record.platform === platform).forEach((record) => {
     const id = `${platform}:${record.creator?.creator_entity_id ?? record.creator_profile_id}`;
-    const current = rows.get(id) ?? { id, label: getManagementRecordCreatorName(record), tiktok: 0, douyin: 0 };
+    const current = rows.get(id) ?? { id, label: getManagementRecordCreatorName(record), tiktok: 0, douyin: 0, firstCreatedAt: null };
     current[platform] += record.revenue_amount;
+    current.firstCreatedAt = getEarlierCreatedAt(current.firstCreatedAt, record.created_at);
     rows.set(id, current);
   });
   return sortManagementRankingRows(Array.from(rows.values()), platform);
@@ -1417,11 +1416,29 @@ function buildManagementCreatorRanking(records: ManagementRevenueRecord[], platf
 
 function sortManagementRankingRows(rows: ManagementRankingRow[], view: ManagementRankingView) {
   return rows.sort((first, second) => {
-    const firstValue = view === 'all' ? Math.max(first.tiktok, first.douyin) : first[view];
-    const secondValue = view === 'all' ? Math.max(second.tiktok, second.douyin) : second[view];
+    const firstValue = first[view];
+    const secondValue = second[view];
     if (secondValue !== firstValue) return secondValue - firstValue;
-    return first.label.localeCompare(second.label, 'zh-Hans');
+    const firstCreatedAtCompare = compareFirstCreatedAt(first.firstCreatedAt, second.firstCreatedAt);
+    if (firstCreatedAtCompare !== 0) return firstCreatedAtCompare;
+    return first.id.localeCompare(second.id);
   });
+}
+
+function getFirstCreatedAt(records: Array<{ created_at?: string | null }>) {
+  return records.reduce<number | null>((firstCreatedAt, record) => getEarlierCreatedAt(firstCreatedAt, record.created_at), null);
+}
+
+function getEarlierCreatedAt(firstCreatedAt: number | null, createdAt?: string | null) {
+  const timestamp = createdAt ? new Date(createdAt).getTime() : Number.NaN;
+  if (!Number.isFinite(timestamp)) return firstCreatedAt;
+  return firstCreatedAt === null || timestamp < firstCreatedAt ? timestamp : firstCreatedAt;
+}
+
+function compareFirstCreatedAt(first: number | null, second: number | null) {
+  if (first === null) return second === null ? 0 : 1;
+  if (second === null) return -1;
+  return first - second;
 }
 
 function shiftMonth(month: string, offset: number) {
@@ -2283,6 +2300,8 @@ type OperationStreamerRow = {
   status: OperationStatus;
   latestNote: string;
   monthSummary: OperationMonthSummaryEntry[];
+  sortValue: number;
+  firstCreatedAt: number | null;
 };
 
 const operationQuickRangeOptions: { value: OperationQuickRange; label: string }[] = [
@@ -3427,6 +3446,7 @@ function buildOperationStreamerRows(
       };
     });
     const rowStatus: OperationStatus = rowPeriods.some((period) => period.profiles.some((profile) => profile.status === 'missing')) ? 'missing' : 'filled';
+    const revenueSort = getOperationRevenueSort(rowPeriods, filters.platform);
     return [{
       id: getOperationGroupKey(visibleProfiles[0]),
       displayName: getOperationDisplayName(visibleProfiles),
@@ -3436,6 +3456,8 @@ function buildOperationStreamerRows(
       status: rowStatus,
       latestNote: getOperationLatestNote(rowPeriods),
       monthSummary: summarizeOperationMonth(rowPeriods),
+      sortValue: revenueSort.sortValue,
+      firstCreatedAt: revenueSort.firstCreatedAt,
     }];
   });
 }
@@ -3516,6 +3538,22 @@ function summarizeOperationMonth(periods: OperationPeriodCell[]): OperationMonth
   return [summary.tiktok, summary.douyin];
 }
 
+function getOperationRevenueSort(periods: OperationPeriodCell[], platformFilter: OperationPlatformFilter) {
+  const totals: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 0 };
+  const selectedPlatform = platformFilter === 'tiktok' || platformFilter === 'douyin' ? platformFilter : null;
+  const records = periods.flatMap((period) => period.profiles)
+    .filter((profile) => profile.record && (!selectedPlatform || profile.creator.platform === selectedPlatform));
+
+  records.forEach((profile) => {
+    totals[profile.creator.platform] += profile.record!.revenue_amount;
+  });
+
+  return {
+    sortValue: selectedPlatform ? totals[selectedPlatform] : Math.max(totals.tiktok, totals.douyin),
+    firstCreatedAt: getFirstCreatedAt(records.map((profile) => profile.record!)),
+  };
+}
+
 function summarizeOperationStreamerRows(rows: OperationStreamerRow[]) {
   return rows.reduce(
     (summary, row) => {
@@ -3547,9 +3585,10 @@ function filterOperationStreamerRows(rows: OperationStreamerRow[], filters: Oper
 
 
 function sortOperationStreamerRows(first: OperationStreamerRow, second: OperationStreamerRow) {
-  const statusOrder: Record<OperationStatus, number> = { missing: 0, filled: 1 };
-  if (statusOrder[first.status] !== statusOrder[second.status]) return statusOrder[first.status] - statusOrder[second.status];
-  return first.displayName.localeCompare(second.displayName, 'zh-Hans');
+  if (second.sortValue !== first.sortValue) return second.sortValue - first.sortValue;
+  const firstCreatedAtCompare = compareFirstCreatedAt(first.firstCreatedAt, second.firstCreatedAt);
+  if (firstCreatedAtCompare !== 0) return firstCreatedAtCompare;
+  return first.id.localeCompare(second.id);
 }
 
 
