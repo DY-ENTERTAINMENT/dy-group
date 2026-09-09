@@ -53,7 +53,8 @@ export function SchedulePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const canViewAllRegions = profile?.role === 'super_admin' || Boolean(profile?.can_view_all_regions);
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const canSwitchRegion = regions.length > 1;
   const monthRange = useMemo(() => getMonthRange(month), [month]);
   const calendarCells = useMemo(
     () => getCalendarCells(monthRange.startDate, monthRange.endDate),
@@ -170,6 +171,9 @@ export function SchedulePage() {
       setLeaves(data.leaves);
       setPublicHolidays(data.publicHolidays);
       setRegions(data.regions);
+      if (!isSuperAdmin && data.regions.length === 1 && regionId !== data.regions[0].id) {
+        setRegionId(data.regions[0].id);
+      }
     } catch (loadError) {
       setError(`读取休假日历失败：${getErrorMessage(loadError)}`);
     } finally {
@@ -254,10 +258,10 @@ export function SchedulePage() {
             <span>区域</span>
             <select
               value={regionId}
-              disabled={!canViewAllRegions}
+              disabled={!canSwitchRegion}
               onChange={(event) => setRegionId(event.target.value)}
             >
-              <option value="">全部可查看区域</option>
+              {canSwitchRegion ? <option value="">全部可查看区域</option> : null}
               {regions.map((region) => (
                 <option key={region.id} value={region.id}>
                   {region.code}

@@ -55,13 +55,13 @@ export const scheduleService = {
       publicHolidaysQuery = publicHolidaysQuery.or(`region_id.is.null,region_id.eq.${regionId}`);
     }
 
-    const [leavesResult, regionsResult, publicHolidaysResult] = await Promise.all([
+    const [leavesResult, authorizedRegionsResult, publicHolidaysResult] = await Promise.all([
       supabase.rpc('get_leave_calendar', {
         month_start: range.startDate,
         month_end: range.endDate,
         region_filter: regionId || null,
       }),
-      supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+      supabase.rpc('current_user_authorized_region_ids'),
       publicHolidaysQuery,
     ]);
 
@@ -69,12 +69,24 @@ export const scheduleService = {
       throw leavesResult.error;
     }
 
-    if (regionsResult.error) {
-      throw regionsResult.error;
+    if (authorizedRegionsResult.error) {
+      throw authorizedRegionsResult.error;
     }
 
     if (publicHolidaysResult.error) {
       throw publicHolidaysResult.error;
+    }
+
+    const authorizedRegionIds = authorizedRegionsResult.data ?? [];
+    const accessibleRegionsResult = await supabase
+      .from('regions')
+      .select('*')
+      .eq('is_active', true)
+      .in('id', authorizedRegionIds)
+      .order('sort_order', { ascending: true });
+
+    if (accessibleRegionsResult.error) {
+      throw accessibleRegionsResult.error;
     }
 
     const approvedLeaves = ((leavesResult.data ?? []) as LeaveCalendarRpcRow[]).map((leave) => ({
@@ -86,7 +98,7 @@ export const scheduleService = {
     return {
       leaves: dedupeLeaves(approvedLeaves),
       publicHolidays: (publicHolidaysResult.data ?? []) as PublicHolidayCalendarItem[],
-      regions: regionsResult.data ?? [],
+      regions: accessibleRegionsResult.data ?? [],
     };
   },
 
