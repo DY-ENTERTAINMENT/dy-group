@@ -466,6 +466,21 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       return true;
     });
   }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, filters.status, offlineRows, props.options.employees]);
+  const visibleOfflineRows = useMemo(() => {
+    const employeeRegions = new Map(props.options.employees.map((employee) => [employee.id, employee.region_id]));
+
+    return offlineRows
+      .filter((row) => !filters.regionId || employeeRegions.get(row.agent_employee_id) === filters.regionId)
+      .sort((first, second) => {
+        const completedDifference = Number(second.completed_amount ?? 0) - Number(first.completed_amount ?? 0);
+        if (completedDifference !== 0) return completedDifference;
+
+        const nameDifference = (first.agent_name ?? '').localeCompare(second.agent_name ?? '');
+        if (nameDifference !== 0) return nameDifference;
+
+        return first.agent_employee_id.localeCompare(second.agent_employee_id);
+      });
+  }, [filters.regionId, offlineRows, props.options.employees]);
   const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
   const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
@@ -727,7 +742,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
       <div className="management-revenue-chart-grid">
         <ManagementRevenueTrendChart points={trendPoints} loading={props.loading || recordsLoading} />
-        <ManagementAgentRankingChart rows={agentRankingRows} view={agentRankingView} onView={setAgentRankingView} offlineRows={offlineRows} offlineLoading={offlineLoading} offlineError={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
+        <ManagementAgentRankingChart rows={agentRankingRows} view={agentRankingView} onView={setAgentRankingView} offlineRows={visibleOfflineRows} offlineLoading={offlineLoading} offlineError={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
         <ManagementCreatorRankingChart records={records} view={creatorRankingView} onView={setCreatorRankingView} />
       </div>
 
