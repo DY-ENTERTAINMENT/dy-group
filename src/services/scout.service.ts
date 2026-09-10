@@ -194,7 +194,7 @@ export type CreatorProfile = {
 
 export type ScoutOptions = {
   regions: Region[];
-  employees: Array<Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id'>>;
+  employees: Array<Pick<Employee, 'id' | 'full_name' | 'nickname' | 'profile_id' | 'region_id' | 'status'> & { job_title_name: string | null }>;
 };
 
 export type OnboardingManagerOption = {
@@ -300,7 +300,7 @@ export const scoutService = {
       supabase.from('regions').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
       supabase
         .from('employees')
-        .select('id, full_name, nickname, profile_id, region_id')
+        .select('id, full_name, nickname, profile_id, region_id, status, job_titles:job_title_id(name)')
         .is('deleted_at', null)
         .order('full_name', { ascending: true }),
     ]);
@@ -310,7 +310,10 @@ export const scoutService = {
 
     return {
       regions: regionsResult.data ?? [],
-      employees: (employeesResult.data ?? []) as ScoutOptions['employees'],
+      employees: (employeesResult.data ?? []).map((employee: { job_titles?: { name: string | null } | null }) => ({
+        ...employee,
+        job_title_name: employee.job_titles?.name ?? null,
+      })) as ScoutOptions['employees'],
     };
   },
 
@@ -702,7 +705,7 @@ export function createRegionRecruitSummaries(creators: CreatorProfile[]): Region
   }));
 }
 
-export function summarizeCreators(creators: CreatorProfile[]): RecruitSummary {
+export function getRecruitCountingGroups(creators: CreatorProfile[]) {
   const creatorGroups = new Map<string, CreatorProfile[]>();
   creators
     .filter((creator) => creator.registration_type !== 'existing_creator')
@@ -711,7 +714,19 @@ export function summarizeCreators(creators: CreatorProfile[]): RecruitSummary {
       creatorGroups.set(key, [...(creatorGroups.get(key) ?? []), creator]);
     });
 
-  return Array.from(creatorGroups.values()).reduce<RecruitSummary>(
+  return Array.from(creatorGroups.values());
+}
+
+export function createRecruitPlatformDetailRows(creators: CreatorProfile[]) {
+  return (['tiktok', 'douyin'] as const).flatMap((platform) => (
+    getRecruitCountingGroups(creators.filter((creator) => creator.platform === platform)).map((profiles) => profiles[0])
+  ));
+}
+
+export function summarizeCreators(creators: CreatorProfile[]): RecruitSummary {
+  const creatorGroups = getRecruitCountingGroups(creators);
+
+  return creatorGroups.reduce<RecruitSummary>(
     (summary, profiles) => {
       const platforms = new Set(profiles.map((creator) => creator.platform));
       const representative = profiles[0];

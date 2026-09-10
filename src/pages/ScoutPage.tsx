@@ -8,6 +8,7 @@ import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
 import douyinLogoUrl from '../assets/icons/douyin-logo.png';
 import {
   createRecruitBreakdown,
+  createRecruitPlatformDetailRows,
   creatorTypeLabels,
   type DailyWorkLog,
   type DailyWorkLogFormValues,
@@ -272,7 +273,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   );
   const personalBreakdown = useMemo(() => createRecruitBreakdown(monthCreators), [monthCreators]);
   const managementBreakdown = useMemo(() => createRecruitBreakdown(managementMonthCreators), [managementMonthCreators]);
-  const scoutRecruitRows = useMemo(() => createScoutRecruitRows(managementMonthCreators), [managementMonthCreators]);
+  const scoutRecruitRows = useMemo(() => createScoutRecruitRows(managementMonthCreators, options.employees, regionFilter), [managementMonthCreators, options.employees, regionFilter]);
   const regionRecruitRows = useMemo(() => createRegionRecruitRows(managementMonthCreators), [managementMonthCreators]);
   const sortedCandidates = useMemo(() => {
     const malaysiaToday = getMalaysiaDateString();
@@ -883,6 +884,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           regionRecruitRows={regionRecruitRows}
           breakdown={managementBreakdown}
           creators={filteredCreators}
+          recruitCreators={managementMonthCreators}
           workloadStats={managementWorkloadStats}
           workloadView={workloadView}
           onWorkloadView={setWorkloadView}
@@ -2173,6 +2175,7 @@ function ManagementRecruitingPanel({
   regionRecruitRows,
   breakdown,
   creators,
+  recruitCreators,
   workloadStats,
   workloadView,
   onWorkloadView,
@@ -2189,6 +2192,7 @@ function ManagementRecruitingPanel({
   regionRecruitRows: RecruitBreakdownRow[];
   breakdown: ReturnType<typeof createRecruitBreakdown>;
   creators: CreatorProfile[];
+  recruitCreators: CreatorProfile[];
   workloadStats: ManagementWorkloadStat[];
   workloadView: WorkloadView;
   onWorkloadView: (value: WorkloadView) => void;
@@ -2197,6 +2201,8 @@ function ManagementRecruitingPanel({
 }) {
   const [selectedWorkloadScout, setSelectedWorkloadScout] = useState<ManagementWorkloadStat | null>(null);
   const [recordGranularity, setRecordGranularity] = useState<ScoutRecordView>('daily');
+  const [recruitDetail, setRecruitDetail] = useState<{ label: string | null; creators: CreatorProfile[]; showRegion: boolean } | null>(null);
+  const recruitDetailRows = useMemo(() => createRecruitPlatformDetailRows(recruitDetail?.creators ?? []), [recruitDetail]);
 
   return (
     <div className="staff-list-panel management-recruiting-panel">
@@ -2218,8 +2224,13 @@ function ManagementRecruitingPanel({
         <div className="table-state">正在统计总招募数据...</div>
       ) : (
         <>
-          <ManagementRecruitBreakdownPanel breakdown={breakdown} />
-          <SummaryTable title="区域总计" label="区域" rows={regionRecruitRows} />
+          <ManagementRecruitBreakdownPanel breakdown={breakdown} onOpenDetails={() => setRecruitDetail({ label: null, creators: recruitCreators, showRegion: true })} />
+          <SummaryTable
+            title="区域总计"
+            label="区域"
+            rows={regionRecruitRows}
+            onOpenDetails={(row) => setRecruitDetail({ label: row.label.replace(/ 总计$/, ''), creators: recruitCreators.filter((creator) => (creator.region_id ?? 'none') === row.key), showRegion: false })}
+          />
           <ScoutRecruitSummaryTable rows={scoutRecruitRows} />
           <ManagementWorkloadPanel
             stats={workloadStats}
@@ -2233,6 +2244,14 @@ function ManagementRecruitingPanel({
             recordGranularity={recordGranularity}
             onRecordGranularity={setRecordGranularity}
           />
+          {recruitDetail ? (
+            <RecruitDetailModal
+              title={formatRecruitDetailTitle(recruitDetail.label, month)}
+              rows={recruitDetailRows}
+              showRegion={recruitDetail.showRegion}
+              onClose={() => setRecruitDetail(null)}
+            />
+          ) : null}
         </>
       )}
     </div>
@@ -2915,6 +2934,9 @@ type RecruitBreakdownRow = {
   key: string;
   label: string;
   breakdown: ReturnType<typeof createRecruitBreakdown>;
+  firstEffectiveDate?: string | null;
+  firstCreatedAt?: string | null;
+  stableEmployeeId?: string;
 };
 
 function createRegionRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow[] {
@@ -2942,7 +2964,7 @@ function createRegionRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRo
     .sort((first, second) => first.label.localeCompare(second.label));
 }
 
-function createScoutRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow[] {
+function createScoutRecruitRows(creators: CreatorProfile[], employees: ScoutOptions['employees'], regionId: string): RecruitBreakdownRow[] {
   const groups = new Map<string, { label: string; creators: CreatorProfile[] }>();
 
   creators.forEach((creator) => {
@@ -2959,16 +2981,56 @@ function createScoutRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow
     groups.set(key, { label, creators: [creator] });
   });
 
-  return Array.from(groups.entries())
+  const rows: RecruitBreakdownRow[] = Array.from(groups.entries())
     .map(([key, group]) => ({
       key,
       label: group.label,
       breakdown: createRecruitBreakdown(group.creators),
-    }))
-    .sort((first, second) => first.label.localeCompare(second.label));
+      firstEffectiveDate: getFirstRecruitEffectiveDate(group.creators),
+      firstCreatedAt: getFirstRecruitCreatedAt(group.creators),
+      stableEmployeeId: group.creators[0]?.scout_employee_id ?? key,
+    }));
+
+  const rowsByEmployeeId = new Map(rows.map((row) => [row.stableEmployeeId, row]));
+  employees
+    .filter((employee) => isCurrentScoutOrLead(employee) && (!regionId || employee.region_id === regionId))
+    .forEach((employee) => {
+      if (rowsByEmployeeId.has(employee.id)) return;
+      rows.push({
+        key: employee.id,
+        label: employee.nickname || employee.full_name,
+        breakdown: createRecruitBreakdown([]),
+        firstEffectiveDate: null,
+        firstCreatedAt: null,
+        stableEmployeeId: employee.id,
+      });
+    });
+
+  return rows;
 }
 
-function SummaryTable({ title, label, rows }: { title: string; label: string; rows: RecruitBreakdownRow[] }) {
+function isCurrentScoutOrLead(employee: ScoutOptions['employees'][number]) {
+  return (
+    (employee.status === 'active' || employee.status === 'probation')
+    && (employee.job_title_name === 'TALENT SCOUT' || employee.job_title_name === 'TALENT SCOUT LEAD')
+  );
+}
+
+function getFirstRecruitEffectiveDate(creators: CreatorProfile[]) {
+  return creators
+    .filter((creator) => creator.registration_type !== 'existing_creator')
+    .map((creator) => creator.guild_joined_date ?? creator.joined_date)
+    .sort()[0] ?? null;
+}
+
+function getFirstRecruitCreatedAt(creators: CreatorProfile[]) {
+  return creators
+    .filter((creator) => creator.registration_type !== 'existing_creator')
+    .map((creator) => creator.created_at)
+    .sort()[0] ?? null;
+}
+
+function SummaryTable({ title, label, rows, onOpenDetails }: { title: string; label: string; rows: RecruitBreakdownRow[]; onOpenDetails?: (row: RecruitBreakdownRow) => void }) {
   return (
     <section className="scout-summary-section scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>{title}</h4>
@@ -2979,7 +3041,7 @@ function SummaryTable({ title, label, rows }: { title: string; label: string; ro
           {rows.map((row) => (
             <article className="recruit-summary-group-card" key={row.key}>
               <h5>{row.label}</h5>
-              <RecruitPlatformCardGrid tiktok={row.breakdown.tiktok} douyin={row.breakdown.douyin} />
+              <RecruitPlatformCardGrid tiktok={row.breakdown.tiktok} douyin={row.breakdown.douyin} onOpenDetails={onOpenDetails ? () => onOpenDetails(row) : undefined} />
             </article>
           ))}
         </div>
@@ -2996,7 +3058,13 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
       const secondTotal = getRecruitBreakdownTotal(second.row.breakdown);
 
       if (secondTotal !== firstTotal) return secondTotal - firstTotal;
-      return first.index - second.index;
+      const firstDate = first.row.firstEffectiveDate ?? '9999-12-31';
+      const secondDate = second.row.firstEffectiveDate ?? '9999-12-31';
+      if (firstDate !== secondDate) return firstDate.localeCompare(secondDate);
+      const firstCreatedAt = first.row.firstCreatedAt ?? '9999-12-31T23:59:59.999Z';
+      const secondCreatedAt = second.row.firstCreatedAt ?? '9999-12-31T23:59:59.999Z';
+      if (firstCreatedAt !== secondCreatedAt) return firstCreatedAt.localeCompare(secondCreatedAt);
+      return (first.row.stableEmployeeId ?? first.row.key).localeCompare(second.row.stableEmployeeId ?? second.row.key) || first.index - second.index;
     })
     .map(({ row }) => row);
 
@@ -3133,32 +3201,39 @@ const summarySectionTitleStyle = {
   fontWeight: 600,
 } as const;
 
-function ManagementRecruitBreakdownPanel({ breakdown }: { breakdown: ReturnType<typeof createRecruitBreakdown> }) {
+function ManagementRecruitBreakdownPanel({ breakdown, onOpenDetails }: { breakdown: ReturnType<typeof createRecruitBreakdown>; onOpenDetails: () => void }) {
   return (
     <div className="scout-total-panel scout-recruit-summary-block">
       <h4 style={summarySectionTitleStyle}>DY Group 总计</h4>
-      <RecruitPlatformCardGrid tiktok={breakdown.tiktok} douyin={breakdown.douyin} />
+      <RecruitPlatformCardGrid tiktok={breakdown.tiktok} douyin={breakdown.douyin} onOpenDetails={onOpenDetails} />
     </div>
   );
 }
 
-function RecruitPlatformCardGrid({ tiktok, douyin }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary }) {
+function RecruitPlatformCardGrid({ tiktok, douyin, onOpenDetails }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary; onOpenDetails?: () => void }) {
   return (
     <div className="recruit-platform-card-grid">
-      <RecruitCombinedSummaryCard tiktok={tiktok} douyin={douyin} />
+      <RecruitCombinedSummaryCard tiktok={tiktok} douyin={douyin} onOpenDetails={onOpenDetails} />
       <RecruitPlatformSummaryCard title="TikTok" breakdown={tiktok} platform="tiktok" logoUrl={tiktokLogoUrl} />
       <RecruitPlatformSummaryCard title="抖音" breakdown={douyin} platform="douyin" logoUrl={douyinLogoUrl} />
     </div>
   );
 }
 
-function RecruitCombinedSummaryCard({ tiktok, douyin }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary }) {
+function RecruitCombinedSummaryCard({ tiktok, douyin, onOpenDetails }: { tiktok: RecruitPlatformSummary; douyin: RecruitPlatformSummary; onOpenDetails?: () => void }) {
+  const total = tiktok.total + douyin.total;
   return (
     <section className="recruit-platform-summary-card recruit-platform-summary-card--combined">
       <span className="recruit-combined-title">双平台总数</span>
       <div className="recruit-platform-total">
         <span>总数</span>
-        <strong>{tiktok.total + douyin.total}</strong>
+        {total > 0 && onOpenDetails ? (
+          <button className="recruit-combined-total-button" type="button" onClick={onOpenDetails} aria-label={`查看双平台总数 ${total} 的新增主播明细`}>
+            {total}
+          </button>
+        ) : (
+          <strong>{total}</strong>
+        )}
       </div>
       <small className="recruit-combined-note">TikTok {tiktok.total} + 抖音 {douyin.total}</small>
     </section>
@@ -3197,6 +3272,57 @@ function RecruitPlatformSummaryCard({
       </div>
     </section>
   );
+}
+
+function RecruitDetailModal({ title, rows, showRegion, onClose }: { title: string; rows: CreatorProfile[]; showRegion: boolean; onClose: () => void }) {
+  return (
+    <SystemModal title={title} subtitle={`双平台总数：${rows.length}`} wide onClose={onClose}>
+      <div className="staff-table-wrap recruit-detail-table-wrap">
+        <table className={`staff-table recruit-detail-table${showRegion ? ' recruit-detail-table--with-region' : ''}`}>
+          <colgroup>
+            <col className="recruit-detail-platform-col" />
+            <col className="recruit-detail-identity-col" />
+            <col className="recruit-detail-identity-col" />
+            {showRegion ? <col className="recruit-detail-region-col" /> : null}
+            <col className="recruit-detail-person-col" />
+            <col className="recruit-detail-person-col" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>平台</th>
+              <th>用户名</th>
+              <th>TikTok ID / 抖音 UID</th>
+              {showRegion ? <th>区域</th> : null}
+              <th>招募星探</th>
+              <th>当前主经纪人</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((creator) => (
+              <tr key={`${creator.creator_entity_id ?? creator.id}-${creator.platform}`}>
+                <td>{platformLabels[creator.platform]}</td>
+                <td>{creator.platform_account || '—'}</td>
+                <td>{creator.platform_public_id || '—'}</td>
+                {showRegion ? <td>{creator.region?.code || creator.region?.name || '—'}</td> : null}
+                <td>{creator.scout_display_name || getEmployeeName(creator.scout) || '—'}</td>
+                <td>{getEmployeeName(creator.manager) || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SystemModal>
+  );
+}
+
+function formatRecruitDetailMonth(month: string) {
+  const [year, monthNumber] = month.split('-');
+  const date = new Date(Date.UTC(Number(year), Number(monthNumber) - 1, 1));
+  return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
+function formatRecruitDetailTitle(label: string | null, month: string) {
+  return ['新增主播明细', label, formatRecruitDetailMonth(month)].filter(Boolean).join(' · ');
 }
 
 function PlatformLogoTitle({ logoUrl, title, logoSize, fontSize }: { logoUrl: string; title: string; logoSize: number; fontSize: number }) {

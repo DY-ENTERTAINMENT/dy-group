@@ -10133,6 +10133,85 @@ button.leave-chip:disabled {
   color: #7148c8;
 }
 
+.recruit-combined-total-button {
+  padding: 0;
+  border: 0;
+  color: #7148c8;
+  font: inherit;
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  cursor: pointer;
+}
+
+.recruit-combined-total-button:hover,
+.recruit-combined-total-button:focus-visible {
+  color: #5b2eb4;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.recruit-combined-total-button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+
+.recruit-detail-table-wrap {
+  max-height: min(58vh, 620px);
+  overflow-x: hidden;
+}
+
+.recruit-detail-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.recruit-detail-platform-col {
+  width: 11%;
+}
+
+.recruit-detail-identity-col {
+  width: 30%;
+}
+
+.recruit-detail-person-col {
+  width: 14.5%;
+}
+
+.recruit-detail-table--with-region .recruit-detail-platform-col,
+.recruit-detail-region-col {
+  width: 9%;
+}
+
+.recruit-detail-table--with-region .recruit-detail-identity-col {
+  width: 28%;
+}
+
+.recruit-detail-table--with-region .recruit-detail-person-col {
+  width: 13%;
+}
+
+.recruit-detail-table th,
+.recruit-detail-table td {
+  min-width: 0;
+  padding: 10px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recruit-detail-table th {
+  font-size: 12px;
+}
+
+.recruit-detail-table td {
+  font-size: 13px;
+}
+
 .recruit-combined-note {
   color: #6d6387;
   font-size: 14px;
