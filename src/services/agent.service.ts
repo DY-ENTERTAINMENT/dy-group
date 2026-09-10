@@ -715,6 +715,16 @@ function normalizeRevenuePeriodMonth(month: string) {
 async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput, status: Extract<WeeklyRevenueStatus, 'submitted'>) {
   await ensureWeeklyRevenuePeriodFlow(input.weekStartDate, input.weekEndDate);
 
+  if (input.recordId) {
+    const { data, error } = await db.rpc('update_own_creator_weekly_revenue_record', {
+      p_record_id: input.recordId,
+      p_revenue_amount: input.revenueAmount,
+      p_agent_note: input.agentNote.trim() || null,
+    });
+    if (error) throw error;
+    return mapWeeklyRevenueRow(data);
+  }
+
   const payload = {
     creator_profile_id: input.creatorProfileId,
     week_start_date: input.weekStartDate,
@@ -725,18 +735,11 @@ async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput, status: Ex
     source: 'manual',
   };
 
-  const query = input.recordId
-    ? db
-        .from('creator_weekly_revenue_records')
-        .update(payload)
-        .eq('id', input.recordId)
-        .select(weeklyRevenueSelect)
-        .single()
-    : db
-        .from('creator_weekly_revenue_records')
-        .insert(payload)
-        .select(weeklyRevenueSelect)
-        .single();
+  const query = db
+    .from('creator_weekly_revenue_records')
+    .insert(payload)
+    .select(weeklyRevenueSelect)
+    .single();
 
   const { data, error } = await query;
   if (error) throw error;

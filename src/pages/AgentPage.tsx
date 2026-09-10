@@ -386,7 +386,6 @@ type ManagementRevenuePanelFilters = {
   platform: '' | CreatorPlatform;
   creatorType: '' | '5+1' | 'non_5_1';
   regionId: string;
-  status: '' | 'pending' | 'confirmed';
 };
 
 type ManagementRankingView = CreatorPlatform;
@@ -432,7 +431,6 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
     platform: '',
     creatorType: '',
     regionId: '',
-    status: '',
   }));
   const [managerSearch, setManagerSearch] = useState('');
   const [records, setRecords] = useState<ManagementRevenueRecord[]>([]);
@@ -445,27 +443,23 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [currentUserJobTitle, setCurrentUserJobTitle] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [selectedCreatorRow, setSelectedCreatorRow] = useState<ManagementCreatorRevenueRow | null>(null);
-  const [cancelAction, setCancelAction] = useState<{ record: ManagementRevenueRecord; reason: string } | null>(null);
-  const [savingActionId, setSavingActionId] = useState('');
   const [agentRankingView, setAgentRankingView] = useState<ManagementRankingView>('tiktok');
   const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('tiktok');
   const [tablePage, setTablePage] = useState(1);
   const tablePageSize = 20;
-  const canConfirm = permissions.canUse('management-creator-operation-review');
-  const canCancel = permissions.isSuperAdmin;
   const isEligibleManager = (employee: AgentOptions['employees'][number] | undefined) => Boolean(
     employee
     && (employee.status === 'active' || employee.status === 'probation')
     && (employee.job_title_name === 'TALENT AGENT' || employee.job_title_name === 'TALENT AGENT LEAD'),
   );
   const rankingRosterRows = useMemo(() => {
-    if (filters.creatorSearch.trim() || filters.creatorType || filters.status) return [];
+    if (filters.creatorSearch.trim() || filters.creatorType) return [];
     return offlineRows.filter((row) => {
       if (filters.managerEmployeeId && row.agent_employee_id !== filters.managerEmployeeId) return false;
       if (filters.regionId && props.options.employees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
       return true;
     });
-  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, filters.status, offlineRows, props.options.employees]);
+  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, offlineRows, props.options.employees]);
   const visibleOfflineRows = useMemo(() => {
     const employeeRegions = new Map(props.options.employees.map((employee) => [employee.id, employee.region_id]));
 
@@ -602,50 +596,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       platform: '',
       creatorType: '',
       regionId: '',
-      status: '',
     });
-  }
-
-  async function confirmRecord(record: ManagementRevenueRecord, managerNote: string | null = null) {
-    if (savingActionId) return;
-    setSavingActionId(record.id);
-    setRecordsError('');
-    setMessage('');
-    try {
-      await agentService.reviewManagementWeeklyRevenueRecord(record.id, managerNote);
-      setMessage('周期流水已确认。');
-      setSelectedCreatorRow(null);
-      await loadRecords();
-    } catch (confirmError) {
-      setRecordsError(`确认失败：${getErrorMessage(confirmError)}`);
-    } finally {
-      setSavingActionId('');
-    }
-  }
-
-  async function cancelRecord(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!cancelAction || savingActionId) return;
-    const reason = cancelAction.reason.trim();
-    if (!reason) {
-      setRecordsError('取消原因必须填写。');
-      return;
-    }
-
-    setSavingActionId(cancelAction.record.id);
-    setRecordsError('');
-    setMessage('');
-    try {
-      await agentService.cancelManagementWeeklyRevenueEntry(cancelAction.record.id, reason);
-      setMessage('该笔正式流水已取消。');
-      setSelectedCreatorRow(null);
-      setCancelAction(null);
-      await loadRecords();
-    } catch (cancelError) {
-      setRecordsError(`取消失败：${getErrorMessage(cancelError)}`);
-    } finally {
-      setSavingActionId('');
-    }
   }
 
   async function saveOfflineKpi(agentEmployeeId: string, amount: number) {
@@ -714,13 +665,6 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
             {props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
           </SelectField>
         </div>
-        <div className="management-revenue-status-filter">
-          <SelectField label="状态" value={filters.status} onChange={(value) => updateFilter('status', value as ManagementRevenuePanelFilters['status'])}>
-            <option value="">全部</option>
-            <option value="pending">待确认</option>
-            <option value="confirmed">已确认</option>
-          </SelectField>
-        </div>
         <div className="management-revenue-filter-actions">
           <button className="secondary-button compact-button" type="button" onClick={resetFilters} disabled={props.loading || recordsLoading}>重置</button>
           <button className="secondary-button compact-button" type="button" onClick={loadRecords} disabled={props.loading || recordsLoading}>
@@ -736,8 +680,6 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       <div className="management-revenue-kpi-grid">
         <ManagementRevenueKpiCard title="TikTok 总钻石" value={summary.tiktokTotal} unit="钻石" platform="tiktok" />
         <ManagementRevenueKpiCard title="抖音总音浪" value={summary.douyinTotal} unit="音浪" platform="douyin" />
-        <ManagementRevenueKpiCard title="已确认周期数" value={summary.confirmedCount} />
-        <ManagementRevenueKpiCard title="待确认周期数" value={summary.pendingCount} />
       </div>
 
       <div className="management-revenue-chart-grid">
@@ -752,35 +694,15 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         allRows={creatorRows}
         page={safePage}
         pageCount={pageCount}
-        canConfirm={canConfirm}
-        canCancel={canCancel}
-        savingActionId={savingActionId}
         onPage={setTablePage}
         onView={setSelectedCreatorRow}
-        onConfirm={confirmRecord}
-        onCancel={(record) => setCancelAction({ record, reason: '' })}
       />
 
       {selectedCreatorRow ? (
         <ManagementRevenueDetailModal
           row={selectedCreatorRow}
           filters={filters}
-          canConfirm={canConfirm}
-          canCancel={canCancel}
-          savingActionId={savingActionId}
           onClose={() => setSelectedCreatorRow(null)}
-          onConfirm={confirmRecord}
-          onCancel={(record) => setCancelAction({ record, reason: '' })}
-        />
-      ) : null}
-
-      {cancelAction ? (
-        <ManagementRevenueCancelModal
-          action={cancelAction}
-          saving={savingActionId === cancelAction.record.id}
-          onChange={(reason) => setCancelAction({ ...cancelAction, reason })}
-          onClose={() => setCancelAction(null)}
-          onSubmit={cancelRecord}
         />
       ) : null}
     </div>
@@ -951,13 +873,8 @@ function ManagementRevenueRecordsSection(props: {
   allRows: ManagementCreatorRevenueRow[];
   page: number;
   pageCount: number;
-  canConfirm: boolean;
-  canCancel: boolean;
-  savingActionId: string;
   onPage: (page: number) => void;
   onView: (row: ManagementCreatorRevenueRow) => void;
-  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
-  onCancel: (record: ManagementRevenueRecord) => void;
 }) {
   if (props.loading) return <div className="table-state management-revenue-state">正在读取正式流水数据...</div>;
   return (
@@ -1070,75 +987,15 @@ function ManagementCreatorRevenueMobileCard({ row, onView }: { row: ManagementCr
   );
 }
 
-function ManagementWeeklyRevenueActions(props: {
-  record: ManagementRevenueRecord;
-  canConfirm: boolean;
-  canCancel: boolean;
-  savingActionId: string;
-  managerNote: string;
-  onManagerNoteChange: (value: string) => void;
-  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
-  onCancel: (record: ManagementRevenueRecord) => void;
-}) {
-  const isSaving = props.savingActionId === props.record.id;
-  const readonlyManagerNote = props.record.manager_note?.trim() || '-';
-  return (
-    <div className="row-actions management-revenue-row-actions">
-      {props.record.status === 'submitted' && props.canConfirm ? (
-        <div className="management-revenue-review-box">
-          <textarea
-            value={props.managerNote}
-            onChange={(event) => props.onManagerNoteChange(event.target.value)}
-            disabled={isSaving}
-            placeholder="组长备注（选填）"
-            aria-label="组长备注"
-          />
-          <button className="secondary-button compact-button" type="button" onClick={() => props.onConfirm(props.record, props.managerNote)} disabled={isSaving}>
-            <Check size={15} />
-            <span>{isSaving ? '确认中' : '确认'}</span>
-          </button>
-        </div>
-      ) : null}
-      {props.record.status === 'confirmed' ? (
-        <div className="management-revenue-manager-note-readonly">
-          <span>组长备注</span>
-          <b title={readonlyManagerNote}>{readonlyManagerNote}</b>
-        </div>
-      ) : null}
-      {props.record.status === 'confirmed' && props.canCancel ? (
-        <button className="secondary-button compact-button reject-button" type="button" onClick={() => props.onCancel(props.record)} disabled={isSaving}>
-          <X size={15} />
-          <span>{isSaving ? '取消中' : '取消'}</span>
-        </button>
-      ) : null}
-      {props.record.status !== 'submitted' && props.record.status !== 'confirmed' ? <span className="management-revenue-weekly-view-label">查看</span> : null}
-    </div>
-  );
-}
-
 function ManagementRevenueDetailModal({
   row,
   filters,
-  canConfirm,
-  canCancel,
-  savingActionId,
   onClose,
-  onConfirm,
-  onCancel,
 }: {
   row: ManagementCreatorRevenueRow;
   filters: ManagementRevenuePanelFilters;
-  canConfirm: boolean;
-  canCancel: boolean;
-  savingActionId: string;
   onClose: () => void;
-  onConfirm: (record: ManagementRevenueRecord, managerNote?: string | null) => void;
-  onCancel: (record: ManagementRevenueRecord) => void;
 }) {
-  const [managerNotes, setManagerNotes] = useState<Record<string, string>>(() =>
-    Object.fromEntries(row.records.map((record) => [record.id, record.manager_note ?? ''])),
-  );
-
   return (
     <SystemModal
       title="查看主播流水"
@@ -1167,9 +1024,6 @@ function ManagementRevenueDetailModal({
               <th>周期</th>
               <th>平台</th>
               <th>流水</th>
-              <th>经纪人备注</th>
-              <th>状态</th>
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -1178,20 +1032,6 @@ function ManagementRevenueDetailModal({
                 <td data-label="周期">{getWeekLabel(record.week_start_date, record.week_end_date)}</td>
                 <td data-label="平台"><PlatformPill platform={record.platform} /></td>
                 <td data-label="流水"><strong>{formatRevenueWithUnit(record)}</strong></td>
-                <td data-label="经纪人备注">{record.agent_note || '-'}</td>
-                <td data-label="状态"><ManagementRevenueStatusBadge status={record.status} /></td>
-                <td data-label="操作">
-                  <ManagementWeeklyRevenueActions
-                    record={record}
-                    canConfirm={canConfirm}
-                    canCancel={canCancel}
-                    savingActionId={savingActionId}
-                    managerNote={managerNotes[record.id] ?? ''}
-                    onManagerNoteChange={(value) => setManagerNotes((current) => ({ ...current, [record.id]: value }))}
-                    onConfirm={onConfirm}
-                    onCancel={onCancel}
-                  />
-                </td>
               </tr>
             ))}
           </tbody>
@@ -1199,32 +1039,6 @@ function ManagementRevenueDetailModal({
       </div>
     </SystemModal>
   );
-}
-
-function ManagementRevenueCancelModal({ action, saving, onChange, onClose, onSubmit }: { action: { record: ManagementRevenueRecord; reason: string }; saving: boolean; onChange: (reason: string) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return (
-    <SystemModal
-      title="取消该笔流水"
-      ariaLabel="取消正式流水"
-      onClose={onClose}
-      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>关闭</button><button className="primary-button compact-button danger-confirm-button" type="submit" form="management-revenue-cancel-form" disabled={saving || !action.reason.trim()}>{saving ? '取消中...' : '确认取消'}</button></>}
-    >
-      <form id="management-revenue-cancel-form" className="management-revenue-cancel-form" onSubmit={onSubmit}>
-        <div className="adjustment-review-confirm-summary">
-          <strong>{getManagementRecordCreatorName(action.record)}</strong>
-          <span>{getWeekLabel(action.record.week_start_date, action.record.week_end_date)} · {formatRevenueAmount(action.record.revenue_amount)} {getRecordRevenueUnitLabel(action.record)}</span>
-        </div>
-        <label className="form-field">
-          <span>取消原因</span>
-          <textarea value={action.reason} onChange={(event) => onChange(event.target.value)} required placeholder="必须填写取消原因" />
-        </label>
-      </form>
-    </SystemModal>
-  );
-}
-
-function ManagementRevenueStatusBadge({ status }: { status: WeeklyRevenueRecord['status'] }) {
-  return <span className={`management-revenue-status management-revenue-status--${status}`}>{getManagementStatusLabel(status)}</span>;
 }
 
 function ManagementCreatorPlatformPills({ platforms }: { platforms: CreatorPlatform[] }) {
@@ -1395,11 +1209,9 @@ function summarizeManagementRevenueRecords(records: ManagementRevenueRecord[]) {
     (summary, record) => {
       if (record.platform === 'tiktok') summary.tiktokTotal += record.revenue_amount;
       if (record.platform === 'douyin') summary.douyinTotal += record.revenue_amount;
-      if (record.status === 'confirmed') summary.confirmedCount += 1;
-      if (record.status === 'submitted') summary.pendingCount += 1;
       return summary;
     },
-    { tiktokTotal: 0, douyinTotal: 0, confirmedCount: 0, pendingCount: 0 },
+    { tiktokTotal: 0, douyinTotal: 0 },
   );
 }
 
@@ -1611,12 +1423,6 @@ function getManagementRecordTypeLabel(record: ManagementRevenueRecord) {
 
 function getManagementRecordRegion(record: ManagementRevenueRecord) {
   return record.creator?.region?.code ?? record.creator?.region?.name ?? '-';
-}
-
-function getManagementStatusLabel(status: WeeklyRevenueRecord['status']) {
-  if (status === 'confirmed') return '已确认';
-  if (status === 'submitted') return '待确认';
-  return '草稿';
 }
 
 type CreatorCalendarEvent = {
@@ -3104,12 +2910,10 @@ function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; 
   const [agentNote, setAgentNote] = useState(row.record?.agent_note ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const readOnly = row.status === 'filled';
   const unitLabel = getCreatorRevenueUnitLabel(row.creator.platform);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (readOnly) return;
     const parsedAmount = parseWeeklyAmount(amount);
     if (parsedAmount.error) {
       setError(parsedAmount.error);
@@ -3137,10 +2941,10 @@ function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; 
 
   return (
     <SystemModal
-      title={readOnly ? '查看周期流水' : '填写周期流水'}
+      title={row.status === 'filled' ? '编辑周期流水' : '填写周期流水'}
       ariaLabel="周期流水"
       onClose={onClose}
-      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>{readOnly ? null : <button className="primary-button compact-button" type="submit" form="weekly-operation-form" disabled={saving}>保存</button>}</>}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="weekly-operation-form" disabled={saving}>保存</button></>}
     >
       <form id="weekly-operation-form" className="weekly-operation-form" onSubmit={submit}>
         <div className="agent-operation-modal-head">
@@ -3158,13 +2962,13 @@ function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; 
         <label className="form-field agent-weekly-revenue-field">
           <span>流水</span>
           <div className="agent-weekly-revenue-input-row">
-            <input inputMode="decimal" min="0" readOnly={readOnly} type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="尚未填写" />
+            <input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="尚未填写" />
             <b>{unitLabel}</b>
           </div>
         </label>
         <label className="form-field agent-weekly-revenue-note">
           <span>备注</span>
-          <textarea readOnly={readOnly} value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" />
+          <textarea value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" />
         </label>
         {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
       </form>
