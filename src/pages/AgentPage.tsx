@@ -684,9 +684,11 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
       <div className="management-revenue-chart-grid">
         <ManagementRevenueTrendChart points={trendPoints} loading={props.loading || recordsLoading} />
-        <ManagementAgentRankingChart rows={agentRankingRows} view={agentRankingView} onView={setAgentRankingView} offlineRows={visibleOfflineRows} offlineLoading={offlineLoading} offlineError={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
+        <ManagementAgentRankingChart rows={agentRankingRows} view={agentRankingView} onView={setAgentRankingView} />
         <ManagementCreatorRankingChart records={records} view={creatorRankingView} onView={setCreatorRankingView} />
       </div>
+
+      <ManagementOfflineRevenueCard rows={visibleOfflineRows} loading={offlineLoading} error={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
 
       <ManagementRevenueRecordsSection
         loading={props.loading || recordsLoading}
@@ -756,28 +758,33 @@ function ManagementRevenueTrendChart({ points, loading }: { points: ManagementTr
   );
 }
 
-function ManagementAgentRankingChart({ rows, view, onView, offlineRows, offlineLoading, offlineError, month, canEditKpi, savingId, onSaveKpi }: { rows: ManagementRankingRow[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void; offlineRows: AgentOfflineRevenueKpiSummary[]; offlineLoading: boolean; offlineError: string; month: string; canEditKpi: boolean; savingId: string; onSaveKpi: (id: string, amount: number) => Promise<void> }) {
+function ManagementAgentRankingChart({ rows, view, onView }: { rows: ManagementRankingRow[]; view: ManagementRankingView; onView: (view: ManagementRankingView) => void }) {
   return (
     <section className="management-revenue-card">
       <ManagementRevenueSectionHead title="经纪人流水排行榜" detail={platformLabels[view]} />
       <ManagementRankingTabs view={view} onView={onView} />
       <ManagementRankingBars rows={rows} view={view} emptyText="暂无经纪人流水数据" />
-      <div className="offline-kpi-subsection">
-        <ManagementRevenueSectionHead title="线下直播间流水" detail={formatMonthLabel(month)} />
-        {offlineLoading ? <div className="table-state management-revenue-state">正在读取线下直播间流水...</div> : null}
-        {offlineError ? <p className="offline-kpi-error">{offlineError}</p> : null}
-        {!offlineLoading && !offlineError && offlineRows.length === 0 ? <div className="table-state management-revenue-state">暂无经纪人数据</div> : null}
-        {!offlineLoading && offlineRows.length > 0 ? <div className="offline-kpi-table" role="table" aria-label="线下直播间流水">
-          <div className="offline-kpi-row offline-kpi-head" role="row"><span>经纪人</span><span>管理主播</span><span>KPI</span><span>已完成</span></div>
-          <div className="offline-kpi-body">
-            {offlineRows.map((row) => <div className="offline-kpi-row" role="row" key={row.agent_employee_id}>
-              <strong title={row.agent_name}>{row.agent_name}</strong><span className="offline-kpi-managed-count">{row.managed_creator_count}</span>
-              <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === row.agent_employee_id} onSave={(amount) => onSaveKpi(row.agent_employee_id, amount)} />
-              <b className={row.completed_amount > 0 ? 'offline-kpi-completed-positive' : 'offline-kpi-completed-zero'}>{formatRevenueAmount(row.completed_amount)}</b>
-            </div>)}
-          </div>
-        </div> : null}
-      </div>
+    </section>
+  );
+}
+
+function ManagementOfflineRevenueCard({ rows, loading, error, month, canEditKpi, savingId, onSaveKpi }: { rows: AgentOfflineRevenueKpiSummary[]; loading: boolean; error: string; month: string; canEditKpi: boolean; savingId: string; onSaveKpi: (id: string, amount: number) => Promise<void> }) {
+  return (
+    <section className="management-revenue-card management-offline-revenue-card">
+      <ManagementRevenueSectionHead title="线下直播间流水" detail={formatMonthLabel(month)} />
+      {loading ? <div className="table-state management-revenue-state">正在读取线下直播间流水...</div> : null}
+      {error ? <p className="offline-kpi-error">{error}</p> : null}
+      {!loading && !error && rows.length === 0 ? <div className="table-state management-revenue-state">暂无经纪人数据</div> : null}
+      {!loading && rows.length > 0 ? <div className="offline-kpi-table" role="table" aria-label="线下直播间流水">
+        <div className="offline-kpi-row offline-kpi-head" role="row"><span>经纪人</span><span>管理主播</span><span>KPI</span><span>已完成</span></div>
+        <div className="offline-kpi-body">
+          {rows.map((row) => <div className="offline-kpi-row" role="row" key={row.agent_employee_id}>
+            <strong title={row.agent_name}>{row.agent_name}</strong><span className="offline-kpi-managed-count">{row.managed_creator_count}</span>
+            <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === row.agent_employee_id} onSave={(amount) => onSaveKpi(row.agent_employee_id, amount)} />
+            <b className={row.completed_amount > 0 ? 'offline-kpi-completed-positive' : 'offline-kpi-completed-zero'}>{formatRevenueAmount(row.completed_amount)}</b>
+          </div>)}
+        </div>
+      </div> : null}
     </section>
   );
 }

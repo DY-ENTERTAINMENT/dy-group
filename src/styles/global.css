@@ -11604,7 +11604,7 @@ button.leave-chip:disabled {
 
 .management-revenue-page {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 14px 16px 18px;
   border-color: #d8e3f0;
   background: #f7f9fc;
@@ -11833,7 +11833,7 @@ button.leave-chip:disabled {
 
 .management-revenue-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -11922,7 +11922,7 @@ button.leave-chip:disabled {
 
 .management-revenue-chart-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 1.85fr) minmax(240px, 1fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(420px, 2fr) minmax(240px, 1fr) minmax(240px, 1fr);
   align-items: stretch;
   gap: 12px;
 }
@@ -11937,6 +11937,7 @@ button.leave-chip:disabled {
 
 .management-revenue-trend-card {
   min-height: 360px;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .management-revenue-line-chart {
@@ -12041,14 +12042,12 @@ button.leave-chip:disabled {
   gap: 7px;
 }
 
-.offline-kpi-subsection {
-  display: grid;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid #e0e8f2;
+.management-offline-revenue-card .management-revenue-section-head {
+  justify-content: center;
+  text-align: center;
 }
 
-.offline-kpi-subsection .management-revenue-section-head h3 {
+.management-offline-revenue-card .management-revenue-section-head h3 {
   color: #6d28d9;
   font-size: 15px;
 }
@@ -12066,6 +12065,11 @@ button.leave-chip:disabled {
   min-width: 0;
 }
 
+.offline-kpi-table {
+  width: min(94%, 1440px);
+  margin: 0 auto;
+}
+
 .offline-kpi-body {
   max-height: 224px;
   overflow-y: auto;
@@ -12073,9 +12077,9 @@ button.leave-chip:disabled {
 
 .offline-kpi-row {
   display: grid;
-  grid-template-columns: minmax(76px, 1fr) 52px minmax(58px, 0.9fr) minmax(70px, 1fr);
+  grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(220px, 1.6fr) minmax(150px, 1.2fr);
   align-items: center;
-  min-height: 36px;
+  min-height: 44px;
   gap: 6px;
   border-bottom: 1px solid #edf1f5;
   color: #344054;
@@ -12088,13 +12092,14 @@ button.leave-chip:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .offline-kpi-row > span,
 .offline-kpi-row > b,
 .offline-kpi-value,
 .offline-kpi-input {
-  text-align: right;
+  text-align: center;
 }
 
 .offline-kpi-managed-count {
@@ -12106,7 +12111,10 @@ button.leave-chip:disabled {
 .offline-kpi-completed-positive { color: #059669 !important; font-weight: 950; }
 
 .offline-kpi-head {
-  min-height: 28px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-bottom-color: #dfe8f2;
+  background: #f8fafc;
   color: #667085;
   font-size: 11px;
   font-weight: 900;
@@ -12124,15 +12132,17 @@ button.leave-chip:disabled {
 .offline-kpi-value.empty { color: #98a2b3; }
 .offline-kpi-value.filled { color: #6d28d9; font-weight: 950; }
 .offline-kpi-value.editable { cursor: pointer; }
-.offline-kpi-value.editable:hover { background: #f5f3ff; border-radius: 5px; text-decoration: underline; }
+.offline-kpi-value.editable { padding: 3px 7px; border: 1px solid #e4d7f8; border-radius: 6px; background: #fbf9ff; }
+.offline-kpi-value.editable:hover { background: #f5f3ff; text-decoration: underline; }
 
 .offline-kpi-input {
   width: 100%;
   min-width: 0;
   height: 27px;
-  padding: 2px 5px;
+  padding: 2px 7px;
   border: 1px solid #b88cf5;
   border-radius: 5px;
+  background: #fbf9ff;
   font: inherit;
 }
 
@@ -12794,6 +12804,17 @@ button.leave-chip:disabled {
 
   .management-revenue-ranking-row {
     grid-template-columns: 26px minmax(72px, 0.8fr) minmax(0, 1fr);
+  }
+
+  .offline-kpi-row {
+    grid-template-columns: minmax(64px, 1fr) minmax(52px, 0.7fr) minmax(64px, 1fr) minmax(64px, 1fr);
+    min-height: 36px;
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .offline-kpi-table {
+    width: 100%;
   }
 
   .management-revenue-desktop-table {
