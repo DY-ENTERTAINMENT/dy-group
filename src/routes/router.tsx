@@ -8,6 +8,7 @@ import { StaffPage } from '../pages/StaffPage';
 import { AttendancePage } from '../pages/AttendancePage';
 import { AttendanceLocationPage } from '../pages/AttendanceLocationPage';
 import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
+import { EmployeeRestManagementPage } from '../pages/EmployeeRestManagementPage';
 import { LeavePage } from '../pages/LeavePage';
 import { LeaveBalanceManagementPage } from '../pages/LeaveBalanceManagementPage';
 import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
@@ -100,6 +101,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="attendance-management">
                 <AttendanceManagementPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('employee-rest-management'),
+            element: (
+              <RequirePermission permissionKey="attendance-management">
+                <EmployeeRestManagementPage />
               </RequirePermission>
             ),
           },

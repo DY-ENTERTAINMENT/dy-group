@@ -3,6 +3,7 @@ import type { RegionFeaturePermissionKey } from '../services/permission-runtime.
 import {
   Brush,
   CalendarCheck2,
+  Coffee,
   CalendarDays,
   ClipboardList,
   ClipboardCheck,
@@ -208,6 +209,15 @@ export const menuItems: MenuItem[] = [
     icon: ClipboardCheck,
     section: '工作工具',
     group: '人事部',
+  },
+  {
+    key: 'employee-rest-management',
+    label: '员工休息管理',
+    path: '/hr/employee-rest-management',
+    icon: Coffee,
+    section: '工作工具',
+    group: '人事部',
+    permissionKey: 'attendance-management',
   },
   {
     key: 'public-holidays',

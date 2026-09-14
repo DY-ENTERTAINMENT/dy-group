@@ -13,6 +13,7 @@ import {
   attendanceManagementService,
   getAttendancePeriodRange,
 } from '../services/attendanceManagement.service';
+import { isEmployeeActiveOnDate, resolveEffectiveAttendanceDay } from '../utils/attendance-effective-day';
 import type {
   AttendanceAbnormalReviewHistory,
   AttendanceAbnormalReviewStatus,
@@ -992,12 +993,19 @@ function buildSummaries(
       const breakMinutes = breakStart && breakEnd ? minutesBetween(breakStart.punched_at, breakEnd.punched_at) : 0;
       const workHours = clockIn && clockOut ? minutesBetween(clockIn.punched_at, clockOut.punched_at) / 60 : null;
       const statuses: string[] = [];
-      const shouldCountAttendance = shouldCountAttendanceDate(employee, date);
+      const effectiveAttendanceDay = resolveEffectiveAttendanceDay({
+        employee,
+        date,
+        leave,
+        restDay,
+        publicHoliday: publicHoliday ?? null,
+        companyActivity: companyActivity ?? null,
+        hasReplacementMakeUpDate: Boolean(replacementMakeUpDate),
+        replacementLeaveEffect,
+      });
+      const shouldCountAttendance = effectiveAttendanceDay.shouldCountEmployeeDate;
       const isPastOrToday = date <= today;
-      const weekend = isWeekend(date);
-      const nonWorkingDay = Boolean(publicHoliday) || (weekend && (!replacementMakeUpDate || replacementLeaveEffect));
-      const activityExempt = Boolean(companyActivity?.id) && !publicHoliday;
-      const exemptFromRules = nonWorkingDay || activityExempt;
+      const { weekend, activityExempt, exemptFromRules } = effectiveAttendanceDay;
 
       if (!shouldCountAttendance) {
         return {
@@ -1032,17 +1040,17 @@ function buildSummaries(
         statuses.push('排休');
       }
 
-      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && isPastOrToday && !clockIn) {
+      if (effectiveAttendanceDay.requiresAttendance && isPastOrToday && !clockIn) {
         statuses.push('旷工');
         absentCount += 1;
       }
 
-      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
+      if (effectiveAttendanceDay.requiresAttendance && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime)) {
         statuses.push('迟到');
         lateCount += 1;
       }
 
-      if (employee.require_attendance && !exemptFromRules && !leave && !restDay && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
+      if (effectiveAttendanceDay.requiresAttendance && clockOut && effectiveEndTime && isBeforeWorkTime(clockOut.punched_at, effectiveEndTime)) {
         statuses.push('早退');
         earlyLeaveCount += 1;
       }
@@ -1147,7 +1155,7 @@ function groupEffectiveWorkTimes(effectiveWorkTimes: AttendanceEffectiveWorkTime
 }
 
 function shouldCountAttendanceDate(employee: AttendanceEmployee, date: string) {
-  return employee.status !== 'left' || !employee.employment_end_date || date < employee.employment_end_date;
+  return isEmployeeActiveOnDate(employee, date);
 }
 
 function groupAttendanceRecords(records: AttendanceRecord[]) {
