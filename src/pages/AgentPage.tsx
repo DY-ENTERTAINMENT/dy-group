@@ -1,5 +1,5 @@
 ﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Eye, Leaf, Plus, RefreshCw, Send, Settings, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Eye, FileWarning, Leaf, Layers3, Plus, RefreshCw, Search, Send, Settings, Trash2, UserRound, X } from 'lucide-react';
 import { useRef } from 'react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
@@ -1565,9 +1565,10 @@ function CreatorDataPanel(props: {
         <div className="table-state">暂无主播资料。</div>
       ) : (
         <>
-          <div className="agent-creator-list-header" aria-live="polite">共 <strong>{creatorGroups.length}</strong> 位主播</div>
-          <div className="staff-table-wrap agent-creator-table-wrap">
-            <table className="staff-table agent-table agent-creator-table">
+          <section className="agent-creator-list-card">
+            <div className="agent-creator-list-header" aria-live="polite">共 <strong>{creatorGroups.length}</strong> 位主播</div>
+            <div className="staff-table-wrap agent-creator-table-wrap">
+              <table className="staff-table agent-table agent-creator-table">
               <thead>
                 <tr>
                   <th>主播</th>
@@ -1588,15 +1589,16 @@ function CreatorDataPanel(props: {
                     <td><CompletenessBadge completeness={group.completeness} /></td>
                     <td>
                       <div className="agent-creator-actions">
-                        <button className="secondary-button compact-button" type="button" onClick={() => props.onView(group)}>查看资料</button>
-                        <button className="secondary-button compact-button" type="button" onClick={() => props.onAdjustment(group)}>申请修改</button>
+                        <button className="secondary-button compact-button agent-creator-view-button" type="button" onClick={() => props.onView(group)}><Eye size={15} />查看资料</button>
+                        <button className="secondary-button compact-button agent-creator-adjust-button" type="button" onClick={() => props.onAdjustment(group)}><RefreshCw size={15} />申请修改</button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </section>
           <div className="agent-creator-mobile-list">
             {creatorGroups.map((group) => (
               <article key={group.id} className="agent-creator-mobile-card">
@@ -1610,8 +1612,8 @@ function CreatorDataPanel(props: {
                   <CompletenessBadge completeness={group.completeness} />
                 </div>
                 <div className="agent-creator-actions">
-                  <button className="secondary-button compact-button" type="button" onClick={() => props.onView(group)}>查看资料</button>
-                  <button className="secondary-button compact-button" type="button" onClick={() => props.onAdjustment(group)}>申请修改</button>
+                  <button className="secondary-button compact-button agent-creator-view-button" type="button" onClick={() => props.onView(group)}><Eye size={15} />查看资料</button>
+                  <button className="secondary-button compact-button agent-creator-adjust-button" type="button" onClick={() => props.onAdjustment(group)}><RefreshCw size={15} />申请修改</button>
                 </div>
               </article>
             ))}
@@ -1648,20 +1650,21 @@ type CreatorGroupSummary = {
 function CreatorSummaryStrip({ summary }: { summary: CreatorGroupSummary }) {
   return (
     <div className="agent-creator-summary-grid">
-      <CreatorSummaryCard title="我的主播" value={summary.total} />
-      <CreatorSummaryCard title="TikTok" value={summary.tiktok} logoUrl={tiktokLogoUrl} />
-      <CreatorSummaryCard title="抖音" value={summary.douyin} logoUrl={douyinLogoUrl} />
-      <CreatorSummaryCard title="双平台" value={summary.dualPlatform} />
-      <CreatorSummaryCard title="待补资料" value={summary.incomplete} tone={summary.incomplete > 0 ? 'warning' : 'default'} />
+      <CreatorSummaryCard title="我的主播" value={summary.total} tone="blue" icon={<UserRound size={19} />} />
+      <CreatorSummaryCard title="TikTok" value={summary.tiktok} tone="pink" icon={<img src={tiktokLogoUrl} alt="" aria-hidden="true" />} />
+      <CreatorSummaryCard title="抖音" value={summary.douyin} tone="green" icon={<img src={douyinLogoUrl} alt="" aria-hidden="true" />} />
+      <CreatorSummaryCard title="双平台" value={summary.dualPlatform} tone="purple" icon={<Layers3 size={19} />} />
+      <CreatorSummaryCard title="待补资料" value={summary.incomplete} tone="orange" icon={<FileWarning size={19} />} />
     </div>
   );
 }
 
-function CreatorSummaryCard({ title, value, logoUrl, tone = 'default' }: { title: string; value: number; logoUrl?: string; tone?: 'default' | 'warning' }) {
+function CreatorSummaryCard({ title, value, icon, tone }: { title: string; value: number; icon: ReactNode; tone: 'blue' | 'pink' | 'green' | 'purple' | 'orange' }) {
   return (
     <article className={`agent-creator-summary-card agent-creator-summary-card--${tone}`}>
-      <div className="agent-creator-summary-title">{logoUrl ? <img src={logoUrl} alt="" aria-hidden="true" /> : null}<span>{title}</span></div>
-      <strong>{value.toLocaleString('en-MY')}</strong>
+      <span className="agent-creator-summary-icon" aria-hidden="true">{icon}</span>
+      <div className="agent-creator-summary-content"><span className="agent-creator-summary-title">{title}</span><strong>{value.toLocaleString('en-MY')}</strong></div>
+      <ArrowUpRight className="agent-creator-summary-arrow" size={17} aria-hidden="true" />
     </article>
   );
 }
@@ -1683,10 +1686,10 @@ function CreatorManagementFilters(props: {
   onReset: () => void;
 }) {
   return (
-    <div className="scout-filters agent-creator-filters">
+    <div className="agent-creator-filters">
       <label className="form-field agent-creator-search-field">
         <span>搜索</span>
-        <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="主播名 / UID / 平台账号" />
+        <span className="agent-creator-search-input"><Search size={16} aria-hidden="true" /><input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="主播名 / UID / 平台账号" /></span>
       </label>
       <SelectField label="平台" value={props.platform} onChange={props.onPlatform}>
         <option value="">全部</option>
@@ -1715,7 +1718,7 @@ function CreatorManagementFilters(props: {
         <option value="">全部</option>
         {props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
       </SelectField>
-      <button className="secondary-button agent-creator-reset-button" type="button" onClick={props.onReset}>重置</button>
+      <button className="secondary-button agent-creator-reset-button" type="button" onClick={props.onReset}><RefreshCw size={15} />重置</button>
     </div>
   );
 }

@@ -5943,7 +5943,7 @@ button.leave-chip:disabled {
 
 .agent-creator-panel {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .agent-creator-view-bar { align-items: center; display: flex; justify-content: space-between; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
@@ -5999,78 +5999,99 @@ button.leave-chip:disabled {
 
 .agent-creator-summary-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 12px 14px 0;
+  padding: 0;
 }
 
 .agent-creator-summary-card {
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-  min-height: 84px;
-  padding: 12px;
-  text-align: center;
-  background:
-    linear-gradient(135deg, rgba(105, 89, 255, 0.1), rgba(255, 255, 255, 0.92)),
-    var(--panel-soft);
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
+  min-height: 96px;
+  padding: 15px;
+  position: relative;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.035);
 }
 
-.agent-creator-summary-card--warning {
-  background:
-    linear-gradient(135deg, rgba(244, 114, 182, 0.13), rgba(255, 255, 255, 0.92)),
-    var(--panel-soft);
+.agent-creator-summary-card--blue { background: #eaf4ff; border-color: #bfdbfe; color: #2563eb; }
+.agent-creator-summary-card--pink { background: #fff0f5; border-color: #fbcfe8; color: #db2777; }
+.agent-creator-summary-card--green { background: #ecfdf5; border-color: #bbf7d0; color: #059669; }
+.agent-creator-summary-card--purple { background: #f5f0ff; border-color: #ddd6fe; color: #7c3aed; }
+.agent-creator-summary-card--orange { background: #fff7ed; border-color: #fed7aa; color: #d97706; }
+
+.agent-creator-summary-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
 }
+
+.agent-creator-summary-icon img { height: 20px; object-fit: contain; width: 20px; }
+
+.agent-creator-summary-content { align-items: center; display: grid; gap: 6px; min-width: 0; text-align: center; }
 
 .agent-creator-summary-title {
-  align-items: center;
   color: var(--muted);
-  display: flex;
   font-size: 12px;
   font-weight: 900;
-  gap: 7px;
-}
-
-.agent-creator-summary-title img {
-  height: 17px;
-  object-fit: contain;
-  width: 17px;
 }
 
 .agent-creator-summary-card strong {
-  color: var(--text);
-  font-size: 27px;
+  color: #172033;
+  font-size: 28px;
   line-height: 1;
 }
 
+.agent-creator-summary-arrow { opacity: .48; position: absolute; right: 13px; top: 13px; }
+
 .agent-creator-filters {
   align-items: end;
-  column-gap: 10px;
-  grid-template-columns: minmax(260px, 1.7fr) repeat(3, minmax(118px, .9fr)) minmax(148px, 1.1fr) minmax(120px, .85fr) 84px;
-  padding: 12px 14px;
-}
-
-.agent-creator-search-field input {
-  width: 100%;
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) repeat(3, minmax(105px, 120px)) minmax(125px, 150px) minmax(100px, 120px) 84px;
+  justify-content: start;
+  padding: 15px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.025);
 }
 
 .agent-creator-filters .form-field { gap: 4px; margin: 0; min-width: 0; }
-.agent-creator-filters .form-field > span { font-size: 11px; line-height: 1; }
+.agent-creator-filters .form-field > span { color: #475569; font-size: 11px; line-height: 1; }
 .agent-creator-filters .form-field input,
 .agent-creator-filters .form-field select,
-.agent-creator-reset-button { min-height: 36px; }
-.agent-creator-reset-button { justify-content: center; padding: 0 12px; white-space: nowrap; }
+.agent-creator-reset-button { min-height: 38px; }
+.agent-creator-filters .form-field input,
+.agent-creator-filters .form-field select { border-color: #dbe2ea; border-radius: 8px; color: #334155; }
+.agent-creator-filters .form-field input:focus,
+.agent-creator-filters .form-field select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(105, 89, 255, .12); }
+.agent-creator-search-input { align-items: center; display: flex; position: relative; }
+.agent-creator-search-input svg { color: #94a3b8; left: 11px; pointer-events: none; position: absolute; }
+.agent-creator-filters .agent-creator-search-input input { padding-left: 35px; }
+.agent-creator-reset-button { align-items: center; border-color: #cbd5e1; color: #475569; display: inline-flex; gap: 5px; justify-content: center; padding: 0 11px; white-space: nowrap; }
+.agent-creator-reset-button:hover { background: #f8fafc; border-color: #94a3b8; color: var(--primary-dark); }
 
 .agent-creator-list-header {
-  color: var(--muted);
+  color: #64748b;
   font-size: 13px;
   font-weight: 800;
-  padding: 0 14px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.agent-creator-list-header strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.agent-creator-list-header strong { color: #111827; font-variant-numeric: tabular-nums; }
+
+.agent-creator-list-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 5px 14px rgba(15, 23, 42, .035); overflow: hidden; }
 
 .agent-creator-table-wrap {
   display: block;
@@ -6078,13 +6099,20 @@ button.leave-chip:disabled {
 
 .agent-creator-table th,
 .agent-creator-table td {
-  padding-bottom: 11px;
-  padding-top: 11px;
+  padding-bottom: 12px;
+  padding-top: 12px;
   vertical-align: middle;
 }
 
+.agent-creator-table th:last-child,
+.agent-creator-table td:last-child { min-width: 220px; width: 220px; }
+
+.agent-creator-table thead th { background: #f8fafc; border-bottom-color: #e5e7eb; color: #64748b; font-size: 11px; font-weight: 800; }
+.agent-creator-table tbody tr:hover td { background: #f8fafc; }
+.agent-creator-table tbody tr:last-child td { border-bottom: 0; }
+
 .agent-creator-name {
-  color: var(--text);
+  color: #111827;
   font-size: 15px;
 }
 
@@ -6106,17 +6134,18 @@ button.leave-chip:disabled {
   color: var(--text);
   display: inline-flex;
   font-weight: 900;
-  gap: 7px;
+  font-size: 13px;
+  gap: 6px;
 }
 
 .agent-creator-platform-name img {
-  height: 17px;
+  height: 18px;
   object-fit: contain;
-  width: 17px;
+  width: 18px;
 }
 
 .agent-creator-platform-uid {
-  color: var(--muted);
+  color: #475569;
   font-weight: 800;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -6136,18 +6165,18 @@ button.leave-chip:disabled {
 }
 
 .agent-creator-type-badge--plus {
-  background: rgba(105, 89, 255, 0.12);
-  color: var(--primary-dark);
+  background: #eaf4ff;
+  color: #2563eb;
 }
 
 .agent-creator-type-badge--standard {
-  background: rgba(15, 23, 42, 0.07);
-  color: var(--muted);
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .agent-creator-status-badge--active,
 .agent-creator-completeness-badge--complete {
-  background: rgba(34, 197, 94, 0.12);
+  background: #ecfdf5;
   color: #15803d;
 }
 
@@ -6159,22 +6188,26 @@ button.leave-chip:disabled {
 
 .agent-creator-status-badge--mixed,
 .agent-creator-completeness-badge--missing {
-  background: rgba(245, 158, 11, 0.14);
-  color: #a16207;
+  background: #fff7ed;
+  color: #c2410c;
 }
 
 .agent-creator-actions {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 8px;
+  justify-content: flex-start;
 }
 
-.agent-creator-actions .compact-button { min-height: 32px; padding-left: 10px; padding-right: 10px; }
-
-@media (max-width: 1220px) and (min-width: 961px) {
-  .agent-creator-filters { grid-template-columns: minmax(260px, 1.6fr) repeat(3, minmax(118px, 1fr)); }
-  .agent-creator-search-field { grid-column: span 2; }
-}
+.agent-creator-actions .compact-button { flex: 0 0 auto; font-size: 13px; margin-top: 0; min-height: 36px; padding-left: 14px; padding-right: 14px; width: auto; }
+.agent-creator-view-button,
+.agent-creator-adjust-button { align-items: center; display: inline-flex; gap: 6px; min-width: 102px; white-space: nowrap; }
+.agent-creator-view-button { background: #ffffff; border-color: #bfdbfe; color: #2563eb; }
+.agent-creator-view-button:hover { background: #eff6ff; border-color: #93c5fd; }
+.agent-creator-adjust-button { background: var(--primary); border-color: var(--primary); color: #ffffff; }
+.agent-creator-adjust-button:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #ffffff; }
 
 .agent-creator-mobile-list {
   display: none;
