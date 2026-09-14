@@ -112,6 +112,7 @@ export type CreatorPlatformFormValues = {
 
 export type CreatorEntityFormValues = {
   display_name: string;
+  birthday: string;
   registration_type: CreatorRegistrationType;
   guild_joined_date: string;
   region_id: string;
@@ -126,6 +127,7 @@ export type CreatorEntityFormValues = {
 
 export type CreatorEntitySharedFormValues = {
   display_name: string;
+  birthday: string;
   registration_type: CreatorRegistrationType | null;
   guild_joined_date: string;
   region_id: string;
@@ -534,8 +536,9 @@ export const scoutService = {
     const platforms = normalizeCreatorEntityPlatforms(values);
     if (platforms.length === 0) throw new Error('请至少选择一个平台。');
 
-    const { error } = await db.rpc('create_creator_entity_with_platforms', {
+    const { error } = await db.rpc('create_creator_entity_with_platforms_with_birthday', {
       p_display_name: values.display_name.trim(),
+      p_birthday: values.birthday || null,
       p_region_id: values.region_id || null,
       p_scout_employee_id: values.scout_employee_id || null,
       p_manager_employee_id: values.manager_employee_id || null,
@@ -553,9 +556,10 @@ export const scoutService = {
   },
 
   async saveCreatorEntitySharedData(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
-    const { error } = await db.rpc('save_creator_entity_shared_data', {
+    const { error } = await db.rpc('save_creator_entity_shared_data_with_birthday', {
       p_creator_entity_id: creatorEntityId,
       p_display_name: values.display_name.trim(),
+      p_birthday: values.birthday || null,
       p_region_id: values.region_id || null,
       p_scout_employee_id: values.scout_employee_id || null,
       p_manager_employee_id: values.manager_employee_id || null,
@@ -569,6 +573,12 @@ export const scoutService = {
     });
 
     if (error) throw error;
+  },
+
+  async getCreatorEntityBirthday(creatorEntityId: string): Promise<string | null> {
+    const { data, error } = await db.rpc('get_creator_entity_birthday', { p_creator_entity_id: creatorEntityId });
+    if (error) throw error;
+    return data ?? null;
   },
 
   async updateCreatorEntityPlatformProfiles(creatorEntityId: string, profiles: CreatorEntityPlatformEditValues[]) {

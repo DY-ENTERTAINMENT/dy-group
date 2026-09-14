@@ -26,6 +26,247 @@
   --sidebar-text: #e8eef7;
 }
 
+/* Creator activity calendar */
+.creator-activity-calendar-heading h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.creator-activity-calendar-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.creator-activity-calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.creator-activity-calendar-navigation,
+.creator-activity-calendar-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.creator-activity-calendar-navigation strong {
+  min-width: 92px;
+  text-align: center;
+}
+
+.creator-activity-calendar-navigation .icon-button,
+.creator-activity-calendar-navigation .compact-button,
+.creator-activity-calendar-filters select,
+.creator-activity-calendar-filters input {
+  box-sizing: border-box;
+  height: 36px;
+}
+
+.creator-activity-calendar-filters select,
+.creator-activity-calendar-filters input {
+  height: 36px;
+  min-width: 118px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.creator-activity-calendar-filters input {
+  min-width: 148px;
+}
+
+.creator-activity-month-calendar {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.creator-activity-month-weekdays,
+.creator-activity-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.creator-activity-month-weekdays span {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.creator-activity-month-day {
+  min-height: 108px;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.creator-activity-month-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.creator-activity-month-day time {
+  display: block;
+  width: fit-content;
+  min-width: 24px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.creator-activity-month-day.is-outside-month {
+  background: var(--panel-soft);
+}
+
+.creator-activity-month-day.is-outside-month time {
+  color: var(--muted);
+}
+
+.creator-activity-month-day.is-today time {
+  color: #fff;
+  background: var(--primary);
+}
+
+.creator-activity-month-items {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.creator-activity-month-item,
+.creator-activity-month-more,
+.creator-activity-agenda-item {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.creator-activity-month-item {
+  overflow: hidden;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f1f7f8;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-activity-month-item:hover {
+  background: #dff0f3;
+}
+
+.creator-activity-month-item--milestone {
+  background: #f7f4fb;
+  color: #5b4b76;
+}
+
+.creator-activity-month-item--milestone:hover {
+  background: #eee8f7;
+}
+
+.creator-activity-agenda-item:hover {
+  background: #e9f5f7;
+}
+
+.creator-activity-month-more {
+  margin-top: 5px;
+  padding: 2px 0;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.creator-activity-agenda {
+  display: none;
+}
+
+.creator-activity-calendar-state {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+}
+
+.creator-activity-calendar-detail {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 760px) {
+  .creator-activity-calendar-toolbar {
+    display: grid;
+    padding: 12px;
+  }
+
+  .creator-activity-calendar-navigation {
+    justify-content: space-between;
+  }
+
+  .creator-activity-calendar-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creator-activity-calendar-filters input {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .creator-activity-month-calendar {
+    display: none;
+  }
+
+  .creator-activity-agenda {
+    display: grid;
+    gap: 12px;
+  }
+
+  .creator-activity-agenda-day {
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  .creator-activity-agenda-day h2 {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .creator-activity-agenda-item {
+    display: block;
+    width: 100%;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .creator-activity-agenda-item--milestone {
+    color: #5b4b76;
+  }
+}
+
 .offline-live-room-page {
   display: flex;
   flex-direction: column;

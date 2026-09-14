@@ -26,6 +26,7 @@ import { RegisterReviewPage } from '../pages/RegisterReviewPage';
 import { RegistrationReviewPage } from '../pages/RegistrationReviewPage';
 import { ScoutPage } from '../pages/ScoutPage';
 import { AgentPage } from '../pages/AgentPage';
+import { CreatorActivityCalendarPage } from '../pages/CreatorActivityCalendarPage';
 import { DesignerPage } from '../pages/DesignerPage';
 import { OfflineLiveRoomManagementPage } from '../pages/OfflineLiveRoomManagementPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -133,6 +134,10 @@ export const router = createBrowserRouter([
                 <AgentPage mode="creators" />
               </RequirePermission>
             ),
+          },
+          {
+            path: getMenuPath('agent-creator-activity-calendar'),
+            element: <RequirePermission permissionKey="agent-creator-activity-calendar"><CreatorActivityCalendarPage /></RequirePermission>,
           },
           {
             path: getMenuPath('agent-adjustment-requests'),

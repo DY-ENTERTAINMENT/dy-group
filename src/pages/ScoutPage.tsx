@@ -131,6 +131,7 @@ function emptyCreatorPlatformForm(enabled = false): CreatorPlatformFormValues {
 
 const emptyCreatorEntityForm: CreatorEntityFormValues = {
   display_name: '',
+  birthday: '',
   registration_type: 'new_onboarding',
   guild_joined_date: today,
   region_id: '',
@@ -148,6 +149,7 @@ const emptyCreatorEntityForm: CreatorEntityFormValues = {
 
 const emptyCreatorEntitySharedForm: CreatorEntitySharedFormValues = {
   display_name: '',
+  birthday: '',
   registration_type: 'new_onboarding',
   guild_joined_date: '',
   region_id: '',
@@ -639,15 +641,17 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     if (creator.creator_entity_id) {
       setError('');
       try {
-        const [collaborators, entityProfiles] = await Promise.all([
+        const [collaborators, entityProfiles, birthday] = await Promise.all([
           scoutService.getCreatorEntityCollaborators(creator.creator_entity_id),
           scoutService.listCreatorEntityActivePlatformProfiles(creator.creator_entity_id),
+          scoutService.getCreatorEntityBirthday(creator.creator_entity_id),
         ]);
         setCreatorEntityCollaborators(collaborators);
         setEditingCreator(null);
         setEditingCreatorEntityId(creator.creator_entity_id);
         setCreatorEntitySharedForm({
           display_name: creator.creator_name,
+          birthday: birthday ?? '',
           registration_type: creator.registration_type ?? null,
           guild_joined_date: creator.guild_joined_date ?? creator.joined_date,
           region_id: creator.region_id ?? '',
@@ -3644,6 +3648,7 @@ function CreatorEntitySharedModal(props: {
         <div className="form-grid">
           <div className="form-section-title">共同资料</div>
           <TextField label="主播名字" value={props.values.display_name} onChange={(value) => updateValues({ display_name: value })} required />
+          <TextField label="生日" type="date" value={props.values.birthday} onChange={(value) => updateValues({ birthday: value })} />
           <TextField label={props.values.registration_type === 'existing_creator' ? '真实入公会日期' : '入会日期'} type="date" value={props.values.guild_joined_date} onChange={(value) => updateValues({ guild_joined_date: value })} required />
           <SelectField label="区域" value={props.values.region_id} onChange={(value) => updateValues({ region_id: value })} required>
             <option value="">请选择</option>
@@ -3766,6 +3771,7 @@ function CreatorModal(props: {
             <div className="form-section-title">共同资料</div>
             {props.entityValues.registration_type === 'existing_creator' ? <p className="form-field-wide">用于录入公司现有主播，不计入新增入公会统计。</p> : null}
             <TextField label="主播名字" value={props.entityValues.display_name} onChange={(value) => updateEntity({ display_name: value })} required />
+            <TextField label="生日" type="date" value={props.entityValues.birthday} onChange={(value) => updateEntity({ birthday: value })} />
             <TextField label={props.entityValues.registration_type === 'existing_creator' ? '真实入公会日期' : '入会日期'} type="date" value={props.entityValues.guild_joined_date} onChange={(value) => updateEntity({ guild_joined_date: value })} required />
             <SelectField label="区域" value={props.entityValues.region_id} onChange={(value) => updateEntity({ region_id: value })} required>
               <option value="">请选择</option>

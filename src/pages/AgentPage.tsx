@@ -36,6 +36,8 @@ import {
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
 import { creatorCalendarMilestoneLabels, getCreatorMilestones, type CreatorCalendarMilestoneType } from '../utils/creator-calendar';
+import { creatorActivityService, creatorActivityTypeLabels, type CreatorActivityForm } from '../services/creator-activity.service';
+import type { CreatorActivity, CreatorActivityType } from '../types/database';
 
 export type AgentPageMode = 'revenue' | 'creators' | 'adjustments' | 'design-requests' | 'management-revenue' | 'management-adjustments';
 
@@ -51,6 +53,12 @@ function getMalaysiaDate(date: Date) {
 function formatMonthLabel(month: string) {
   const [year, monthNumber] = month.split('-');
   return `${year}年${Number(monthNumber)}月`;
+}
+
+function parseCreatorEntityKey(value: string) {
+  const match = /^entity:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(value);
+  if (!match) throw new Error('请选择有效的主播。');
+  return match[1];
 }
 
 const emptyAdjustment: AdjustmentFormValues = {
@@ -100,7 +108,13 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
   const [creatorView, setCreatorView] = useState<'profiles' | 'calendar'>('profiles');
   const [calendarMonth, setCalendarMonth] = useState(currentMonth);
   const [calendarType, setCalendarType] = useState<'' | CreatorCalendarMilestoneType>('');
+  const [calendarActivityType, setCalendarActivityType] = useState<'' | CreatorActivityType>('');
   const [calendarInfoOpen, setCalendarInfoOpen] = useState(false);
+  const [calendarActivities, setCalendarActivities] = useState<CreatorActivity[]>([]);
+  const [activityForm, setActivityForm] = useState<CreatorActivityForm>({ creator_entity_id: '', title: '', activity_date: today, activity_time: '', activity_type: 'guild_activity', agent_remark: '' });
+  const [editingActivity, setEditingActivity] = useState<CreatorActivity | null>(null);
+  const [selectedMilestone, setSelectedMilestone] = useState<CreatorCalendarEvent | null>(null);
+  const [milestoneRemark, setMilestoneRemark] = useState('');
   const [reviewStatus, setReviewStatus] = useState('pending');
   const [reviewPlatform, setReviewPlatform] = useState('');
   const [reviewType, setReviewType] = useState('');
@@ -149,6 +163,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       }
       if (mode === 'creators') {
         setCreators(await agentService.listPersonalManagerCreatorProfiles({ regionId: defaultRegion }));
+        setCalendarActivities(await creatorActivityService.listMine(calendarMonth));
       }
       if (mode === 'adjustments' && profile?.id) {
         setAdjustments(await agentService.listAdjustments(profile.id));
@@ -273,6 +288,17 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
     });
     setAdjustmentModalOpen(true);
   }
+  async function saveActivity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      const creatorEntityId = parseCreatorEntityKey(activityForm.creator_entity_id);
+      const values = { ...activityForm, creator_entity_id: creatorEntityId };
+      if (editingActivity) await creatorActivityService.update(editingActivity.id, values); else await creatorActivityService.create(values);
+      setCalendarInfoOpen(false); setEditingActivity(null); setActivityForm({ creator_entity_id: '', title: '', activity_date: today, activity_time: '', activity_type: 'guild_activity', agent_remark: '' }); setCalendarActivities(await creatorActivityService.listMine(calendarMonth));
+    } catch (e) { setError(`保存活动失败：${getErrorMessage(e)}`); } finally { setSaving(false); }
+  }
+  async function saveMilestone() { if (!selectedMilestone) return; setSaving(true); try { await creatorActivityService.saveMilestoneNote(parseCreatorEntityKey(selectedMilestone.group.id), selectedMilestone.type, selectedMilestone.date, milestoneRemark); setSelectedMilestone(null); } catch (e) { setError(`保存节点备注失败：${getErrorMessage(e)}`); } finally { setSaving(false); } }
+  async function openMilestone(event: CreatorCalendarEvent) { setError(''); try { const note = await creatorActivityService.getMilestoneNote(parseCreatorEntityKey(event.group.id), event.type, event.date); setMilestoneRemark(note?.agent_remark ?? ''); setSelectedMilestone(event); } catch (e) { setError(`读取节点备注失败：${getErrorMessage(e)}`); } }
 
   return (
     <section className="agent-page">
@@ -329,11 +355,16 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
             loading={loading}
             creators={creators}
             currentEmployeeId={options.currentEmployee?.id ?? null}
+            activities={calendarActivities}
             month={calendarMonth}
             type={calendarType}
+            activityType={calendarActivityType}
             onMonth={setCalendarMonth}
             onType={setCalendarType}
+            onActivityType={setCalendarActivityType}
             onView={setSelectedCreatorGroup}
+            onActivity={(activity) => { setEditingActivity(activity); setActivityForm({ creator_entity_id: `entity:${activity.creator_entity_id}`, title: activity.title, activity_date: activity.activity_date, activity_time: activity.activity_time?.slice(0, 5) ?? '', activity_type: activity.activity_type, agent_remark: activity.agent_remark ?? '' }); setCalendarInfoOpen(true); }}
+            onMilestone={(event) => void openMilestone(event)}
             onAddActivity={() => setCalendarInfoOpen(true)}
           />}
         </>
@@ -368,7 +399,8 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         />
       ) : null}
 
-      {calendarInfoOpen ? <SystemModal title="新增活动" ariaLabel="新增活动" onClose={() => setCalendarInfoOpen(false)} footer={<button className="primary-button compact-button" type="button" onClick={() => setCalendarInfoOpen(false)}>知道了</button>}><p className="agent-calendar-coming-soon">新增活动功能将在下一阶段开放。</p></SystemModal> : null}
+      {calendarInfoOpen ? <SystemModal title={editingActivity ? '编辑活动' : '新增活动'} ariaLabel="活动" onClose={() => { setCalendarInfoOpen(false); setEditingActivity(null); }} footer={<><button className="secondary-button compact-button" type="button" onClick={() => setCalendarInfoOpen(false)}>取消</button><button className="primary-button compact-button" type="submit" form="creator-activity-form" disabled={saving}>{saving ? '保存中...' : '保存'}</button></>}><form id="creator-activity-form" onSubmit={saveActivity}><div className="form-grid single"><label className="form-field"><span>主播</span><select disabled={Boolean(editingActivity)} required value={activityForm.creator_entity_id} onChange={(e) => setActivityForm({ ...activityForm, creator_entity_id: e.target.value })}><option value="">请选择</option>{groupCreatorProfiles(creators, options.currentEmployee?.id ?? null).map((group) => <option key={group.id} value={group.id}>{group.displayName}</option>)}</select></label><label className="form-field"><span>活动名称</span><input required value={activityForm.title} onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })} /></label><label className="form-field"><span>活动日期</span><input required type="date" value={activityForm.activity_date} onChange={(e) => setActivityForm({ ...activityForm, activity_date: e.target.value })} /></label><label className="form-field"><span>活动时间</span><input type="time" value={activityForm.activity_time} onChange={(e) => setActivityForm({ ...activityForm, activity_time: e.target.value })} /></label><label className="form-field"><span>活动类型</span><select value={activityForm.activity_type} onChange={(e) => setActivityForm({ ...activityForm, activity_type: e.target.value as CreatorActivityForm['activity_type'] })}>{Object.entries(creatorActivityTypeLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><label className="form-field"><span>经纪人备注</span><textarea value={activityForm.agent_remark} onChange={(e) => setActivityForm({ ...activityForm, agent_remark: e.target.value })} /></label>{editingActivity ? <label className="form-field"><span>组长备注</span><textarea readOnly value={editingActivity.lead_remark ?? ''} /></label> : null}</div></form></SystemModal> : null}
+      {selectedMilestone ? <SystemModal title={creatorCalendarMilestoneLabels[selectedMilestone.type as CreatorCalendarMilestoneType]} subtitle={selectedMilestone.group.displayName} ariaLabel="节点详情" onClose={() => setSelectedMilestone(null)} footer={<><button className="secondary-button compact-button" type="button" onClick={() => setSelectedCreatorGroup(selectedMilestone.group)}>查看主播资料</button><button className="primary-button compact-button" type="button" disabled={saving} onClick={() => void saveMilestone()}>保存备注</button></>}><label className="form-field"><span>经纪人备注</span><textarea value={milestoneRemark} onChange={(e) => setMilestoneRemark(e.target.value)} /></label></SystemModal> : null}
 
       {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} currentRegionId={options.currentEmployee?.region_id ?? ''} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
       {selectedAdjustmentReview ? <AdjustmentReviewDrawer request={selectedAdjustmentReview} onClose={() => setSelectedAdjustmentReview(null)} /> : null}
@@ -1435,13 +1467,19 @@ function getManagementRecordRegion(record: ManagementRevenueRecord) {
 type CreatorCalendarEvent = {
   id: string;
   group: CreatorProfileGroup;
-  type: CreatorCalendarMilestoneType;
+  type: CreatorCalendarMilestoneType | 'activity';
   date: string;
+  title?: string;
+  activity?: CreatorActivity;
 };
 
-function CreatorCalendarPanel(props: { loading: boolean; creators: PersonalManagerCreatorProfile[]; currentEmployeeId: string | null; month: string; type: '' | CreatorCalendarMilestoneType; onMonth: (month: string) => void; onType: (type: '' | CreatorCalendarMilestoneType) => void; onView: (group: CreatorProfileGroup) => void; onAddActivity: () => void }) {
+function CreatorCalendarPanel(props: { loading: boolean; creators: PersonalManagerCreatorProfile[]; activities: CreatorActivity[]; currentEmployeeId: string | null; month: string; type: '' | CreatorCalendarMilestoneType; activityType: '' | CreatorActivityType; onMonth: (month: string) => void; onType: (type: '' | CreatorCalendarMilestoneType) => void; onActivityType: (type: '' | CreatorActivityType) => void; onView: (group: CreatorProfileGroup) => void; onActivity: (activity: CreatorActivity) => void; onMilestone: (event: CreatorCalendarEvent) => void; onAddActivity: () => void }) {
   const groups = useMemo(() => groupCreatorProfiles(props.creators, props.currentEmployeeId), [props.creators, props.currentEmployeeId]);
-  const events = useMemo(() => groups.flatMap((group) => getCreatorMilestones(group.profiles).map((milestone) => ({ id: `${group.id}:${milestone.type}`, group, ...milestone }))).filter((event) => !props.type || event.type === props.type), [groups, props.type]);
+  const events = useMemo(() => {
+    const milestones = groups.flatMap((group) => getCreatorMilestones(group.profiles, Number(props.month.slice(0, 4))).map((milestone) => ({ id: `${group.id}:${milestone.type}`, group, ...milestone })));
+    const activities = props.activities.flatMap((activity) => { const group = groups.find((item) => item.id === `entity:${activity.creator_entity_id}`); return group ? [{ id: activity.id, group, type: 'activity' as const, date: activity.activity_date, title: activity.title, activity }] : []; });
+    return [...milestones, ...activities].filter((event) => (!props.type || event.type === props.type) && (!props.activityType || event.type !== 'activity' || event.activity?.activity_type === props.activityType));
+  }, [groups, props.activities, props.month, props.type, props.activityType]);
   const todayIso = new Date().toISOString().slice(0, 10);
   const tomorrowIso = shiftIsoDate(todayIso, 1);
   const weekEndIso = shiftIsoDate(todayIso, 7);
@@ -1454,17 +1492,17 @@ function CreatorCalendarPanel(props: { loading: boolean; creators: PersonalManag
 
   return <div className="agent-creator-calendar">
     <div className="agent-calendar-summary-grid">
-      <CalendarStat title="今日节点" value={events.filter((event) => event.date === todayIso).length} icon={<Clock3 size={17} />} tone="today" />
-      <CalendarStat title="未来7天节点" value={upcoming.length} icon={<CalendarDays size={17} />} tone="week" />
-      <CalendarStat title="100天节点" value={events.filter((event) => event.type === '100_days').length} icon={<Leaf size={17} />} tone="hundred" />
-      <CalendarStat title="本月节点" value={monthEvents.length} icon={<CalendarCheck size={17} />} tone="month" />
+      <CalendarStat title="今日安排" value={events.filter((event) => event.date === todayIso).length} icon={<Clock3 size={17} />} tone="today" />
+      <CalendarStat title="未来7天" value={upcoming.length} icon={<CalendarDays size={17} />} tone="week" />
+      <CalendarStat title="百日节点" value={events.filter((event) => event.type === '100_days').length} icon={<Leaf size={17} />} tone="hundred" />
+      <CalendarStat title="本月安排" value={monthEvents.length} icon={<CalendarCheck size={17} />} tone="month" />
     </div>
     <div className="agent-calendar-toolbar">
-      <div className="agent-calendar-month-control"><button className="icon-button" type="button" aria-label="上一月" onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatCalendarMonth(props.month)}</strong><button className="icon-button" type="button" aria-label="下一月" onClick={() => changeMonth(1)}><ChevronRight size={18} /></button><button className="secondary-button compact-button" type="button" onClick={() => props.onMonth(currentMonth)}>今天</button></div>
-      <div className="agent-calendar-toolbar-actions"><label className="form-field agent-calendar-type-filter"><span>活动类型</span><select value={props.type} onChange={(event) => props.onType(event.target.value as '' | CreatorCalendarMilestoneType)}><option value="">全部</option>{Object.entries(creatorCalendarMilestoneLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select></label><button className="primary-button compact-button agent-calendar-add-button" type="button" onClick={props.onAddActivity}><Plus size={16} />新增活动</button></div>
+      <div className="agent-calendar-month-control"><button className="icon-button" type="button" aria-label="上一月" onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button><strong>{formatCalendarMonth(props.month)}</strong><button className="icon-button" type="button" aria-label="下一月" onClick={() => changeMonth(1)}><ChevronRight size={18} /></button><button className="secondary-button compact-button" type="button" onClick={() => props.onMonth(currentMonth)}>今天</button><label className="form-field agent-calendar-type-filter"><span>活动类型</span><select value={props.activityType} onChange={(event) => props.onActivityType(event.target.value as '' | CreatorActivityType)}><option value="">全部</option>{Object.entries(creatorActivityTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select></label></div>
+      <div className="agent-calendar-toolbar-actions"><button className="primary-button compact-button agent-calendar-add-button" type="button" onClick={props.onAddActivity}><Plus size={16} />新增活动</button></div>
     </div>
     {props.loading ? <div className="table-state">正在读取主播日历...</div> : <div className="agent-calendar-layout">
-      <section className="agent-calendar-month"><div className="agent-calendar-weekdays">{['一', '二', '三', '四', '五', '六', '日'].map((day) => <span key={day}>周{day}</span>)}</div><div className="agent-calendar-grid">{days.map((day) => { const isCurrentMonth = day.month === props.month; const dayEvents = isCurrentMonth ? eventsByDate.get(day.iso) ?? [] : []; return <div className={`agent-calendar-day${isCurrentMonth ? '' : ' is-outside'}${day.iso === todayIso && isCurrentMonth ? ' is-today' : ''}`} key={day.iso}><span>{day.day}</span>{isCurrentMonth ? <>{dayEvents.slice(0, 2).map((event) => <button key={event.id} type="button" className={`agent-calendar-event agent-calendar-event--${event.type}`} onClick={() => props.onView(event.group)}>{event.group.displayName} · {creatorCalendarMilestoneLabels[event.type]}</button>)}{dayEvents.length > 2 ? <small>+{dayEvents.length - 2} 个节点</small> : null}</> : null}</div>; })}</div></section>
+      <section className="agent-calendar-month"><div className="agent-calendar-weekdays">{['一', '二', '三', '四', '五', '六', '日'].map((day) => <span key={day}>周{day}</span>)}</div><div className="agent-calendar-grid">{days.map((day) => { const isCurrentMonth = day.month === props.month; const dayEvents = isCurrentMonth ? eventsByDate.get(day.iso) ?? [] : []; return <div className={`agent-calendar-day${isCurrentMonth ? '' : ' is-outside'}${day.iso === todayIso && isCurrentMonth ? ' is-today' : ''}`} key={day.iso}><span>{day.day}</span>{isCurrentMonth ? <>{dayEvents.slice(0, 2).map((event) => <button key={event.id} type="button" className={`agent-calendar-event agent-calendar-event--${event.type}`} onClick={() => event.type === 'activity' && event.activity ? props.onActivity(event.activity) : props.onMilestone(event)}>{event.group.displayName} · {event.type === 'activity' ? event.title : creatorCalendarMilestoneLabels[event.type]}</button>)}{dayEvents.length > 2 ? <small>+{dayEvents.length - 2} 个安排</small> : null}</> : null}</div>; })}</div></section>
       <aside className="agent-calendar-upcoming"><h3>近期节点</h3><CalendarEventList title="今天" events={upcoming.filter((event) => event.date === todayIso)} onView={props.onView} /><CalendarEventList title="明天" events={upcoming.filter((event) => event.date === tomorrowIso)} onView={props.onView} /><CalendarEventList title="未来7天" events={upcoming.filter((event) => event.date > tomorrowIso)} onView={props.onView} /><CalendarQuickFilters value={props.type} onChange={props.onType} /></aside>
       <section className="agent-calendar-mobile-agenda"><CalendarQuickFilters value={props.type} onChange={props.onType} />{monthEvents.length === 0 ? <div className="table-state">本月暂无节点。</div> : groupCalendarEventsByDate(monthEvents).map(([date, items]) => <div key={date} className="agent-calendar-agenda-day"><strong>{formatCalendarDate(date)}</strong>{items.map((event) => <CalendarEventCard key={event.id} event={event} onView={props.onView} />)}</div>)}</section>
     </div>}
@@ -1473,7 +1511,7 @@ function CreatorCalendarPanel(props: { loading: boolean; creators: PersonalManag
 
 function CalendarStat({ title, value, icon, tone }: { title: string; value: number; icon: ReactNode; tone: 'today' | 'week' | 'hundred' | 'month' }) { return <article className={`agent-calendar-stat agent-calendar-stat--${tone}`}><span>{icon}{title}</span><strong>{value}</strong></article>; }
 function CalendarEventList({ title, events, onView }: { title: string; events: CreatorCalendarEvent[]; onView: (group: CreatorProfileGroup) => void }) { return <section className="agent-calendar-upcoming-section"><h4>{title}</h4>{events.length ? events.map((event) => <CalendarEventCard key={event.id} event={event} onView={onView} />) : <p>暂无节点</p>}</section>; }
-function CalendarEventCard({ event, onView }: { event: CreatorCalendarEvent; onView: (group: CreatorProfileGroup) => void }) { return <button type="button" className={`agent-calendar-event-card agent-calendar-event-card--${event.type}`} onClick={() => onView(event.group)}><span><b>{event.group.displayName}</b><em>{creatorCalendarMilestoneLabels[event.type]}</em></span><small>{formatCalendarDate(event.date)} · {Array.from(event.group.platforms).map((platform) => platformLabels[platform]).join(' / ')}</small></button>; }
+function CalendarEventCard({ event, onView }: { event: CreatorCalendarEvent; onView: (group: CreatorProfileGroup) => void }) { return <button type="button" className={`agent-calendar-event-card agent-calendar-event-card--${event.type}`} onClick={() => onView(event.group)}><span><b>{event.group.displayName}</b><em>{event.type === 'activity' ? event.title : creatorCalendarMilestoneLabels[event.type]}</em></span><small>{formatCalendarDate(event.date)} · {Array.from(event.group.platforms).map((platform) => platformLabels[platform]).join(' / ')}</small></button>; }
 function CalendarQuickFilters({ value, onChange }: { value: '' | CreatorCalendarMilestoneType; onChange: (type: '' | CreatorCalendarMilestoneType) => void }) { return <section className="agent-calendar-quick-filters"><h4>快速筛选</h4><div>{([{ type: '', label: '全部' }, ...Object.entries(creatorCalendarMilestoneLabels).map(([type, label]) => ({ type: type as CreatorCalendarMilestoneType, label }))] as Array<{ type: '' | CreatorCalendarMilestoneType; label: string }>).map((item) => <button key={item.type || 'all'} type="button" className={`agent-calendar-filter-chip agent-calendar-filter-chip--${item.type || 'all'}${value === item.type ? ' active' : ''}`} onClick={() => onChange(item.type)}>{item.label}</button>)}</div></section>; }
 
 function CreatorDataPanel(props: {
@@ -3041,7 +3079,9 @@ function getCalendarDays(month: string) {
   const start = new Date(first);
   start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
   const last = new Date(Date.UTC(year, monthIndex, 0));
-  const daysToShow = Math.ceil((((last.getUTCDay() + 6) % 7) + last.getUTCDate()) / 7) * 7;
+  const end = new Date(last);
+  end.setUTCDate(end.getUTCDate() + (6 - ((end.getUTCDay() + 6) % 7)));
+  const daysToShow = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
   return Array.from({ length: daysToShow }, (_, index) => {
     const date = new Date(start); date.setUTCDate(start.getUTCDate() + index);
     return { iso: date.toISOString().slice(0, 10), day: date.getUTCDate(), month: date.toISOString().slice(0, 7) };

@@ -34,6 +34,7 @@ export type AgentOptions = {
 };
 
 export type PersonalManagerCreatorProfile = CreatorProfile & {
+  birthday?: string | null;
   secondary_manager_employee_id?: string | null;
   secondary_manager_display_name?: string | null;
 };
@@ -417,11 +418,17 @@ export const agentService = {
   async listPersonalManagerCreatorProfiles(filters: { month?: string; platform?: string; regionId?: string } = {}): Promise<PersonalManagerCreatorProfile[]> {
     const { data, error } = await db.rpc('list_personal_manager_creator_profiles', { p_status: 'active' });
     if (error) throw error;
-    return (data ?? [])
+    const creators: PersonalManagerCreatorProfile[] = (data ?? [])
       .filter((row: any) => !filters.month || String(row.joined_date).startsWith(filters.month))
       .filter((row: any) => !filters.platform || row.platform === filters.platform)
       .filter((row: any) => !filters.regionId || row.region_id === filters.regionId)
       .map(mapPersonalManagerCreatorRow);
+    const ids = [...new Set(creators.map((creator: PersonalManagerCreatorProfile) => creator.creator_entity_id).filter((id): id is string => Boolean(id)))];
+    if (!ids.length) return creators;
+    const { data: birthdays, error: birthdayError } = await db.rpc('list_my_creator_entity_birthdays', { p_creator_entity_ids: ids });
+    if (birthdayError) throw birthdayError;
+    const birthdayByEntity = new Map<string, string | null>((birthdays ?? []).map((row: any) => [row.creator_entity_id, row.birthday as string | null]));
+    return creators.map((creator: PersonalManagerCreatorProfile) => ({ ...creator, birthday: creator.creator_entity_id ? birthdayByEntity.get(creator.creator_entity_id) ?? null : null }));
   },
 
   async listRevenueData(input: { profileId?: string; month: string; platform?: string; regionId?: string; management?: boolean }) {

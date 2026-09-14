@@ -1,10 +1,10 @@
-export type CreatorCalendarMilestoneType = '30_days' | '100_days' | '3_months' | '6_months' | '1_year';
+export type CreatorCalendarMilestoneType = '30_days' | '100_days' | '6_months' | '1_year' | 'birthday';
 
-export type CreatorCalendarSource = { joined_date?: string | null; guild_joined_date?: string | null };
+export type CreatorCalendarSource = { joined_date?: string | null; guild_joined_date?: string | null; birthday?: string | null };
 export type CreatorCalendarMilestone = { type: CreatorCalendarMilestoneType; date: string };
 
 export const creatorCalendarMilestoneLabels: Record<CreatorCalendarMilestoneType, string> = {
-  '30_days': '入会30天', '100_days': '入会100天', '3_months': '入会3个月', '6_months': '入会半年', '1_year': '入会1周年',
+  '30_days': '满月', '100_days': '百日', '6_months': '半年', '1_year': '周年', 'birthday': '生日',
 };
 
 export function getCreatorMilestoneDateSource(profiles: CreatorCalendarSource[]): string | null {
@@ -15,17 +15,18 @@ export function getCreatorMilestoneDateSource(profiles: CreatorCalendarSource[])
   return profileDates.length === 1 ? profileDates[0] : null;
 }
 
-export function getCreatorMilestones(profiles: CreatorCalendarSource[]): CreatorCalendarMilestone[] {
+export function getCreatorMilestones(profiles: CreatorCalendarSource[], year = new Date().getUTCFullYear()): CreatorCalendarMilestone[] {
   const sourceDate = getCreatorMilestoneDateSource(profiles);
   const date = sourceDate ? parseIsoDate(sourceDate) : null;
-  if (!date) return [];
-  return [
+  const milestones: CreatorCalendarMilestone[] = date ? [
     { type: '30_days', date: formatIsoDate(addDays(date, 30)) },
     { type: '100_days', date: formatIsoDate(addDays(date, 100)) },
-    { type: '3_months', date: formatIsoDate(addMonths(date, 3)) },
     { type: '6_months', date: formatIsoDate(addMonths(date, 6)) },
     { type: '1_year', date: formatIsoDate(addMonths(date, 12)) },
-  ];
+  ] : [];
+  const birthday = profiles.find((profile) => isIsoDate(profile.birthday))?.birthday;
+  if (birthday) milestones.push({ type: 'birthday', date: birthdayForYear(birthday, year) });
+  return milestones;
 }
 
 function isIsoDate(value: string | null | undefined): value is string { return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value) && parseIsoDate(value)); }
@@ -39,3 +40,9 @@ function addMonths(date: Date, months: number) {
   result.setUTCDate(Math.min(day, new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate())); return result;
 }
 function formatIsoDate(date: Date) { return date.toISOString().slice(0, 10); }
+function birthdayForYear(birthday: string, year: number) {
+  const [, month, day] = birthday.split('-').map(Number);
+  if (month === 2 && day === 29 && !isLeapYear(year)) return `${year}-02-28`;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+function isLeapYear(year: number) { return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0); }

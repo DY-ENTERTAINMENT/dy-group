@@ -122,6 +122,14 @@ export const menuItems: MenuItem[] = [
     group: '经纪人',
   },
   {
+    key: 'agent-creator-activity-calendar',
+    label: '主播活动总日历',
+    path: '/tools/agent/activity-calendar',
+    icon: CalendarDays,
+    section: '工作工具',
+    group: '经纪人',
+  },
+  {
     key: 'agent-adjustment-requests',
     label: '主播资料调整申请',
     path: '/tools/agent/adjustment-requests',
