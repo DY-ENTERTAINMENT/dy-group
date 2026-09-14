@@ -349,6 +349,14 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
           onStatus={setCreatorStatus}
           onCompleteness={setCreatorCompleteness}
           onRegion={setRegionId}
+          onReset={() => {
+            setCreatorSearch('');
+            setCreatorPlatform('');
+            setCreatorType('');
+            setCreatorStatus('');
+            setCreatorCompleteness('');
+            setRegionId('');
+          }}
           onView={setSelectedCreatorGroup}
           onAdjustment={openAdjustmentForCreator}
           /> : <CreatorCalendarPanel
@@ -1531,6 +1539,7 @@ function CreatorDataPanel(props: {
   onStatus: (value: string) => void;
   onCompleteness: (value: string) => void;
   onRegion: (value: string) => void;
+  onReset: () => void;
   onView: (group: CreatorProfileGroup) => void;
   onAdjustment: (group: CreatorProfileGroup, creatorProfile?: CreatorProfile) => void;
 }) {
@@ -1556,6 +1565,7 @@ function CreatorDataPanel(props: {
         <div className="table-state">暂无主播资料。</div>
       ) : (
         <>
+          <div className="agent-creator-list-header" aria-live="polite">共 <strong>{creatorGroups.length}</strong> 位主播</div>
           <div className="staff-table-wrap agent-creator-table-wrap">
             <table className="staff-table agent-table agent-creator-table">
               <thead>
@@ -1670,6 +1680,7 @@ function CreatorManagementFilters(props: {
   onStatus: (value: string) => void;
   onCompleteness: (value: string) => void;
   onRegion: (value: string) => void;
+  onReset: () => void;
 }) {
   return (
     <div className="scout-filters agent-creator-filters">
@@ -1704,6 +1715,7 @@ function CreatorManagementFilters(props: {
         <option value="">全部</option>
         {props.options.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
       </SelectField>
+      <button className="secondary-button agent-creator-reset-button" type="button" onClick={props.onReset}>重置</button>
     </div>
   );
 }
