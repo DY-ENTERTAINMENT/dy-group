@@ -1,5 +1,13 @@
 import { attendanceManagementService, type AttendancePeriodData } from './attendanceManagement.service';
 
+/** Loads only the attendance cycle containing one requested calendar day. */
+export function getEmployeeRestManagementDayData(date: string, regionId: string): Promise<AttendancePeriodData> {
+  const [yearText, monthText, dayText] = date.split('-');
+  const cycleMonth = Number(dayText) <= 25 ? new Date(Number(yearText), Number(monthText) - 1, 1) : new Date(Number(yearText), Number(monthText), 1);
+  const month = `${cycleMonth.getFullYear()}-${String(cycleMonth.getMonth() + 1).padStart(2, '0')}`;
+  return attendanceManagementService.getPeriodData(month, regionId);
+}
+
 /** Loads the two attendance cycles which can overlap one natural calendar month. */
 export async function getEmployeeRestManagementData(month: string, regionId: string): Promise<AttendancePeriodData> {
   const [yearText, monthText] = month.split('-');

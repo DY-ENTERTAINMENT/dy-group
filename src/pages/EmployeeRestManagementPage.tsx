@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Coffee, Eye } from 'lucide-react';
-import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import type { AttendanceEmployee, AttendancePeriodData } from '../services/attendanceManagement.service';
-import { getEmployeeRestManagementData } from '../services/employee-rest-management.service';
+import { getEmployeeRestManagementDayData } from '../services/employee-rest-management.service';
 import type { AttendanceRecord } from '../types/database';
 import { createEffectiveAttendanceDayResolver, MALAYSIA_TIME_ZONE, malaysiaDateKey } from '../utils/attendance-effective-day';
 
@@ -17,49 +16,33 @@ const monthlyLabels: Record<MonthlyStatus, string> = { completed: '已休息', m
 
 export function EmployeeRestManagementPage() {
   const today = malaysiaDateKey(new Date());
-  const [tab, setTab] = useState<'today' | 'month'>('today');
   const [date, setDate] = useState(today);
-  const [month, setMonth] = useState(today.slice(0, 7));
   const [regionId, setRegionId] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<TodayStatus | ''>('');
   const [data, setData] = useState<AttendancePeriodData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [detail, setDetail] = useState<{ summary: Summary; filter: MonthlyStatus | '' } | null>(null);
-  const loadMonth = tab === 'today' ? date.slice(0, 7) : month;
-
-  useEffect(() => { void load(); }, [loadMonth, regionId]);
+  useEffect(() => { void load(); }, [date, regionId]);
   useEffect(() => { setStatus(''); }, [date]);
-  useEffect(() => { setDetail(null); }, [month, regionId]);
-  async function load() { setLoading(true); setError(''); try { setData(await getEmployeeRestManagementData(loadMonth, regionId)); } catch (reason) { setError(reason instanceof Error ? reason.message : '读取休息记录失败。'); } finally { setLoading(false); } }
+  async function load() { setLoading(true); setError(''); try { setData(await getEmployeeRestManagementDayData(date, regionId)); } catch (reason) { setError(reason instanceof Error ? reason.message : '读取休息记录失败。'); } finally { setLoading(false); } }
 
-  const dates = useMemo(() => tab === 'today' ? [date] : monthDatesThroughToday(month, today), [tab, date, month, today]);
+  const dates = useMemo(() => [date], [date]);
   const rows = useMemo(() => data ? buildRows(data, dates, today) : [], [data, dates, today]);
-  const summaries = useMemo(() => buildSummaries(rows), [rows]);
   const displayedRows = rows.filter((row) => (!status || row.todayStatus === status) && matches(row.employee, search)).sort(compareToday);
-  const displayedSummaries = summaries.filter((summary) => matches(summary.employee, search)).sort(compareSummary);
-  const averages = useMemo(() => overallAverages(rows), [rows]);
   const todayCounts = { total: rows.length, notStarted: rows.filter((row) => row.todayStatus === 'not_started').length, inProgress: rows.filter((row) => row.todayStatus === 'in_progress').length, completed: rows.filter((row) => row.todayStatus === 'completed').length };
   const toggleStatus = (value: TodayStatus) => setStatus((current) => current === value ? '' : value);
 
   return <section className="employee-rest-management-page">
-    <div className="rest-tabs"><button type="button" className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>今日休息状态</button><button type="button" className={tab === 'month' ? 'active' : ''} onClick={() => setTab('month')}>月度休息记录</button></div>
     <div className="attendance-filters rest-management-filters">
-      {tab === 'today' ? <label className="form-field"><span>日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} max={today} /></label> : <label className="form-field"><span>月份</span><MonthSelect value={month} onChange={setMonth} /></label>}
+      <label className="form-field"><span>日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} max={today} /></label>
       <label className="form-field"><span>区域</span><select value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="">全部可查看区域</option>{data?.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}</select></label>
-      {tab === 'today' ? <label className="form-field"><span>状态</span><select value={status} onChange={(event) => setStatus(event.target.value as TodayStatus | '')}><option value="">全部状态</option>{Object.entries(todayLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label> : null}
+      <label className="form-field"><span>状态</span><select value={status} onChange={(event) => setStatus(event.target.value as TodayStatus | '')}><option value="">全部状态</option>{Object.entries(todayLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label className="form-field rest-search-field"><span>员工搜索</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="姓名或职位" /></label>
     </div>
     {error ? <p className="form-alert">{error}</p> : null}
-    {tab === 'today' ? <>
-      <div className="rest-stat-grid"><Stat label="今日考勤" value={todayCounts.total} active={!status} onClick={() => setStatus('')} /><Stat label="未休息" value={todayCounts.notStarted} active={status === 'not_started'} onClick={() => toggleStatus('not_started')} /><Stat label="休息中" value={todayCounts.inProgress} active={status === 'in_progress'} onClick={() => toggleStatus('in_progress')} /><Stat label="已休息" value={todayCounts.completed} active={status === 'completed'} onClick={() => toggleStatus('completed')} /></div>
-      <TodayList rows={displayedRows} loading={loading} />
-    </> : <>
-      <div className="rest-stat-grid"><Stat label="本月考勤员工" value={new Set(rows.map((row) => row.employee.id)).size} /><TimeStat label="平均开始休息" value={averages.start} /><TimeStat label="平均结束休息" value={averages.end} /><TimeStat label="平均休息时长" value={averages.duration} duration /></div>
-      <MonthlyList rows={displayedSummaries} loading={loading} onOpen={(summary, filter = '') => setDetail({ summary, filter })} />
-    </>}
-    {detail ? <Detail summary={detail.summary} filter={detail.filter} onClose={() => setDetail(null)} /> : null}
+    <div className="rest-stat-grid"><Stat label="今日考勤" value={todayCounts.total} active={!status} onClick={() => setStatus('')} /><Stat label="未休息" value={todayCounts.notStarted} active={status === 'not_started'} onClick={() => toggleStatus('not_started')} /><Stat label="休息中" value={todayCounts.inProgress} active={status === 'in_progress'} onClick={() => toggleStatus('in_progress')} /><Stat label="已休息" value={todayCounts.completed} active={status === 'completed'} onClick={() => toggleStatus('completed')} /></div>
+    <TodayList rows={displayedRows} loading={loading} />
   </section>;
 }
 
