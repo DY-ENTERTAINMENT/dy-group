@@ -3296,13 +3296,7 @@ function ScoutRecruitMobileCombinedTable({ rows, title, completion = new Map() }
 }
 
 function ScoutRecruitName({ row, completion }: { row: RecruitBreakdownRow; completion?: ManagementScoutWorkCompletion }) {
-  if (!row.isScout || !completion) return <>{row.label}</>;
-  return <span className="scout-recruit-name-with-completion">
-    <b>{row.label}</b>
-    <small>
-      本周 {formatScoutCompletion(completion.current_week_filled_days, completion.current_week_expected_days, completion.current_week_missing_days)} · 上周 {formatScoutCompletion(completion.previous_week_filled_days, completion.previous_week_expected_days, completion.previous_week_missing_days)}
-    </small>
-  </span>;
+  return <>{row.label}</>;
 }
 
 function formatScoutCompletion(filled: number, expected: number, missing: number) {
