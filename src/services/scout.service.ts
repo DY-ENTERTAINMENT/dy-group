@@ -19,6 +19,15 @@ export type DailyWorkLogFormValues = {
 
 export type WorkloadGranularity = 'daily' | 'weekly' | 'monthly';
 export type ManagementWorkloadStat = ManagementScoutWorkloadStat;
+export type ManagementScoutWorkCompletion = {
+  scout_profile_id: string;
+  current_week_filled_days: number;
+  current_week_expected_days: number;
+  current_week_missing_days: number;
+  previous_week_filled_days: number;
+  previous_week_expected_days: number;
+  previous_week_missing_days: number;
+};
 
 export type CandidateFormValues = {
   platform: CreatorPlatform | '';
@@ -416,6 +425,37 @@ export const scoutService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async listManagementDailyWorkLogs(scoutProfileId: string, month: string): Promise<DailyWorkLog[]> {
+    const { data, error } = await db.rpc('get_management_scout_daily_work_logs', {
+      p_scout_profile_id: scoutProfileId,
+      p_month: month,
+    });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async saveManagementDailyWorkLog(scoutProfileId: string, workDate: string, values: DailyWorkLogFormValues): Promise<DailyWorkLog> {
+    const contactedCount = parseCount(values.contacted_count);
+    const repliedCount = parseCount(values.replied_count);
+    const { data, error } = await db.rpc('upsert_management_scout_daily_work_log', {
+      p_scout_profile_id: scoutProfileId,
+      p_work_date: workDate,
+      p_contacted_count: contactedCount,
+      p_replied_count: repliedCount,
+      p_note: values.note,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async listManagementScoutWorkCompletion(scoutProfileIds: string[]): Promise<ManagementScoutWorkCompletion[]> {
+    const ids = Array.from(new Set(scoutProfileIds.filter(Boolean)));
+    if (ids.length === 0) return [];
+    const { data, error } = await db.rpc('get_management_scout_daily_work_completion', { p_scout_profile_ids: ids });
+    if (error) throw error;
+    return data ?? [];
   },
 
   async listManagementWorkloadStats(input: { month: string; regionId?: string; granularity: WorkloadGranularity }): Promise<ManagementWorkloadStat[]> {

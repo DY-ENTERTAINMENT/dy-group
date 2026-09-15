@@ -15,6 +15,7 @@ import {
   filterCreatorsByMonth,
   getEmployeeName,
   type ManagementWorkloadStat,
+  type ManagementScoutWorkCompletion,
   platformLabels,
   scoutService,
   type Candidate,
@@ -49,14 +50,15 @@ type ScoutPageProps = {
   mode: ScoutPageMode;
 };
 
-const currentMonth = new Date().toISOString().slice(0, 7);
-const today = new Date().toISOString().slice(0, 10);
+const currentMonth = getMalaysiaDateString().slice(0, 7);
+const today = getMalaysiaDateString();
 type CandidateFollowFilter = 'all' | 'today' | 'overdue';
 type CandidateStatusFilter = Candidate['status'] | 'all';
 const candidateStatusFilters: CandidateStatusFilter[] = ['pending', 'accepted', 'rejected', 'all'];
 type TeamWorkloadView = WorkloadGranularity | 'last-week';
 type WorkloadView = TeamWorkloadView | 'scout-records';
 type ScoutRecordView = Extract<WorkloadGranularity, 'daily' | 'monthly'>;
+type DailyWorkWeek = 'current' | 'previous';
 type ManagementWorkloadDisplayStat = ManagementWorkloadStat & { onboarded_count: number; onboarded_creator_details: string[] };
 const teamWorkloadViews: TeamWorkloadView[] = ['daily', 'weekly', 'last-week', 'monthly'];
 const workloadGranularityLabels: Record<WorkloadGranularity, string> = {
@@ -207,7 +209,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [dailyWorkLogs, setDailyWorkLogs] = useState<DailyWorkLog[]>([]);
+  const [dailyWorkWeek, setDailyWorkWeek] = useState<DailyWorkWeek>('current');
   const [managementWorkloadStats, setManagementWorkloadStats] = useState<ManagementWorkloadStat[]>([]);
+  const [managementWorkCompletion, setManagementWorkCompletion] = useState<ManagementScoutWorkCompletion[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [creatorStatsMonth, setCreatorStatsMonth] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
@@ -303,8 +307,16 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   }, [candidateFollowFilter, candidateStatusFilter, candidateUidQuery, candidates]);
 
   useEffect(() => {
+    if (mode !== 'management-recruiting') { setManagementWorkCompletion([]); return; }
+    const scoutProfileIds = scoutRecruitRows.filter((row) => row.isScout && row.scoutProfileId).map((row) => row.scoutProfileId as string);
+    void scoutService.listManagementScoutWorkCompletion(scoutProfileIds)
+      .then(setManagementWorkCompletion)
+      .catch(() => setManagementWorkCompletion([]));
+  }, [mode, scoutRecruitRows]);
+
+  useEffect(() => {
     void loadData();
-  }, [creatorStatusFilter, mode, month, profile?.id, regionFilter, workloadGranularity, workloadView]);
+  }, [creatorStatusFilter, dailyWorkWeek, mode, month, profile?.id, regionFilter, workloadGranularity, workloadView]);
 
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
@@ -318,7 +330,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           ? scoutService.listPersonalStreamerProfiles()
           : scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
-        mode === 'personal-recruiting' ? scoutService.listDailyWorkLogs(month) : Promise.resolve([]),
+        mode === 'personal-recruiting' ? listPersonalDailyWorkLogsForWeek(dailyWorkWeek) : Promise.resolve([]),
         mode === 'management-recruiting' ? listManagementWorkloadStatsForView({ month, regionId: regionFilter, granularity: workloadGranularity, view: workloadView }) : Promise.resolve([]),
       ]);
 
@@ -800,6 +812,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           dailyWorkLogs={dailyWorkLogs}
           dailyWorkSavingDate={dailyWorkSavingDate}
           canEditDailyWork={permissions.canUse('scout-recruiting-data')}
+          dailyWorkWeek={dailyWorkWeek}
+          onDailyWorkWeekChange={setDailyWorkWeek}
           loading={loading}
           onSaveDailyWorkLog={submitDailyWorkLog}
         />
@@ -890,10 +904,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           creators={filteredCreators}
           recruitCreators={managementMonthCreators}
           workloadStats={managementWorkloadStats}
+          workCompletion={managementWorkCompletion}
           workloadView={workloadView}
           onWorkloadView={setWorkloadView}
           workloadGranularity={workloadGranularity}
           onWorkloadGranularity={setWorkloadGranularity}
+          canManageBackfill={permissions.canUse('management-recruiting-data')}
         />
       ) : null}
 
@@ -975,6 +991,8 @@ function PersonalRecruitingPanel({
   dailyWorkLogs,
   dailyWorkSavingDate,
   canEditDailyWork,
+  dailyWorkWeek,
+  onDailyWorkWeekChange,
   loading,
   onSaveDailyWorkLog,
 }: {
@@ -984,6 +1002,8 @@ function PersonalRecruitingPanel({
   dailyWorkLogs: DailyWorkLog[];
   dailyWorkSavingDate: string;
   canEditDailyWork: boolean;
+  dailyWorkWeek: DailyWorkWeek;
+  onDailyWorkWeekChange: (week: DailyWorkWeek) => void;
   loading: boolean;
   onSaveDailyWorkLog: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
 }) {
@@ -1005,6 +1025,8 @@ function PersonalRecruitingPanel({
         logs={dailyWorkLogs}
         savingDate={dailyWorkSavingDate}
         canEdit={canEditDailyWork}
+        week={dailyWorkWeek}
+        onWeekChange={onDailyWorkWeekChange}
         loading={loading}
         onSave={onSaveDailyWorkLog}
       />
@@ -1017,6 +1039,8 @@ function DailyWorkLogPanel({
   logs,
   savingDate,
   canEdit,
+  week,
+  onWeekChange,
   loading,
   onSave,
 }: {
@@ -1024,14 +1048,24 @@ function DailyWorkLogPanel({
   logs: DailyWorkLog[];
   savingDate: string;
   canEdit: boolean;
+  week: DailyWorkWeek;
+  onWeekChange: (week: DailyWorkWeek) => void;
   loading: boolean;
   onSave: (workDate: string, values: DailyWorkLogFormValues) => Promise<void>;
 }) {
-  const rows = useMemo(() => createDailyWorkRows(logs, month), [logs, month]);
+  const range = useMemo(() => getPersonalDailyWorkWeekRange(week), [week]);
+  const rows = useMemo(() => createDailyWorkRows(logs, range), [logs, range]);
+  const completion = useMemo(() => getDailyWorkCompletion(rows), [rows]);
 
   return (
     <section className="scout-summary-section">
-      <h4>每日工作记录</h4>
+      <div className="daily-work-heading">
+        <div><h4>每日工作记录</h4><span>{range.label} · {completion.completed}/{completion.expected} 已完成{completion.missing ? ` · 遗漏${completion.missing}天` : ''}</span></div>
+        <div className="segmented-control" role="group" aria-label="每日工作记录周期">
+          <button className={week === 'current' ? 'active' : ''} type="button" onClick={() => onWeekChange('current')}>本周</button>
+          <button className={week === 'previous' ? 'active' : ''} type="button" onClick={() => onWeekChange('previous')}>上周</button>
+        </div>
+      </div>
       {loading ? (
         <div className="table-state">正在读取每日工作记录...</div>
       ) : rows.length === 0 ? (
@@ -1056,7 +1090,7 @@ function DailyWorkLogPanel({
                     key={row.workDate}
                     workDate={row.workDate}
                     log={row.log}
-                    editable={canEdit && isRecentDailyWorkDate(row.workDate)}
+                    editable={canEdit && row.editable}
                     saving={savingDate === row.workDate}
                     onSave={onSave}
                   />
@@ -1070,7 +1104,7 @@ function DailyWorkLogPanel({
                 key={row.workDate}
                 workDate={row.workDate}
                 log={row.log}
-                editable={canEdit && isRecentDailyWorkDate(row.workDate)}
+                editable={canEdit && row.editable}
                 saving={savingDate === row.workDate}
                 onSave={onSave}
               />
@@ -2181,10 +2215,12 @@ function ManagementRecruitingPanel({
   creators,
   recruitCreators,
   workloadStats,
+  workCompletion,
   workloadView,
   onWorkloadView,
   workloadGranularity,
   onWorkloadGranularity,
+  canManageBackfill,
 }: {
   loading: boolean;
   month: string;
@@ -2198,10 +2234,12 @@ function ManagementRecruitingPanel({
   creators: CreatorProfile[];
   recruitCreators: CreatorProfile[];
   workloadStats: ManagementWorkloadStat[];
+  workCompletion: ManagementScoutWorkCompletion[];
   workloadView: WorkloadView;
   onWorkloadView: (value: WorkloadView) => void;
   workloadGranularity: WorkloadGranularity;
   onWorkloadGranularity: (value: WorkloadGranularity) => void;
+  canManageBackfill: boolean;
 }) {
   const [selectedWorkloadScout, setSelectedWorkloadScout] = useState<ManagementWorkloadStat | null>(null);
   const [recordGranularity, setRecordGranularity] = useState<ScoutRecordView>('daily');
@@ -2235,7 +2273,7 @@ function ManagementRecruitingPanel({
             rows={regionRecruitRows}
             onOpenDetails={(row) => setRecruitDetail({ label: row.label.replace(/ 总计$/, ''), creators: recruitCreators.filter((creator) => (creator.region_id ?? 'none') === row.key), showRegion: false })}
           />
-          <ScoutRecruitSummaryTable rows={scoutRecruitRows} />
+          <ScoutRecruitSummaryTable rows={scoutRecruitRows} completion={workCompletion} />
           <ManagementWorkloadPanel
             stats={workloadStats}
             creators={creators}
@@ -2247,6 +2285,7 @@ function ManagementRecruitingPanel({
             onSelectedScout={setSelectedWorkloadScout}
             recordGranularity={recordGranularity}
             onRecordGranularity={setRecordGranularity}
+            canManageBackfill={canManageBackfill}
           />
           {recruitDetail ? (
             <RecruitDetailModal
@@ -2273,6 +2312,7 @@ function ManagementWorkloadPanel({
   onSelectedScout,
   recordGranularity,
   onRecordGranularity,
+  canManageBackfill,
 }: {
   stats: ManagementWorkloadStat[];
   creators: CreatorProfile[];
@@ -2284,6 +2324,7 @@ function ManagementWorkloadPanel({
   onSelectedScout: (value: ManagementWorkloadStat | null) => void;
   recordGranularity: ScoutRecordView;
   onRecordGranularity: (value: ScoutRecordView) => void;
+  canManageBackfill: boolean;
 }) {
   const malaysiaToday = getMalaysiaDateString();
   const activeTeamView = view === 'scout-records' ? granularity : view;
@@ -2374,7 +2415,7 @@ function ManagementWorkloadPanel({
               ))}
             </div>
             {recordGranularity === 'daily' ? (
-              <WorkloadStatsTable rows={selectedScoutRows} granularity={recordGranularity} personal />
+              <ManagementDailyWorkLogPanel scout={selectedScout} canManage={canManageBackfill} />
             ) : (
               <ScoutMonthlySummary total={selectedScoutTotal} />
             )}
@@ -2435,6 +2476,72 @@ function ScoutMonthlySummary({ total }: { total: { contacted_count: number; repl
       </div>
     </div>
   );
+}
+
+function ManagementDailyWorkLogPanel({ scout, canManage }: { scout: ManagementWorkloadStat; canManage: boolean }) {
+  const [logs, setLogs] = useState<DailyWorkLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const month = getMalaysiaDateString().slice(0, 7);
+  const profileId = scout.scout_profile_id;
+
+  async function reload() {
+    if (!profileId) return;
+    setLoading(true);
+    setError('');
+    try {
+      setLogs(await scoutService.listManagementDailyWorkLogs(profileId, month));
+    } catch (loadError) {
+      setError(`读取每日记录失败：${getErrorMessage(loadError)}`);
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => { void reload(); }, [profileId, month]);
+  if (!profileId) return <div className="table-state">该历史记录缺少星探帐号，无法补录。</div>;
+  if (loading) return <div className="table-state">正在读取当月每日记录...</div>;
+
+  const byDate = new Map(logs.map((log) => [log.work_date, log]));
+  const today = getMalaysiaDateString();
+  const rows: Array<{ workDate: string; log: DailyWorkLog | null }> = [];
+  for (let cursor = `${month}-01`; cursor <= today; cursor = formatUtcDate(addUtcDays(parseDateOnly(cursor), 1))) rows.push({ workDate: cursor, log: byDate.get(cursor) ?? null });
+
+  return (
+    <div className="management-daily-work-panel">
+      <p className="muted-copy">仅显示 MYT 当月已发生日期。{canManage ? '可在现有区域权限范围内补录或修改。' : '你只有查看权限。'}</p>
+      {error ? <p className="form-alert">{error}</p> : null}
+      <div className="management-daily-work-list">
+        {rows.map((row) => <ManagementDailyWorkLogRow key={row.workDate} workDate={row.workDate} log={row.log} canManage={canManage} scoutProfileId={profileId} onSaved={reload} />)}
+      </div>
+    </div>
+  );
+}
+
+function ManagementDailyWorkLogRow({ workDate, log, canManage, scoutProfileId, onSaved }: { workDate: string; log: DailyWorkLog | null; canManage: boolean; scoutProfileId: string; onSaved: () => Promise<void> }) {
+  const [values, setValues] = useState<DailyWorkLogFormValues>({ contacted_count: String(log?.contacted_count ?? 0), replied_count: String(log?.replied_count ?? 0), note: log?.note ?? '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => setValues({ contacted_count: String(log?.contacted_count ?? 0), replied_count: String(log?.replied_count ?? 0), note: log?.note ?? '' }), [log?.contacted_count, log?.note, log?.replied_count]);
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManage) return;
+    const contacted = Number(values.contacted_count);
+    const replied = Number(values.replied_count);
+    if (!Number.isInteger(contacted) || contacted < 0 || !Number.isInteger(replied) || replied < 0 || replied > contacted) { setError('请输入有效人数，且回复人数不可大于联系人数。'); return; }
+    setSaving(true); setError('');
+    try { await scoutService.saveManagementDailyWorkLog(scoutProfileId, workDate, values); await onSaved(); }
+    catch (saveError) { setError(getErrorMessage(saveError)); }
+    finally { setSaving(false); }
+  }
+  return <article className="management-daily-work-row">
+    <header><b>{workDate}</b><span className={log ? 'daily-work-state daily-work-state--done' : 'daily-work-state'}>{log ? '已填写' : '未填写'}</span></header>
+    {canManage ? <form onSubmit={save} className="management-daily-work-form">
+      <input className="daily-work-input" type="number" min="0" step="1" value={values.contacted_count} onChange={(event) => setValues({ ...values, contacted_count: event.target.value })} aria-label={`${workDate} 联系人数`} />
+      <input className="daily-work-input" type="number" min="0" step="1" value={values.replied_count} onChange={(event) => setValues({ ...values, replied_count: event.target.value })} aria-label={`${workDate} 回复人数`} />
+      <input className="daily-work-input management-daily-work-note" value={values.note} onChange={(event) => setValues({ ...values, note: event.target.value })} placeholder="备注 / 今日进度" />
+      <button className="primary-button compact-button" type="submit" disabled={saving}>{saving ? '保存中...' : log ? '修改' : '补录'}</button>
+      {error ? <small className="form-error">{error}</small> : null}
+    </form> : <p>{log ? `联系 ${log.contacted_count} · 回复 ${log.replied_count} · ${log.note || '无备注'}` : '未填写'}</p>}
+  </article>;
 }
 
 function ScoutRecordList({ rows, onOpen }: { rows: ManagementWorkloadStat[]; onOpen: (row: ManagementWorkloadStat) => void }) {
@@ -2941,6 +3048,8 @@ type RecruitBreakdownRow = {
   firstEffectiveDate?: string | null;
   firstCreatedAt?: string | null;
   stableEmployeeId?: string;
+  scoutProfileId?: string;
+  isScout?: boolean;
 };
 
 function createRegionRecruitRows(creators: CreatorProfile[]): RecruitBreakdownRow[] {
@@ -2985,6 +3094,7 @@ function createScoutRecruitRows(creators: CreatorProfile[], employees: ScoutOpti
     groups.set(key, { label, creators: [creator] });
   });
 
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
   const rows: RecruitBreakdownRow[] = Array.from(groups.entries())
     .map(([key, group]) => ({
       key,
@@ -2993,6 +3103,8 @@ function createScoutRecruitRows(creators: CreatorProfile[], employees: ScoutOpti
       firstEffectiveDate: getFirstRecruitEffectiveDate(group.creators),
       firstCreatedAt: getFirstRecruitCreatedAt(group.creators),
       stableEmployeeId: group.creators[0]?.scout_employee_id ?? key,
+      scoutProfileId: group.creators[0]?.scout_profile_id ?? undefined,
+      isScout: isCurrentScoutOrLead(employeeById.get(group.creators[0]?.scout_employee_id ?? '')),
     }));
 
   const rowsByEmployeeId = new Map(rows.map((row) => [row.stableEmployeeId, row]));
@@ -3007,15 +3119,18 @@ function createScoutRecruitRows(creators: CreatorProfile[], employees: ScoutOpti
         firstEffectiveDate: null,
         firstCreatedAt: null,
         stableEmployeeId: employee.id,
+        scoutProfileId: employee.profile_id ?? undefined,
+        isScout: true,
       });
     });
 
   return rows;
 }
 
-function isCurrentScoutOrLead(employee: ScoutOptions['employees'][number]) {
+function isCurrentScoutOrLead(employee: ScoutOptions['employees'][number] | undefined) {
   return (
-    (employee.status === 'active' || employee.status === 'probation')
+    employee !== undefined
+    && (employee.status === 'active' || employee.status === 'probation')
     && (employee.job_title_name === 'TALENT SCOUT' || employee.job_title_name === 'TALENT SCOUT LEAD')
   );
 }
@@ -3054,7 +3169,8 @@ function SummaryTable({ title, label, rows, onOpenDetails }: { title: string; la
   );
 }
 
-function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
+function ScoutRecruitSummaryTable({ rows, completion }: { rows: RecruitBreakdownRow[]; completion: ManagementScoutWorkCompletion[] }) {
+  const completionByProfileId = new Map(completion.map((item) => [item.scout_profile_id, item]));
   const sortedRows = rows
     .map((row, index) => ({ row, index }))
     .sort((first, second) => {
@@ -3071,6 +3187,8 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
       return (first.row.stableEmployeeId ?? first.row.key).localeCompare(second.row.stableEmployeeId ?? second.row.key) || first.index - second.index;
     })
     .map(({ row }) => row);
+  const scoutRows = sortedRows.filter((row) => row.isScout);
+  const otherRows = sortedRows.filter((row) => !row.isScout);
 
   return (
     <section className="scout-summary-section scout-recruit-summary-block scout-compact-summary-section">
@@ -3116,9 +3234,23 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedRows.map((row) => (
+                {scoutRows.length > 0 ? <tr className="scout-summary-group-row"><td colSpan={8}>星探</td></tr> : null}
+                {scoutRows.map((row) => (
                   <tr key={row.key}>
-                    <td className="scout-compact-name-cell">{row.label}</td>
+                    <td className="scout-compact-name-cell"><ScoutRecruitName row={row} completion={completionByProfileId.get(row.scoutProfileId ?? '')} /></td>
+                    <td className="scout-compact-number-cell scout-compact-cell--combined">{getRecruitBreakdownTotal(row.breakdown)}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.total}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.plusFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.nonFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.total}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.plusFiveOne}</td>
+                    <td className="scout-compact-number-cell scout-compact-cell--douyin">{row.breakdown.douyin.nonFiveOne}</td>
+                  </tr>
+                ))}
+                {otherRows.length > 0 ? <tr className="scout-summary-group-row"><td colSpan={8}>其他</td></tr> : null}
+                {otherRows.map((row) => (
+                  <tr key={row.key}>
+                    <td className="scout-compact-name-cell"><ScoutRecruitName row={row} completion={completionByProfileId.get(row.scoutProfileId ?? '')} /></td>
                     <td className="scout-compact-number-cell scout-compact-cell--combined">{getRecruitBreakdownTotal(row.breakdown)}</td>
                     <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.total}</td>
                     <td className="scout-compact-number-cell scout-compact-cell--tiktok">{row.breakdown.tiktok.plusFiveOne}</td>
@@ -3132,9 +3264,12 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
             </table>
           </div>
           <div className="scout-compact-mobile-list" hidden>
-            <ScoutRecruitMobileCombinedTable rows={sortedRows} />
-            <ScoutRecruitMobilePlatformTable title="TikTok" platform="tiktok" rows={sortedRows} logoUrl={tiktokLogoUrl} />
-            <ScoutRecruitMobilePlatformTable title="抖音" platform="douyin" rows={sortedRows} logoUrl={douyinLogoUrl} />
+            <ScoutRecruitMobileCombinedTable rows={scoutRows} title="星探" completion={completionByProfileId} />
+            {otherRows.length > 0 ? <ScoutRecruitMobileCombinedTable rows={otherRows} title="其他" /> : null}
+            <ScoutRecruitMobilePlatformTable title="TikTok · 星探" platform="tiktok" rows={scoutRows} logoUrl={tiktokLogoUrl} completion={completionByProfileId} />
+            {otherRows.length > 0 ? <ScoutRecruitMobilePlatformTable title="TikTok · 其他" platform="tiktok" rows={otherRows} logoUrl={tiktokLogoUrl} /> : null}
+            <ScoutRecruitMobilePlatformTable title="抖音 · 星探" platform="douyin" rows={scoutRows} logoUrl={douyinLogoUrl} completion={completionByProfileId} />
+            {otherRows.length > 0 ? <ScoutRecruitMobilePlatformTable title="抖音 · 其他" platform="douyin" rows={otherRows} logoUrl={douyinLogoUrl} /> : null}
           </div>
         </>
       )}
@@ -3142,16 +3277,16 @@ function ScoutRecruitSummaryTable({ rows }: { rows: RecruitBreakdownRow[] }) {
   );
 }
 
-function ScoutRecruitMobileCombinedTable({ rows }: { rows: RecruitBreakdownRow[] }) {
+function ScoutRecruitMobileCombinedTable({ rows, title, completion = new Map() }: { rows: RecruitBreakdownRow[]; title: string; completion?: Map<string, ManagementScoutWorkCompletion> }) {
   return (
     <section className="scout-compact-mobile-platform-card scout-compact-mobile-platform-card--combined">
-      <span className="scout-compact-mobile-combined-title">双平台总数</span>
+      <span className="scout-compact-mobile-combined-title">{title} · 双平台总数</span>
       <div className="scout-compact-mobile-combined-table">
         <span className="scout-compact-mobile-name-head">星探</span>
         <span>双平台总数</span>
         {rows.map((row) => (
           <Fragment key={`combined-${row.key}`}>
-            <b className="scout-compact-mobile-name-cell">{row.label}</b>
+            <b className="scout-compact-mobile-name-cell"><ScoutRecruitName row={row} completion={completion.get(row.scoutProfileId ?? '')} /></b>
             <b className="scout-compact-mobile-combined-value">{getRecruitBreakdownTotal(row.breakdown)}</b>
           </Fragment>
         ))}
@@ -3160,16 +3295,33 @@ function ScoutRecruitMobileCombinedTable({ rows }: { rows: RecruitBreakdownRow[]
   );
 }
 
+function ScoutRecruitName({ row, completion }: { row: RecruitBreakdownRow; completion?: ManagementScoutWorkCompletion }) {
+  if (!row.isScout || !completion) return <>{row.label}</>;
+  return <span className="scout-recruit-name-with-completion">
+    <b>{row.label}</b>
+    <small>
+      本周 {formatScoutCompletion(completion.current_week_filled_days, completion.current_week_expected_days, completion.current_week_missing_days)} · 上周 {formatScoutCompletion(completion.previous_week_filled_days, completion.previous_week_expected_days, completion.previous_week_missing_days)}
+    </small>
+  </span>;
+}
+
+function formatScoutCompletion(filled: number, expected: number, missing: number) {
+  if (expected <= 0) return '';
+  return missing === 0 ? `${filled}/${expected} ✓` : `${filled}/${expected} · 缺${missing}`;
+}
+
 function ScoutRecruitMobilePlatformTable({
   title,
   platform,
   rows,
   logoUrl,
+  completion = new Map(),
 }: {
   title: string;
   platform: 'tiktok' | 'douyin';
   rows: RecruitBreakdownRow[];
   logoUrl: string;
+  completion?: Map<string, ManagementScoutWorkCompletion>;
 }) {
   return (
     <section className={`scout-compact-mobile-platform-card scout-compact-mobile-platform-card--${platform}`}>
@@ -3184,7 +3336,7 @@ function ScoutRecruitMobilePlatformTable({
 
           return (
             <Fragment key={`${platform}-${row.key}`}>
-              <b className="scout-compact-mobile-name-cell">{row.label}</b>
+              <b className="scout-compact-mobile-name-cell"><ScoutRecruitName row={row} completion={completion.get(row.scoutProfileId ?? '')} /></b>
               <b>{breakdown.total}</b>
               <b>{breakdown.plusFiveOne}</b>
               <b>{breakdown.nonFiveOne}</b>
@@ -4181,28 +4333,42 @@ function getConsistentValue(creators: CreatorProfile[], getValue: (creator: Crea
   return values[0];
 }
 
-function createDailyWorkRows(logs: DailyWorkLog[], month: string) {
+function getPersonalDailyWorkWeekRange(week: DailyWorkWeek): WorkloadDateRange {
+  return getCompleteWeekRange(getMalaysiaDateString(), week === 'current' ? 0 : -1);
+}
+
+async function listPersonalDailyWorkLogsForWeek(week: DailyWorkWeek) {
+  const range = getPersonalDailyWorkWeekRange(week);
+  const months = getMonthsInDateRange(range.startIso, range.endIso);
+  const logs = await Promise.all(months.map((targetMonth) => scoutService.listDailyWorkLogs(targetMonth)));
+  return logs.flat().filter((log) => log.work_date >= range.startIso && log.work_date <= range.endIso);
+}
+
+function createDailyWorkRows(logs: DailyWorkLog[], range: WorkloadDateRange) {
   const rows = new Map<string, DailyWorkLog | null>();
 
   logs.forEach((log) => {
     rows.set(log.work_date, log);
   });
 
-  [getLocalDateString(new Date()), getLocalDateString(addLocalDays(new Date(), -1))]
-    .filter((workDate) => workDate.startsWith(month))
-    .forEach((workDate) => {
-      if (!rows.has(workDate)) rows.set(workDate, null);
-    });
+  let cursor = parseDateOnly(range.startIso);
+  const end = parseDateOnly(range.endIso);
+  while (cursor <= end) {
+    const workDate = formatUtcDate(cursor);
+    if (!rows.has(workDate)) rows.set(workDate, null);
+    cursor = addUtcDays(cursor, 1);
+  }
 
   return Array.from(rows.entries())
-    .map(([workDate, log]) => ({ workDate, log }))
-    .sort((first, second) => second.workDate.localeCompare(first.workDate));
+    .map(([workDate, log]) => ({ workDate, log, editable: workDate <= getMalaysiaDateString() }))
+    .sort((first, second) => first.workDate.localeCompare(second.workDate));
 }
 
-function isRecentDailyWorkDate(workDate: string) {
-  const today = getLocalDateString(new Date());
-  const yesterday = getLocalDateString(addLocalDays(new Date(), -1));
-  return workDate === today || workDate === yesterday;
+function getDailyWorkCompletion(rows: Array<{ workDate: string; log: DailyWorkLog | null }>) {
+  const today = getMalaysiaDateString();
+  const expectedRows = rows.filter((row) => row.workDate <= today);
+  const completed = expectedRows.filter((row) => row.log !== null).length;
+  return { expected: expectedRows.length, completed, missing: expectedRows.length - completed };
 }
 
 function formatReplyRate(contactedCount: number, repliedCount: number) {
