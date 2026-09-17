@@ -307,7 +307,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         {mode === 'adjustments' ? (
           <button className="secondary-action" type="button" onClick={() => setAdjustmentModalOpen(true)}><Plus size={17} /><span>添加新申请</span></button>
         ) : null}
-        {mode === 'revenue' || mode === 'management-revenue' || mode === 'creators' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
+        {mode === 'revenue' || mode === 'management-revenue' || mode === 'creators' || mode === 'design-requests' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
       </div>
 
       {error ? <p className="form-alert">{error}</p> : null}

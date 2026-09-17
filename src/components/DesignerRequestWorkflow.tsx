@@ -69,9 +69,9 @@ export function AgentDesignerRequests() {
   return <section className="designer-request-page">
     <header className="designer-request-hero designer-request-agent-hero">
       <div className="designer-request-guides" aria-label="美工申请说明与价格规则">
-        <section className="designer-request-guide"><strong>Banner</strong><span>默认尺寸：100cm × 30cm</span><b>RM30 / 次</b><small>制作周期：10～15天</small></section>
-        <section className="designer-request-guide"><strong>立牌</strong><b>RM50 / 次</b><small>制作周期：10～15天</small></section>
-        <section className="designer-request-guide"><strong>活动布置</strong><b>RM50 / 次</b><span>基础直播间背景布置和道具搭配</span><small>至少提前10天申请 · 额外需求另评估报价</small></section>
+        <section className="designer-request-guide"><strong>Banner 制作</strong><b>RM30 / 次</b><span>默认尺寸：100cm × 30cm</span><small className="designer-request-guide-time">制作周期：10–15天，请提前安排</small><small className="designer-request-guide-online">线上主播：月流水每达 <em>200K</em>，可申请 <em>1次 Banner 制作</em></small><small className="designer-request-guide-offline">线下主播：可使用直播间累积金额抵扣</small></section>
+        <section className="designer-request-guide"><strong>立牌制作</strong><b>RM50 / 次</b><small className="designer-request-guide-time">制作周期：10–15天，请提前安排</small><small className="designer-request-guide-offline">线下主播：可使用直播间累积金额抵扣</small></section>
+        <section className="designer-request-guide"><strong>活动设计与布置</strong><b>RM50 / 次</b><span>含基础直播间背景布置及道具搭配</span><small className="designer-request-guide-time">所有活动海报及布置需求须至少提前10天申请<br />逾期申请无法保证按时完成</small><small className="designer-request-guide-offline">线下主播：可使用直播间累积金额抵扣</small><small>额外需求将另行评估与报价</small></section>
       </div>
       <button className="designer-request-primary" type="button" onClick={() => setForm({ ...emptyForm, workMode: tab === 'setup' ? 'setup_only' : 'design_only' })}><Plus size={17} />新增申请</button>
     </header>
