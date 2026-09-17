@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronR
 import { useRef } from 'react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
+import { AgentDesignerRequests } from '../components/DesignerRequestWorkflow';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { profileService } from '../services/profile.service';
@@ -306,9 +307,6 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
         {mode === 'adjustments' ? (
           <button className="secondary-action" type="button" onClick={() => setAdjustmentModalOpen(true)}><Plus size={17} /><span>添加新申请</span></button>
         ) : null}
-        {mode === 'design-requests' ? (
-          <button className="secondary-action" type="button" onClick={() => setDesignModalOpen(true)}><Plus size={17} /><span>添加新申请</span></button>
-        ) : null}
         {mode === 'revenue' || mode === 'management-revenue' || mode === 'creators' ? null : <button className="secondary-action" type="button" onClick={loadData} disabled={loading}><RefreshCw size={17} /><span>刷新</span></button>}
       </div>
 
@@ -396,7 +394,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
           onAction={(request, status) => setReviewAction({ request, status, note: '' })}
         />
       ) : null}
-      {mode === 'design-requests' ? <AgentDesignPanel loading={loading} unclaimed={unclaimedDesigns} inProgress={inProgressDesigns} requests={designRequests} onStatus={updateDesignStatus} /> : null}
+      {mode === 'design-requests' ? <AgentDesignerRequests /> : null}
 
       {selectedCreatorGroup ? (
         <CreatorDetailDrawer
@@ -413,7 +411,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       {adjustmentModalOpen ? <AdjustmentModal values={adjustmentForm} saving={saving} currentRegionId={options.currentEmployee?.region_id ?? ''} onChange={setAdjustmentForm} onClose={() => setAdjustmentModalOpen(false)} onSubmit={submitAdjustment} /> : null}
       {selectedAdjustmentReview ? <AdjustmentReviewDrawer request={selectedAdjustmentReview} onClose={() => setSelectedAdjustmentReview(null)} /> : null}
       {reviewAction ? <AdjustmentReviewActionModal action={reviewAction} saving={saving} onChange={(note) => setReviewAction({ ...reviewAction, note })} onClose={() => setReviewAction(null)} onSubmit={submitAdjustmentReview} /> : null}
-      {designModalOpen ? <DesignModal values={designForm} saving={saving} onChange={setDesignForm} onClose={() => setDesignModalOpen(false)} onSubmit={submitDesign} /> : null}
+      {designModalOpen && mode !== 'design-requests' ? <DesignModal values={designForm} saving={saving} onChange={setDesignForm} onClose={() => setDesignModalOpen(false)} onSubmit={submitDesign} /> : null}
     </section>
   );
 }
