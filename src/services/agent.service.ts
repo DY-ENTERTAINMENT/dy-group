@@ -33,6 +33,8 @@ export type AgentOptions = {
   currentEmployee: AgentOptionEmployee | null;
 };
 
+export type ManagementRevenueManagerOption = Omit<AgentOptionEmployee, 'profile_id'>;
+
 export type PersonalManagerCreatorProfile = CreatorProfile & {
   birthday?: string | null;
   secondary_manager_employee_id?: string | null;
@@ -397,6 +399,12 @@ export const agentService = {
       job_title_name: employee.job_titles?.name ?? null,
     })) as AgentOptions['employees'];
     return { regions: regionsResult.data ?? [], employees, currentEmployee: employees.find((employee) => employee.profile_id === profileId) ?? null };
+  },
+
+  async listManagementRevenueManagerOptions(): Promise<ManagementRevenueManagerOption[]> {
+    const { data, error } = await db.rpc('list_management_revenue_manager_options');
+    if (error) throw error;
+    return (data ?? []) as ManagementRevenueManagerOption[];
   },
 
   async listManagedCreators(profileId: string, filters: { month?: string; platform?: string; regionId?: string }) {

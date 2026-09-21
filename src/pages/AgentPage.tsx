@@ -29,6 +29,7 @@ import {
   type DesignFormValues,
   type DesignRequest,
   type DesignRequestType,
+  type ManagementRevenueManagerOption,
   type ManagementRevenueRecord,
   type PersonalManagerCreatorProfile,
   type RevenuePeriodSetting,
@@ -472,6 +473,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   }));
   const [managerSearch, setManagerSearch] = useState('');
   const [records, setRecords] = useState<ManagementRevenueRecord[]>([]);
+  const [managerEmployees, setManagerEmployees] = useState<ManagementRevenueManagerOption[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState('');
   const [offlineRows, setOfflineRows] = useState<AgentOfflineRevenueKpiSummary[]>([]);
@@ -485,7 +487,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('tiktok');
   const [tablePage, setTablePage] = useState(1);
   const tablePageSize = 20;
-  const isEligibleManager = (employee: AgentOptions['employees'][number] | undefined) => Boolean(
+  const isEligibleManager = (employee: ManagementRevenueManagerOption | undefined) => Boolean(
     employee
     && (employee.status === 'active' || employee.status === 'probation')
     && (employee.job_title_name === 'TALENT AGENT' || employee.job_title_name === 'TALENT AGENT LEAD'),
@@ -494,12 +496,12 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
     if (filters.creatorSearch.trim() || filters.creatorType) return [];
     return offlineRows.filter((row) => {
       if (filters.managerEmployeeId && row.agent_employee_id !== filters.managerEmployeeId) return false;
-      if (filters.regionId && props.options.employees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
+      if (filters.regionId && managerEmployees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
       return true;
     });
-  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, offlineRows, props.options.employees]);
+  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, managerEmployees, offlineRows]);
   const visibleOfflineRows = useMemo(() => {
-    const employeeRegions = new Map(props.options.employees.map((employee) => [employee.id, employee.region_id]));
+    const employeeRegions = new Map(managerEmployees.map((employee) => [employee.id, employee.region_id]));
 
     return offlineRows
       .filter((row) => !filters.regionId || employeeRegions.get(row.agent_employee_id) === filters.regionId)
@@ -512,13 +514,23 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
         return first.agent_employee_id.localeCompare(second.agent_employee_id);
       });
-  }, [filters.regionId, offlineRows, props.options.employees]);
+  }, [filters.regionId, managerEmployees, offlineRows]);
   const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
   const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
   useEffect(() => {
     void loadRecords();
   }, [filters]);
+
+  useEffect(() => {
+    let active = true;
+
+    agentService.listManagementRevenueManagerOptions()
+      .then((employees) => { if (active) setManagerEmployees(employees); })
+      .catch(() => { if (active) setManagerEmployees([]); });
+
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -547,7 +559,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
   const managerOptions = useMemo(() => {
     const normalizedSearch = managerSearch.trim().toLowerCase();
-    return props.options.employees.filter((employee) => {
+    return managerEmployees.filter((employee) => {
       if (!isEligibleManager(employee)) return false;
       if (filters.regionId && employee.region_id !== filters.regionId) return false;
       if (!normalizedSearch) return true;
@@ -558,7 +570,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         employee.email,
       ].join(' ').toLowerCase().includes(normalizedSearch);
     });
-  }, [filters.regionId, managerSearch, props.options.employees]);
+  }, [filters.regionId, managerSearch, managerEmployees]);
 
   const summary = useMemo(() => summarizeManagementRevenueRecords(records), [records]);
   const trendPoints = useMemo(() => buildManagementTrendPoints(records, filters.startMonth, filters.endMonth), [filters.endMonth, filters.startMonth, records]);
@@ -594,7 +606,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
     const nextRegionId = value as string;
     setFilters((current) => {
       if (!current.managerEmployeeId || !nextRegionId) return { ...current, regionId: nextRegionId };
-      const selectedEmployee = props.options.employees.find((employee) => employee.id === current.managerEmployeeId);
+      const selectedEmployee = managerEmployees.find((employee) => employee.id === current.managerEmployeeId);
       const keepManager = selectedEmployee !== undefined && isEligibleManager(selectedEmployee) && selectedEmployee.region_id === nextRegionId;
       return { ...current, regionId: nextRegionId, managerEmployeeId: keepManager ? current.managerEmployeeId : '' };
     });
