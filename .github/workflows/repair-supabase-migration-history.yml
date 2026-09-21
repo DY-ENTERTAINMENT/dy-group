@@ -1,0 +1,185 @@
+name: Repair Supabase Migration History
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  repair-history:
+    name: Repair Supabase Production migration history
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+
+      - name: Validate secrets and Production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; }
+          test -n "$SUPABASE_PROJECT_REF" || { echo "Missing SUPABASE_PROJECT_REF"; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing SUPABASE_DB_PASSWORD"; exit 1; }
+          [[ "$SUPABASE_PROJECT_REF" == "ulbrmsybdacdhkbkeqwo" ]] || { echo "Production project ref guard failed"; exit 1; }
+
+      - name: Verify normalized migration filenames
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/migrations/202608280003_employee_business_card_social_qr.sql
+          test -f supabase/migrations/202609150005_scout_daily_work_log_window_and_management_backfill.sql
+          test ! -e supabase/migrations/202608280001_employee_business_card_social_qr.sql
+          test ! -e supabase/migrations/202609150001_scout_daily_work_log_window_and_management_backfill.sql
+
+          duplicate_versions="$(find supabase/migrations -maxdepth 1 -type f -printf '%f\n' \
+            | sed -nE 's/^([0-9]{12})_.*/\1/p' \
+            | sort \
+            | uniq -d)"
+          test -z "$duplicate_versions" || {
+            echo "Duplicate migration version detected"
+            exit 1
+          }
+
+      - name: Link Supabase Production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify pre-repair remote migration history
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_list="$(supabase migration list --linked)"
+          printf '%s\n' "$migration_list"
+
+          remote_versions="$(printf '%s\n' "$migration_list" | awk -F '|' '
+            /^[[:space:]]*[0-9]{12}[[:space:]]*\|/ {
+              remote = $2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote)
+              if (remote ~ /^[0-9]{12}$/) print remote
+            }
+          ')"
+
+          for version in 202608210003 202608280001 202608280002; do
+            grep -Fxq "$version" <<< "$remote_versions" || {
+              echo "Expected baseline migration history is missing: $version"
+              exit 1
+            }
+          done
+
+          for version in \
+            202608280003 \
+            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
+            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
+            202609040001 \
+            202609070001 202609070002 202609070003 \
+            202609080001 202609080002 202609080003 \
+            202609090001 202609090002 202609090003 202609090004 \
+            202609100001 202609100002 \
+            202609150001 202609150002 202609150003 202609150004 202609150005 \
+            202609170001 202609210001; do
+            if grep -Fxq "$version" <<< "$remote_versions"; then
+              echo "Unexpectedly recorded migration blocks repair: $version"
+              exit 1
+            fi
+          done
+
+          if grep -Fxq "202609220001" <<< "$remote_versions"; then
+            echo "Phase A migration must remain pending: 202609220001"
+            exit 1
+          fi
+
+      - name: Repair approved migration history
+        shell: bash
+        run: |
+          set -euo pipefail
+          for version in \
+            202608280003 \
+            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
+            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
+            202609040001 \
+            202609070001 202609070002 202609070003 \
+            202609080001 202609080002 202609080003 \
+            202609090001 202609090002 202609090003 202609090004 \
+            202609100001 202609100002 \
+            202609150001 202609150002 202609150003 202609150004 202609150005 \
+            202609170001 202609210001; do
+            supabase migration repair --status applied "$version"
+          done
+
+      - name: Validate repaired history and dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_list="$(supabase migration list --linked)"
+          printf '%s\n' "$migration_list"
+
+          remote_versions="$(printf '%s\n' "$migration_list" | awk -F '|' '
+            /^[[:space:]]*[0-9]{12}[[:space:]]*\|/ {
+              remote = $2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote)
+              if (remote ~ /^[0-9]{12}$/) print remote
+            }
+          ')"
+
+          for version in \
+            202608210003 202608280001 202608280002 202608280003 \
+            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
+            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
+            202609040001 \
+            202609070001 202609070002 202609070003 \
+            202609080001 202609080002 202609080003 \
+            202609090001 202609090002 202609090003 202609090004 \
+            202609100001 202609100002 \
+            202609150001 202609150002 202609150003 202609150004 202609150005 \
+            202609170001 202609210001; do
+            grep -Fxq "$version" <<< "$remote_versions" || {
+              echo "Repaired migration history is missing: $version"
+              exit 1
+            }
+          done
+
+          if grep -Fxq "202609220001" <<< "$remote_versions"; then
+            echo "Phase A migration must remain pending: 202609220001"
+            exit 1
+          fi
+
+          dry_run="$(supabase db push --dry-run --linked)"
+          printf '%s\n' "$dry_run"
+          grep -Fq "202609220001_designer_request_multi_items_phase_a.sql" <<< "$dry_run" || {
+            echo "Expected Phase A migration is not pending in dry-run"
+            exit 1
+          }
+
+          for version in \
+            202608210003 202608280001 202608280002 202608280003 \
+            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
+            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
+            202609040001 \
+            202609070001 202609070002 202609070003 \
+            202609080001 202609080002 202609080003 \
+            202609090001 202609090002 202609090003 202609090004 \
+            202609100001 202609100002 \
+            202609150001 202609150002 202609150003 202609150004 202609150005 \
+            202609170001 202609210001; do
+            if grep -Fq "$version" <<< "$dry_run"; then
+              echo "Historical migration unexpectedly pending in dry-run: $version"
+              exit 1
+            fi
+          done
