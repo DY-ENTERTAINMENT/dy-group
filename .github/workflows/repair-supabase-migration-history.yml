@@ -69,7 +69,8 @@ jobs:
           printf '%s\n' "$migration_list"
 
           remote_versions="$(printf '%s\n' "$migration_list" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g' | awk -F '|' '
-            function trim(value) {
+            function normalize(value) {
+              gsub(/[\r\`]/, "", value)
               gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
               return value
             }
@@ -79,14 +80,14 @@ jobs:
             {
               if (!header_found && index($0, "|")) {
                 for (column = 1; column <= NF; column++) {
-                  if (tolower(trim($column)) == "remote") {
+                  if (tolower(normalize($column)) == "remote") {
                     remote_column = column
                     header_found = 1
                     next
                   }
                 }
               }
-              if (header_found && is_version(trim($remote_column))) print trim($remote_column)
+              if (header_found && is_version(normalize($remote_column))) print normalize($remote_column)
             }
             END {
               if (!header_found) exit 2
@@ -148,7 +149,8 @@ jobs:
           printf '%s\n' "$migration_list"
 
           remote_versions="$(printf '%s\n' "$migration_list" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g' | awk -F '|' '
-            function trim(value) {
+            function normalize(value) {
+              gsub(/[\r\`]/, "", value)
               gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
               return value
             }
@@ -158,14 +160,14 @@ jobs:
             {
               if (!header_found && index($0, "|")) {
                 for (column = 1; column <= NF; column++) {
-                  if (tolower(trim($column)) == "remote") {
+                  if (tolower(normalize($column)) == "remote") {
                     remote_column = column
                     header_found = 1
                     next
                   }
                 }
               }
-              if (header_found && is_version(trim($remote_column))) print trim($remote_column)
+              if (header_found && is_version(normalize($remote_column))) print normalize($remote_column)
             }
             END {
               if (!header_found) exit 2
