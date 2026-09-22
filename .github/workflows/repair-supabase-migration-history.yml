@@ -1,4 +1,4 @@
-name: Repair Supabase Migration History
+name: Validate Supabase Migration History
 
 on:
   workflow_dispatch:
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  repair-history:
-    name: Repair Supabase Production migration history
+  validate-history:
+    name: Validate Supabase Production migration history
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -43,6 +43,8 @@ jobs:
           set -euo pipefail
           test -f supabase/migrations/202608280003_employee_business_card_social_qr.sql
           test -f supabase/migrations/202609150005_scout_daily_work_log_window_and_management_backfill.sql
+          test -f supabase/migrations/202608210001_lost_historical_migration_placeholder.sql
+          test -f supabase/migrations/202608210002_lost_historical_migration_placeholder.sql
           test ! -e supabase/migrations/202608280001_employee_business_card_social_qr.sql
           test ! -e supabase/migrations/202609150001_scout_daily_work_log_window_and_management_backfill.sql
 
@@ -61,7 +63,7 @@ jobs:
           set -euo pipefail
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: Verify pre-repair remote migration history
+      - name: Validate Remote migration history
         shell: bash
         run: |
           set -euo pipefail
@@ -102,80 +104,8 @@ jobs:
           done
 
           for version in \
+            202608210001 202608210002 \
             202608280003 \
-            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
-            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
-            202609040001 \
-            202609070001 202609070002 202609070003 \
-            202609080001 202609080002 202609080003 \
-            202609090001 202609090002 202609090003 202609090004 \
-            202609100001 202609100002 \
-            202609150001 202609150002 202609150003 202609150004 202609150005 \
-            202609170001 202609210001; do
-            if grep -Fxq "$version" <<< "$remote_versions"; then
-              echo "Unexpectedly recorded migration blocks repair: $version"
-              exit 1
-            fi
-          done
-
-          if grep -Fxq "202609220001" <<< "$remote_versions"; then
-            echo "Phase A migration must remain pending: 202609220001"
-            exit 1
-          fi
-
-      - name: Repair approved migration history
-        shell: bash
-        run: |
-          set -euo pipefail
-          for version in \
-            202608280003 \
-            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
-            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
-            202609040001 \
-            202609070001 202609070002 202609070003 \
-            202609080001 202609080002 202609080003 \
-            202609090001 202609090002 202609090003 202609090004 \
-            202609100001 202609100002 \
-            202609150001 202609150002 202609150003 202609150004 202609150005 \
-            202609170001 202609210001; do
-            supabase migration repair --status applied "$version"
-          done
-
-      - name: Validate repaired history and dry-run
-        shell: bash
-        run: |
-          set -euo pipefail
-          migration_list="$(supabase migration list --linked)"
-          printf '%s\n' "$migration_list"
-
-          remote_versions="$(printf '%s\n' "$migration_list" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g' | awk -F '|' '
-            function normalize(value) {
-              gsub(/[\r\`]/, "", value)
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-              return value
-            }
-            function is_version(value) {
-              return value ~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/
-            }
-            {
-              if (!header_found && index($0, "|")) {
-                for (column = 1; column <= NF; column++) {
-                  if (tolower(normalize($column)) == "remote") {
-                    remote_column = column
-                    header_found = 1
-                    next
-                  }
-                }
-              }
-              if (header_found && is_version(normalize($remote_column))) print normalize($remote_column)
-            }
-            END {
-              if (!header_found) exit 2
-            }
-          ' | sort -u)"
-
-          for version in \
-            202608210003 202608280001 202608280002 202608280003 \
             202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
             202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
             202609040001 \
@@ -186,7 +116,7 @@ jobs:
             202609150001 202609150002 202609150003 202609150004 202609150005 \
             202609170001 202609210001; do
             grep -Fxq "$version" <<< "$remote_versions" || {
-              echo "Repaired migration history is missing: $version"
+              echo "Expected repaired migration history is missing: $version"
               exit 1
             }
           done
@@ -196,26 +126,18 @@ jobs:
             exit 1
           fi
 
+      - name: Validate exact pending migration dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
           dry_run="$(supabase db push --dry-run --linked)"
           printf '%s\n' "$dry_run"
-          grep -Fq "202609220001_designer_request_multi_items_phase_a.sql" <<< "$dry_run" || {
-            echo "Expected Phase A migration is not pending in dry-run"
+          pending_migrations="$(printf '%s\n' "$dry_run" \
+            | grep -oE '[0-9]{12}_[A-Za-z0-9_]+\.sql' \
+            | sort -u || true)"
+          expected_pending="202609220001_designer_request_multi_items_phase_a.sql"
+          if [[ "$pending_migrations" != "$expected_pending" ]]; then
+            echo "Expected exactly one pending migration: $expected_pending"
+            echo "Actual pending migrations: ${pending_migrations:-<none>}"
             exit 1
-          }
-
-          for version in \
-            202608210003 202608280001 202608280002 202608280003 \
-            202609010001 202609010002 202609010003 202609010004 202609010005 202609010006 202609010007 \
-            202609020008 202609020009 202609020010 202609020011 202609020012 202609020013 202609020014 202609020015 202609020016 202609020017 \
-            202609040001 \
-            202609070001 202609070002 202609070003 \
-            202609080001 202609080002 202609080003 \
-            202609090001 202609090002 202609090003 202609090004 \
-            202609100001 202609100002 \
-            202609150001 202609150002 202609150003 202609150004 202609150005 \
-            202609170001 202609210001; do
-            if grep -Fq "$version" <<< "$dry_run"; then
-              echo "Historical migration unexpectedly pending in dry-run: $version"
-              exit 1
-            fi
-          done
+          fi
