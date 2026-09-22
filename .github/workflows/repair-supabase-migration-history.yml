@@ -130,10 +130,12 @@ jobs:
             }
           done
 
-          if grep -Fxq "202609220001" <<< "$remote_versions"; then
-            echo "Phase A migration must remain pending: 202609220001"
-            exit 1
-          fi
+          for version in 202609220001 202609220002; do
+            if grep -Fxq "$version" <<< "$remote_versions"; then
+              echo "Combined release migration unexpectedly already applied: $version"
+              exit 1
+            fi
+          done
 
       - name: Validate exact pending migration dry-run
         shell: bash
@@ -174,18 +176,14 @@ jobs:
               exit 1
             }
           done
-          if grep -Fxq "202609220001" <<< "$remote_versions"; then
-            echo "Phase A migration must remain pending: 202609220001"
-            exit 1
-          fi
-
           local_versions="$(find supabase/migrations -maxdepth 1 -type f -printf '%f\n' \
             | sed -nE 's/^([0-9]{12})_.*/\1/p' \
             | sort -u)"
           local_only_versions="$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))"
           remote_only_versions="$(comm -13 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))"
-          test "$local_only_versions" = "202609220001" || {
-            echo "Expected only Phase A to be local-only; actual: ${local_only_versions:-<none>}"
+          expected_local_only=$'202609220001\n202609220002'
+          test "$local_only_versions" = "$expected_local_only" || {
+            echo "Expected exactly the combined release migrations to be local-only; actual: ${local_only_versions:-<none>}"
             exit 1
           }
           test -z "$remote_only_versions" || {
@@ -203,10 +201,11 @@ jobs:
           pending_migrations="$(printf '%s\n' "$normalized_dry_run_output" \
             | grep -oE '[0-9]{12}_[A-Za-z0-9_.-]+\.sql' \
             | sed -E 's#.*/##' \
-            | sort -u || true)"
-          expected_pending="202609220001_designer_request_multi_items_phase_a.sql"
+            | awk '!seen[$0]++' || true)"
+          expected_pending=$'202609220001_designer_request_multi_items_phase_a.sql\n202609220002_employee_account_access_guard.sql'
           if [[ "$pending_migrations" != "$expected_pending" ]]; then
-            echo "Expected exactly one pending migration: $expected_pending"
+            echo "Expected exactly two pending migrations in release order:"
+            printf '%s\n' "$expected_pending"
             echo "Actual pending migrations: ${pending_migrations:-<none>}"
             exit 1
           fi
