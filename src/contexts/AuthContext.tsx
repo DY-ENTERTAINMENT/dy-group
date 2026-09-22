@@ -12,6 +12,7 @@ const initialState: AuthState = {
   user: null,
   session: null,
   profile: null,
+  employeeAccess: null,
   loading: true,
 };
 
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: null,
           session,
           profile: null,
+          employeeAccess: null,
           loading: false,
         });
         return;
@@ -47,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       commitAuthState(requestId, {
         user,
         session,
-        profile: null,
+          profile: null,
+          employeeAccess: null,
         loading: true,
       });
 
@@ -77,11 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session = data.session;
       const user = session?.user ?? null;
       const profile = user ? await fetchProfile(user.id) : null;
+      const employeeAccess = user ? await fetchEmployeeAccess(user.id, profile) : null;
 
       commitAuthState(requestId, {
         user,
         session,
         profile,
+        employeeAccess,
         loading: false,
       });
     } catch (loadError) {
@@ -107,11 +112,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setError('');
       const profile = user ? await fetchProfile(user.id) : null;
+      const employeeAccess = user ? await fetchEmployeeAccess(user.id, profile) : null;
 
       commitAuthState(requestId, {
         user,
         session,
         profile,
+        employeeAccess,
         loading: false,
       });
     } catch (profileError) {
@@ -168,6 +175,19 @@ async function fetchProfile(userId: string) {
   }
 
   return data;
+}
+
+async function fetchEmployeeAccess(userId: string, profile: AuthState['profile']): Promise<AuthState['employeeAccess']> {
+  if (profile?.status !== 'approved') return 'disabled';
+
+  const { data, error } = await supabase
+    .from('employees')
+    .select('status, deleted_at')
+    .eq('profile_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data && data.deleted_at === null && (data.status === 'active' || data.status === 'probation') ? 'allowed' : 'disabled';
 }
 
 function getErrorMessage(error: unknown) {

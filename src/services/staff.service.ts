@@ -52,6 +52,8 @@ export type EmployeeListItem = {
   region_id: string | null;
   employment_type_id: string | null;
   job_title_id: string | null;
+  profile_id: string | null;
+  profile_status: Profile['status'] | null;
   status: EmployeeStatus;
   hire_date: string | null;
   employment_end_date: string | null;
@@ -105,6 +107,7 @@ const employeeSelect = `
   employment_type_id,
   job_title_id,
   status,
+  profile_id,
   hire_date,
   employment_end_date,
   probation_confirm_date,
@@ -279,11 +282,10 @@ async function getEmployeeById(employeeId: string, signal?: AbortSignal) {
   return mapEmployeeRow(row, reviewerMap);
 }
 
-async function getReviewerMap(rows: EmployeeRowWithRelations[], signal?: AbortSignal) {
-  const reviewerIds = Array.from(new Set(rows.map((row) => row.reviewed_by).filter(Boolean))) as string[];
-  if (reviewerIds.length === 0) return new Map<string, Pick<Profile, 'id' | 'full_name' | 'email'>>();
-
-  let query = supabase.from('profiles').select('id, full_name, email').in('id', reviewerIds);
+async function getReviewerMap(rows: EmployeeRowWithRelations[], signal?: AbortSignal): Promise<Map<string, Pick<Profile, 'id' | 'full_name' | 'email' | 'status'>>> {
+  const profileIds = Array.from(new Set(rows.flatMap((row) => [row.reviewed_by, row.profile_id]).filter(Boolean))) as string[];
+  if (profileIds.length === 0) return new Map<string, Pick<Profile, 'id' | 'full_name' | 'email' | 'status'>>();
+  let query = supabase.from('profiles').select('id, full_name, email, status').in('id', profileIds);
 
   if (signal) {
     query = query.abortSignal(signal);
@@ -298,7 +300,7 @@ async function getReviewerMap(rows: EmployeeRowWithRelations[], signal?: AbortSi
   return new Map((data ?? []).map((profile) => [profile.id, profile]));
 }
 
-function mapEmployeeRow(row: EmployeeRowWithRelations, reviewerMap: Map<string, Pick<Profile, 'id' | 'full_name' | 'email'>>): EmployeeListItem {
+function mapEmployeeRow(row: EmployeeRowWithRelations, reviewerMap: Map<string, Pick<Profile, 'id' | 'full_name' | 'email' | 'status'>>): EmployeeListItem {
   return {
     id: row.id,
     full_name: row.full_name,
@@ -321,6 +323,8 @@ function mapEmployeeRow(row: EmployeeRowWithRelations, reviewerMap: Map<string, 
     region_id: row.region_id,
     employment_type_id: row.employment_type_id,
     job_title_id: row.job_title_id,
+    profile_id: row.profile_id,
+    profile_status: row.profile_id ? reviewerMap.get(row.profile_id)?.status ?? null : null,
     status: row.status,
     hire_date: row.hire_date,
     employment_end_date: row.employment_end_date,

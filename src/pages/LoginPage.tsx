@@ -8,6 +8,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard';
+  const accountDisabled = Boolean((location.state as { accountDisabled?: boolean } | null)?.accountDisabled);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -57,6 +58,7 @@ export function LoginPage() {
       </label>
 
       {message ? <p className="form-alert">{message}</p> : null}
+      {accountDisabled ? <p className="form-alert">该员工账号已停用，请联系管理员。</p> : null}
 
       <button className="primary-button" type="submit" disabled={submitting || !isSupabaseConfigured}>
         <LogIn size={18} />

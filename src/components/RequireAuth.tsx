@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export function RequireAuth() {
   const location = useLocation();
-  const { user, profile, loading } = useAuth();
+  const { user, profile, employeeAccess, loading } = useAuth();
 
   if (loading) {
     return <div className="route-loading">正在加载系统...</div>;
@@ -13,8 +13,8 @@ export function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (profile?.status !== 'approved') {
-    return <Navigate to="/register-review" replace />;
+  if (profile?.status !== 'approved' || employeeAccess !== 'allowed') {
+    return <Navigate to="/login" replace state={{ accountDisabled: true }} />;
   }
 
   return <Outlet />;

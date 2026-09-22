@@ -56,6 +56,11 @@ function getEmployeeStatus(status: EmployeeStatus | string | null | undefined) {
   return status || 'active';
 }
 
+function isEmployeeAccountEnabled(employee: EmployeeListItem) {
+  return employee.profile_status === 'approved'
+    && (employee.status === 'active' || employee.status === 'probation');
+}
+
 export function StaffPage() {
   const { profile } = useAuth();
   const permissions = usePermissions();
@@ -137,6 +142,10 @@ export function StaffPage() {
 
       if (nextValues.status === 'left' && !nextValues.employment_end_date) {
         throw new Error('离职日期为必填');
+      }
+
+      if (editingEmployee && (nextValues.status === 'inactive' || nextValues.status === 'left')) {
+        if (!window.confirm('该员工将无法继续登录 DY Group。是否继续保存？')) return;
       }
 
       if (nextValues.status !== 'left') {
@@ -456,6 +465,7 @@ function EmployeeDetailModal({
             <Info label="区域" value={employee.region?.name ?? employee.region?.code} />
             <Info label="雇佣类型" value={employee.employment_type?.name} />
             <Info label="状态" value={statusLabels[getEmployeeStatus(employee.status)] ?? statusLabels.active} />
+            <Info label="账号状态" value={isEmployeeAccountEnabled(employee) ? '🟢 正常' : '🔴 已停用'} />
             <Info label="入职日期" value={employee.hire_date} />
             {employee.status === 'left' ? <Info label="离职日期" value={employee.employment_end_date} /> : null}
             <Info label="正式日期" value={employee.hire_date ? calculateConfirmDate(employee.hire_date) : employee.probation_confirm_date} />
