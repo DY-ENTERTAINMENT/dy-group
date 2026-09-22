@@ -1,4 +1,4 @@
-name: Final Six Supabase Migration History Repair
+name: Validate Supabase Migration History
 
 on:
   workflow_dispatch:
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  repair-final-six-history:
-    name: Repair and validate six historical Production migrations
+  validate-history:
+    name: Validate reconciled Supabase Production migration history
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -124,10 +124,10 @@ jobs:
           for version in \
             202608260004 202608260005 202608260006 202608260007 \
             202608270001 202608270002; do
-            if grep -Fxq "$version" <<< "$remote_versions"; then
-              echo "Historical migration is already recorded; refusing to repair: $version"
+            grep -Fxq "$version" <<< "$remote_versions" || {
+              echo "Expected reconciled historical migration is missing: $version"
               exit 1
-            fi
+            }
           done
 
           if grep -Fxq "202609220001" <<< "$remote_versions"; then
@@ -135,17 +135,7 @@ jobs:
             exit 1
           fi
 
-      - name: Repair exactly six historical migration versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          for version in \
-            202608260004 202608260005 202608260006 202608260007 \
-            202608270001 202608270002; do
-            supabase migration repair --status applied "$version" --linked
-          done
-
-      - name: Validate reconciled history and exact pending migration dry-run
+      - name: Validate exact pending migration dry-run
         shell: bash
         run: |
           set -euo pipefail
@@ -206,7 +196,7 @@ jobs:
           dry_run="$(supabase db push --dry-run --linked)"
           printf '%s\n' "$dry_run"
           pending_migrations="$(printf '%s\n' "$dry_run" \
-            | grep -oE '[0-9]{12}_[A-Za-z0-9_]+\.sql' \
+            | sed -nE 's/^[[:space:]]*[^0-9]*([0-9]{12}_[A-Za-z0-9_]+\.sql)[[:space:]]*$/\1/p' \
             | sort -u || true)"
           expected_pending="202609220001_designer_request_multi_items_phase_a.sql"
           if [[ "$pending_migrations" != "$expected_pending" ]]; then
