@@ -1,4 +1,4 @@
-name: Validate Supabase Migration History
+name: Final Six Supabase Migration History Repair
 
 on:
   workflow_dispatch:
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate-history:
-    name: Validate Supabase Production migration history
+  repair-final-six-history:
+    name: Repair and validate six historical Production migrations
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -121,15 +121,88 @@ jobs:
             }
           done
 
+          for version in \
+            202608260004 202608260005 202608260006 202608260007 \
+            202608270001 202608270002; do
+            if grep -Fxq "$version" <<< "$remote_versions"; then
+              echo "Historical migration is already recorded; refusing to repair: $version"
+              exit 1
+            fi
+          done
+
           if grep -Fxq "202609220001" <<< "$remote_versions"; then
             echo "Phase A migration must remain pending: 202609220001"
             exit 1
           fi
 
-      - name: Validate exact pending migration dry-run
+      - name: Repair exactly six historical migration versions
         shell: bash
         run: |
           set -euo pipefail
+          for version in \
+            202608260004 202608260005 202608260006 202608260007 \
+            202608270001 202608270002; do
+            supabase migration repair --status applied "$version" --linked
+          done
+
+      - name: Validate reconciled history and exact pending migration dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_list="$(supabase migration list --linked)"
+          printf '%s\n' "$migration_list"
+          remote_versions="$(printf '%s\n' "$migration_list" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g' | awk -F '|' '
+            function normalize(value) {
+              gsub(/[\r\`]/, "", value)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+              return value
+            }
+            function is_version(value) {
+              return value ~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/
+            }
+            {
+              if (!header_found && index($0, "|")) {
+                for (column = 1; column <= NF; column++) {
+                  if (tolower(normalize($column)) == "remote") {
+                    remote_column = column
+                    header_found = 1
+                    next
+                  }
+                }
+              }
+              if (header_found && is_version(normalize($remote_column))) print normalize($remote_column)
+            }
+            END {
+              if (!header_found) exit 2
+            }
+          ' | sort -u)"
+          for version in \
+            202608260004 202608260005 202608260006 202608260007 \
+            202608270001 202608270002; do
+            grep -Fxq "$version" <<< "$remote_versions" || {
+              echo "Repaired historical migration is missing: $version"
+              exit 1
+            }
+          done
+          if grep -Fxq "202609220001" <<< "$remote_versions"; then
+            echo "Phase A migration must remain pending: 202609220001"
+            exit 1
+          fi
+
+          local_versions="$(find supabase/migrations -maxdepth 1 -type f -printf '%f\n' \
+            | sed -nE 's/^([0-9]{12})_.*/\1/p' \
+            | sort -u)"
+          local_only_versions="$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))"
+          remote_only_versions="$(comm -13 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))"
+          test "$local_only_versions" = "202609220001" || {
+            echo "Expected only Phase A to be local-only; actual: ${local_only_versions:-<none>}"
+            exit 1
+          }
+          test -z "$remote_only_versions" || {
+            echo "Unexpected remote-only migration versions: $remote_only_versions"
+            exit 1
+          }
+
           dry_run="$(supabase db push --dry-run --linked)"
           printf '%s\n' "$dry_run"
           pending_migrations="$(printf '%s\n' "$dry_run" \
