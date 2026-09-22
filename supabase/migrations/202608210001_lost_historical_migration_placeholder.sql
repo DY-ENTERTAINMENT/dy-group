@@ -1,0 +1,10 @@
+-- Historical migration placeholder.
+-- Production migration history already records version 202608210001 as applied.
+-- The original migration filename and SQL source could not be recovered from
+-- the repository history, remote branches, retained Git objects, or available
+-- deployment records.
+-- This file exists only to reconcile local migration history with the
+-- already-applied Production migration history.
+-- It intentionally performs no database operation.
+-- It must not be treated as evidence of the original migration contents.
+-- Any future corrective schema change must use a new migration version.
