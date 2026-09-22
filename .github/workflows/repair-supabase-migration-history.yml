@@ -193,10 +193,16 @@ jobs:
             exit 1
           }
 
-          dry_run="$(supabase db push --dry-run --linked)"
-          printf '%s\n' "$dry_run"
-          pending_migrations="$(printf '%s\n' "$dry_run" \
-            | sed -nE 's/^[[:space:]]*[^0-9]*([0-9]{12}_[A-Za-z0-9_]+\.sql)[[:space:]]*$/\1/p' \
+          if ! dry_run_output="$(supabase db push --dry-run --linked 2>&1)"; then
+            printf '%s\n' "$dry_run_output"
+            exit 1
+          fi
+          printf '%s\n' "$dry_run_output"
+          normalized_dry_run_output="$(printf '%s\n' "$dry_run_output" \
+            | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
+          pending_migrations="$(printf '%s\n' "$normalized_dry_run_output" \
+            | grep -oE '[0-9]{12}_[A-Za-z0-9_.-]+\.sql' \
+            | sed -E 's#.*/##' \
             | sort -u || true)"
           expected_pending="202609220001_designer_request_multi_items_phase_a.sql"
           if [[ "$pending_migrations" != "$expected_pending" ]]; then
