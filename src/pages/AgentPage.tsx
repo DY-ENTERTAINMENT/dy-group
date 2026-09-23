@@ -727,6 +727,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
       {recordsError ? <p className="form-alert management-revenue-alert">{recordsError}</p> : null}
       {message ? <p className="form-success management-revenue-alert">{message}</p> : null}
+      <p className="management-revenue-attribution-note">新流水按记录时负责人归属；旧历史记录如无负责人快照，则暂按主播当前负责人归属。</p>
 
       <div className="management-revenue-kpi-grid">
         <ManagementRevenueKpiCard title="TikTok 总钻石" value={summary.tiktokTotal} unit="钻石" platform="tiktok" />
@@ -1393,7 +1394,7 @@ function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: M
   const rows = new Map<string, ManagementRankingRow>();
   roster.forEach((agent) => rows.set(agent.agent_employee_id, { id: agent.agent_employee_id, label: agent.agent_name, tiktok: 0, douyin: 0, firstCreatedAt: null }));
   records.filter((record) => record.platform === view).forEach((record) => {
-    const id = record.creator?.manager_employee_id ?? 'unassigned';
+    const id = record.reporting_manager_employee_id ?? 'unassigned';
     const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0, firstCreatedAt: null };
     if (record.platform === 'tiktok') current.tiktok += record.revenue_amount;
     if (record.platform === 'douyin') current.douyin += record.revenue_amount;
@@ -1472,7 +1473,7 @@ function getManagementRecordCreatorName(record: ManagementRevenueRecord) {
 }
 
 function getManagementRecordAgentName(record: ManagementRevenueRecord) {
-  return getEmployeeName(record.creator?.manager) || '未分配经纪人';
+  return getEmployeeName(record.reportingManager) || '未分配经纪人';
 }
 
 function getManagementRecordTypeLabel(record: ManagementRevenueRecord) {

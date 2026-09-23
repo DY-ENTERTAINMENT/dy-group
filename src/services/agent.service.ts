@@ -177,6 +177,9 @@ export type ManagementRevenueRecord = WeeklyRevenueRecord & {
   creator: CreatorProfile | null;
   submittedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
   confirmedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
+  reporting_manager_employee_id: string | null;
+  manager_attribution_source: 'historical_attribution' | 'legacy_current_manager_fallback';
+  reportingManager: Pick<Employee, 'id' | 'full_name' | 'nickname'> | null;
 };
 
 export type ManagementRevenueFilters = {
@@ -311,13 +314,6 @@ const weeklyRevenueSelect = `
   updated_by_employee_id,
   created_at,
   updated_at
-`;
-
-const managementWeeklyRevenueSelect = `
-  ${weeklyRevenueSelect},
-  creator:creator_profiles!inner(${creatorSelect}),
-  submitted_by:employees!creator_weekly_revenue_records_submitted_by_employee_id_fkey(id, full_name, nickname, email),
-  confirmed_by:employees!creator_weekly_revenue_records_confirmed_by_employee_id_fkey(id, full_name, nickname, email)
 `;
 
 const designSelect = `
@@ -534,29 +530,27 @@ export const agentService = {
 
   async listManagementRevenueRecords(filters: ManagementRevenueFilters): Promise<ManagementRevenueRecord[]> {
     const normalizedRange = normalizeManagementMonthRange(filters.startMonth, filters.endMonth);
-    let query = db
-      .from('creator_weekly_revenue_records')
-      .select(managementWeeklyRevenueSelect)
-      .gte('week_start_date', normalizedRange.startIso)
-      .lte('week_start_date', normalizedRange.endIso)
-      .in('status', ['submitted', 'confirmed'])
-      .order('week_start_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(2000);
-
-    if (filters.platform) query = query.eq('platform', filters.platform);
-    if (filters.regionId) query = query.eq('creator.region_id', filters.regionId);
-    if (filters.managerEmployeeId) query = query.eq('creator.manager_employee_id', filters.managerEmployeeId);
-    if (filters.creatorType === '5+1') query = query.eq('creator.creator_type', '5+1');
-    if (filters.creatorType === 'non_5_1') query = query.neq('creator.creator_type', '5+1');
-    if (filters.status === 'pending') query = query.eq('status', 'submitted');
-    if (filters.status === 'confirmed') query = query.eq('status', 'confirmed');
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data ?? [])
-      .map(mapManagementRevenueRow)
-      .filter((record: ManagementRevenueRecord) => record.creator?.status !== 'invalid')
+    const pageSize = 500;
+    const rows: unknown[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await db.rpc('list_management_revenue_canonical_records', {
+        p_start_date: normalizedRange.startIso,
+        p_end_date: normalizedRange.endIso,
+        p_manager_employee_id: filters.managerEmployeeId || null,
+        p_platform: filters.platform || null,
+        p_creator_type: filters.creatorType || null,
+        p_region_id: filters.regionId || null,
+        p_status: filters.status || null,
+        p_limit: pageSize,
+        p_offset: offset,
+      });
+      if (error) throw error;
+      const page = data ?? [];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return rows
+      .map(mapCanonicalManagementRevenueRow)
       .filter((record: ManagementRevenueRecord) => matchesManagementRevenueSearch(record, filters.creatorSearch ?? ''));
   },
 
@@ -908,12 +902,36 @@ function mapRevenuePeriodSettingRow(row: any): RevenuePeriodSetting {
   };
 }
 
-function mapManagementRevenueRow(row: any): ManagementRevenueRecord {
+function mapCanonicalManagementRevenueRow(row: any): ManagementRevenueRecord {
   return {
     ...mapWeeklyRevenueRow(row),
-    creator: row.creator ? mapCreatorRow(row.creator) : null,
-    submittedBy: row.submitted_by ?? null,
-    confirmedBy: row.confirmed_by ?? null,
+    creator: mapCreatorRow({
+      id: row.creator_profile_id,
+      creator_entity_id: row.creator_current_entity_id,
+      joined_date: row.creator_joined_date,
+      platform: row.creator_platform,
+      platform_user_id: row.creator_platform_user_id,
+      platform_account: row.creator_platform_account,
+      region_id: row.creator_region_id,
+      creator_name: row.creator_name,
+      scout_employee_id: row.creator_scout_employee_id,
+      scout_profile_id: row.creator_scout_profile_id,
+      manager_employee_id: row.creator_current_manager_employee_id,
+      revenue_cycle: row.creator_revenue_cycle,
+      revenue_input_mode: row.creator_revenue_input_mode,
+      status: row.creator_status,
+      creator_type: row.creator_type,
+      created_at: row.creator_created_at,
+      updated_at: row.creator_updated_at,
+      regions: row.creator_region_id ? { id: row.creator_region_id, code: row.region_code, name: row.region_name } : null,
+      scout: row.creator_scout_employee_id ? { id: row.creator_scout_employee_id, full_name: row.scout_full_name, nickname: row.scout_nickname } : null,
+      manager: null,
+    }),
+    submittedBy: row.submitted_by_employee_id ? { id: row.submitted_by_employee_id, full_name: row.submitted_by_full_name, nickname: row.submitted_by_nickname, email: row.submitted_by_email } : null,
+    confirmedBy: row.confirmed_by_employee_id ? { id: row.confirmed_by_employee_id, full_name: row.confirmed_by_full_name, nickname: row.confirmed_by_nickname, email: row.confirmed_by_email } : null,
+    reporting_manager_employee_id: row.reporting_manager_employee_id ?? null,
+    manager_attribution_source: row.manager_attribution_source === 'historical_attribution' ? 'historical_attribution' : 'legacy_current_manager_fallback',
+    reportingManager: row.reporting_manager_employee_id ? { id: row.reporting_manager_employee_id, full_name: row.reporting_manager_full_name, nickname: row.reporting_manager_nickname } : null,
   };
 }
 
@@ -950,7 +968,7 @@ function matchesManagementRevenueSearch(record: ManagementRevenueRecord, search:
     record.creator?.platform_account,
     record.creator?.region?.code,
     record.creator?.region?.name,
-    getEmployeeName(record.creator?.manager),
+    getEmployeeName(record.reportingManager),
   ].join(' ').toLowerCase().includes(normalizedSearch);
 }
 
