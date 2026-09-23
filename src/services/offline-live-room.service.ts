@@ -512,6 +512,7 @@ function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
     week_end_date: row.week_end_date,
     revenue_amount: Number(row.revenue_amount) || 0,
     revenue_unit: row.revenue_unit,
+    is_cumulative_generated: Boolean(row.is_cumulative_generated),
     source: row.source,
     source_reference: row.source_reference ?? null,
     agent_note: row.agent_note ?? null,

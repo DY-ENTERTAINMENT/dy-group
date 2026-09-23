@@ -148,6 +148,7 @@ export type WeeklyRevenueRecord = {
   week_end_date: string;
   revenue_amount: number;
   revenue_unit: 'diamond' | 'yinlang';
+  is_cumulative_generated: boolean;
   source: 'manual' | 'csv' | 'api';
   source_reference: string | null;
   agent_note: string | null;
@@ -200,6 +201,22 @@ export type WeeklyRevenueSaveInput = {
   agentNote: string;
 };
 
+export type CumulativeRevenueContext = {
+  latestCumulativeAmount: number | null;
+  chainActive: boolean;
+  latestDataDate: string | null;
+  openingCumulativeAmount: number | null;
+  estimatedPeriodAmount: number | null;
+};
+
+export type CumulativeRevenueSubmitResult = {
+  entryKind: 'baseline' | 'calculation' | 'reset';
+  idempotent: boolean;
+  weeklyRecord: WeeklyRevenueRecord | null;
+  previousCumulativeAmount: number | null;
+  calculatedPeriodAmount: number | null;
+};
+
 export type RevenuePeriodSettingSource = 'custom' | 'fallback';
 
 export type RevenuePeriodSetting = {
@@ -235,6 +252,8 @@ const creatorSelect = `
   scout_employee_id,
   scout_profile_id,
   manager_employee_id,
+  revenue_cycle,
+  revenue_input_mode,
   status,
   creator_type,
   bank_name,
@@ -271,6 +290,7 @@ const weeklyRevenueSelect = `
   week_end_date,
   revenue_amount,
   revenue_unit,
+  is_cumulative_generated,
   source,
   source_reference,
   agent_note,
@@ -549,6 +569,38 @@ export const agentService = {
     return saveWeeklyRevenueRecord(input, 'submitted');
   },
 
+  async getCumulativeRevenueContext(creatorProfileId: string, dataDate: string): Promise<CumulativeRevenueContext> {
+    const { data, error } = await db.rpc('get_creator_cumulative_revenue_context', { p_creator_profile_id: creatorProfileId, p_data_date: dataDate });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      latestCumulativeAmount: row?.latest_cumulative_amount == null ? null : Number(row.latest_cumulative_amount),
+      chainActive: Boolean(row?.chain_active),
+      latestDataDate: row?.latest_data_date ?? null,
+      openingCumulativeAmount: row?.opening_cumulative_amount == null ? null : Number(row.opening_cumulative_amount),
+      estimatedPeriodAmount: row?.estimated_period_amount == null ? null : Number(row.estimated_period_amount),
+    };
+  },
+
+  async submitCumulativeRevenue(input: { creatorProfileId: string; cumulativeAmount: number; dataDate: string; agentNote: string; idempotencyKey: string }): Promise<CumulativeRevenueSubmitResult> {
+    const { data, error } = await db.rpc('submit_creator_cumulative_revenue', {
+      p_creator_profile_id: input.creatorProfileId,
+      p_cumulative_amount: input.cumulativeAmount,
+      p_data_date: input.dataDate,
+      p_idempotency_key: input.idempotencyKey,
+      p_note: input.agentNote.trim() || null,
+      p_source: 'manual',
+    });
+    if (error) throw error;
+    return {
+      entryKind: data.entry_kind,
+      idempotent: Boolean(data.idempotent),
+      weeklyRecord: data.weekly_record ? mapWeeklyRevenueRow(data.weekly_record) : null,
+      previousCumulativeAmount: data.previous_cumulative_amount == null ? null : Number(data.previous_cumulative_amount),
+      calculatedPeriodAmount: data.calculated_period_amount == null ? null : Number(data.calculated_period_amount),
+    };
+  },
+
   async listAdjustments(profileId: string): Promise<AdjustmentRequest[]> {
     const { data, error } = await db
       .from('creator_adjustment_requests')
@@ -784,6 +836,8 @@ function mapCreatorRow(row: any): CreatorProfile {
     scout_employee_id: row.scout_employee_id,
     scout_profile_id: row.scout_profile_id,
     manager_employee_id: row.manager_employee_id,
+    revenue_cycle: row.revenue_cycle ?? 'weekly',
+    revenue_input_mode: row.revenue_input_mode ?? 'direct',
     creator_type: row.creator_type,
     status: row.status,
     bank_account_name: row.bank_account_name,
@@ -818,6 +872,7 @@ function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
   return {
     ...row,
     revenue_amount: Number(row.revenue_amount),
+    is_cumulative_generated: Boolean(row.is_cumulative_generated),
   };
 }
 

@@ -26,6 +26,7 @@ import {
   type AdjustmentType,
   type AgentOptions,
   type AgentOfflineRevenueKpiSummary,
+  type CumulativeRevenueContext,
   type DesignFormValues,
   type DesignRequest,
   type DesignRequestType,
@@ -2976,6 +2977,13 @@ function RevenuePeriodSettingsModal({ month, periods, saving, onClose, onSaved }
 }
 
 function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
+  if (row.creator.revenue_input_mode === 'cumulative') {
+    return <CumulativeWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} />;
+  }
+  return <DirectWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} />;
+}
+
+function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
   const [amount, setAmount] = useState(row.record && row.status !== 'missing' ? formatAmountInput(row.record.revenue_amount) : '');
   const [agentNote, setAgentNote] = useState(row.record?.agent_note ?? '');
   const [saving, setSaving] = useState(false);
@@ -3040,6 +3048,77 @@ function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; 
           <span>备注</span>
           <textarea value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" />
         </label>
+        {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
+      </form>
+    </SystemModal>
+  );
+}
+
+function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
+  const [amount, setAmount] = useState('');
+  const [dataDate, setDataDate] = useState(getMalaysiaDate(new Date()));
+  const [agentNote, setAgentNote] = useState('');
+  const [context, setContext] = useState<CumulativeRevenueContext | null>(null);
+  const [loadingContext, setLoadingContext] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const unitLabel = getCreatorRevenueUnitLabel(row.creator.platform);
+  const parsedAmount = parseWeeklyAmount(amount);
+  const isFirstBaseline = !context?.chainActive;
+  const isDecrease = !parsedAmount.error && context?.latestCumulativeAmount != null && parsedAmount.value < context.latestCumulativeAmount;
+  const preview = !parsedAmount.error && context?.latestCumulativeAmount != null && !isFirstBaseline && !isDecrease
+    ? (context.openingCumulativeAmount == null ? parsedAmount.value - context.latestCumulativeAmount : parsedAmount.value - context.openingCumulativeAmount)
+    : null;
+
+  useEffect(() => {
+    let active = true;
+    agentService.getCumulativeRevenueContext(row.creator.id, dataDate)
+      .then((value) => { if (active) setContext(value); })
+      .catch((loadError) => { if (active) setError(`读取累计基准失败：${getErrorMessage(loadError)}`); })
+      .finally(() => { if (active) setLoadingContext(false); });
+    return () => { active = false; };
+  }, [dataDate, row.creator.id]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (parsedAmount.error) { setError(parsedAmount.error); return; }
+    if (isDecrease) { setError('当前累计低于上次累计。请联系 Super Admin 重置基准；系统不会生成负流水。'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const result = await agentService.submitCumulativeRevenue({
+        creatorProfileId: row.creator.id, cumulativeAmount: parsedAmount.value, dataDate, agentNote, idempotencyKey: crypto.randomUUID(),
+      });
+      if (result.weeklyRecord) onSubmitted(result.weeklyRecord);
+      else onClose();
+    } catch (saveError) {
+      setError(`提交失败：${getErrorMessage(saveError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SystemModal title="填写累计流水" ariaLabel="累计流水" onClose={onClose}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="cumulative-weekly-operation-form" disabled={saving || loadingContext}>{saving ? '保存中...' : '保存'}</button></>}
+    >
+      <form id="cumulative-weekly-operation-form" className="weekly-operation-form" onSubmit={submit}>
+        <div className="agent-operation-modal-head"><PlatformPill platform={row.creator.platform} /><OperationStatusBadge status={row.status} /></div>
+        <div className="agent-operation-detail-grid">
+          <DrawerField label="主播" value={row.creator.creator_name || '-'} />
+          <DrawerField label="平台" value={platformLabels[row.creator.platform]} />
+          <DrawerField label="UID" value={row.creator.platform_user_id} />
+          <DrawerField label="周期" value={row.period.label} />
+          <DrawerField label="上次累计" value={context?.latestCumulativeAmount == null ? '-' : `${formatRevenueAmount(context.latestCumulativeAmount)} ${unitLabel}`} />
+          <DrawerField label="本期基准" value={context?.openingCumulativeAmount == null ? '-' : `${formatRevenueAmount(context.openingCumulativeAmount)} ${unitLabel}`} />
+        </div>
+        {loadingContext ? <p className="agent-operation-alert">正在读取累计基准...</p> : null}
+        {isFirstBaseline && !loadingContext ? <p className="form-alert agent-operation-alert">首次累计，仅建立基准，不产生本期流水。</p> : null}
+        <label className="form-field agent-weekly-revenue-field"><span>数据日期</span><input type="date" value={dataDate} onChange={(event) => setDataDate(event.target.value)} required /></label>
+        <label className="form-field agent-weekly-revenue-field"><span>后台当前累计</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入当前累计" /><b>{unitLabel}</b></div></label>
+        {preview != null ? <p className="form-success agent-operation-alert">预计本期流水：{formatRevenueAmount(preview)} {unitLabel}</p> : null}
+        {isDecrease ? <p className="form-alert agent-operation-alert">当前累计低于上次累计，不能保存。请联系 Super Admin 处理 reset。</p> : null}
+        <label className="form-field agent-weekly-revenue-note"><span>备注</span><textarea value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" /></label>
         {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
       </form>
     </SystemModal>

@@ -196,6 +196,8 @@ export type CreatorProfile = {
   scout_employee_id: string | null;
   scout_profile_id: string | null;
   manager_employee_id: string | null;
+  revenue_cycle?: 'weekly' | 'monthly' | 'none';
+  revenue_input_mode?: 'direct' | 'cumulative';
   creator_type: CreatorType;
   status?: CreatorStatus;
   bank_account_name?: string | null;
