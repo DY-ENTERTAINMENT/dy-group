@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode 
 import { Check, ChevronRight, Edit3, Layers, MessageSquarePlus, Plus, RefreshCw, Search, UsersRound, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
+import { CrossPlatformAssociationModal } from '../components/CrossPlatformAssociationModal';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
@@ -23,6 +24,7 @@ import {
   type CandidateFollowUpHistory,
   type CandidateFormValues,
   type CreatorEntityFormValues,
+  type CreatorEntityPlatformEditValues,
   type CreatorEntitySharedFormValues,
   type CreatorAdditionalPlatformFormValues,
   type CreatorEntityCollaborator,
@@ -247,6 +249,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [selectedCreatorGroup, setSelectedCreatorGroup] = useState<CreatorProfileGroup | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
+  const [associationOpen, setAssociationOpen] = useState(false);
+  const [associationCurrentProfile, setAssociationCurrentProfile] = useState<CreatorEntityPlatformEditValues | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dailyWorkSavingDate, setDailyWorkSavingDate] = useState('');
@@ -666,6 +670,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         setCreatorEntityCollaborators(collaborators);
         setEditingCreator(null);
         setEditingCreatorEntityId(creator.creator_entity_id);
+        const configuredPlatforms = entityProfiles.map((profile) => {
+          const setting = managementSettings.find((item) => item.creator_profile_id === profile.id);
+          return { ...profile, revenue_cycle: setting?.revenue_cycle ?? 'weekly', revenue_input_mode: setting?.revenue_input_mode ?? 'direct' };
+        });
         setCreatorEntitySharedForm({
           display_name: creator.creator_name,
           birthday: birthday ?? '',
@@ -682,11 +690,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           is_priority: managementSettings[0]?.is_priority ?? false,
           operation_status: managementSettings[0]?.operation_status ?? 'normal',
           operation_status_reason: managementSettings[0]?.operation_status_reason ?? '',
-          platforms: entityProfiles.map((profile) => {
-            const setting = managementSettings.find((item) => item.creator_profile_id === profile.id);
-            return { ...profile, revenue_cycle: setting?.revenue_cycle ?? 'weekly', revenue_input_mode: setting?.revenue_input_mode ?? 'direct' };
-          }),
+          platforms: configuredPlatforms,
         });
+        setAssociationCurrentProfile(configuredPlatforms.find((profile) => profile.id === creator.id) ?? null);
         setCreatorModalOpen(true);
       } catch (collaboratorError) {
         setError(`读取第二协作者失败：${getErrorMessage(collaboratorError)}`);
@@ -723,6 +729,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorEntityForm(emptyCreatorEntityForm);
     setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
     setCreatorEntityCollaborators([]);
+    setAssociationCurrentProfile(null);
   }
 
   async function openCreatorDetails(group: CreatorProfileGroup) {
@@ -960,6 +967,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
             onChange={setCreatorEntitySharedForm}
             onClose={closeCreatorModal}
             onSubmit={submitCreator}
+            onOpenCrossPlatformAssociation={permissions.isSuperAdmin && associationCurrentProfile ? () => { setCreatorModalOpen(false); setAssociationOpen(true); } : undefined}
           />
         ) : (
           <CreatorModal
@@ -978,6 +986,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           />
         )
       ) : null}
+
+      {associationOpen && editingCreatorEntityId && associationCurrentProfile ? <CrossPlatformAssociationModal currentProfile={associationCurrentProfile} currentEntityId={editingCreatorEntityId} onClose={() => setAssociationOpen(false)} onSuccess={() => { setAssociationOpen(false); setAssociationCurrentProfile(null); setEditingCreatorEntityId(null); setCreatorEntitySharedForm(emptyCreatorEntitySharedForm); setMessage('双平台账号已关联。'); loadData(); }} /> : null}
 
       {addingCreatorPlatform ? (
         <CreatorAdditionalPlatformModal
@@ -3766,6 +3776,7 @@ function CreatorEntitySharedModal(props: {
   onChange: (values: CreatorEntitySharedFormValues) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onOpenCrossPlatformAssociation?: () => void;
 }) {
   const updateValues = (values: Partial<CreatorEntitySharedFormValues>) => {
     props.onChange({ ...props.values, ...values });
@@ -3798,6 +3809,7 @@ function CreatorEntitySharedModal(props: {
           <button className="primary-button compact-button" type="submit" form="creator-entity-shared-form" disabled={props.saving}>
             {props.saving ? '保存中...' : '确认'}
           </button>
+          {props.onOpenCrossPlatformAssociation ? <button className="secondary-button compact-button" type="button" onClick={props.onOpenCrossPlatformAssociation}>关联双平台账号</button> : null}
         </>
       }
     >

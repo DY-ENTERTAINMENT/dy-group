@@ -313,6 +313,165 @@ export const platformLabels: Record<CreatorPlatform, string> = {
 
 const db = supabase as any;
 
+export type CrossPlatformAssociationEntitySummary = {
+  id: string;
+  displayName: string;
+  status: string;
+  isPriority: boolean;
+  operationStatus: string | null;
+  operationStatusReason: string | null;
+  managerEmployeeId: string | null;
+  regionId: string | null;
+  managerName: string | null;
+  regionName: string | null;
+};
+
+export type CrossPlatformAssociationProfileSummary = {
+  id: string;
+  creatorEntityId: string;
+  platform: CreatorPlatform;
+  creatorName: string;
+  platformAccount: string;
+  platformUserId: string;
+  platformPublicId: string | null;
+  revenueCycle: 'weekly' | 'monthly' | 'none' | null;
+  revenueInputMode: 'direct' | 'cumulative' | null;
+};
+
+export type CrossPlatformAssociationDependencies = {
+  sourceActiveRoomCount: number;
+  retainedActiveRoomCount: number;
+  sourceActiveCollaboratorCount: number;
+  sourceActivityCount: number;
+  sourceMilestoneCount: number;
+  sourceExtraActiveProfileCount: number;
+};
+
+export type CrossPlatformAssociationPreflight = {
+  canAssociate: boolean;
+  blockers: string[];
+  warnings: string[];
+  retainedEntity: CrossPlatformAssociationEntitySummary;
+  sourceEntity: CrossPlatformAssociationEntitySummary;
+  sourceProfile: CrossPlatformAssociationProfileSummary;
+  retainedProfiles: CrossPlatformAssociationProfileSummary[];
+  dependencies: CrossPlatformAssociationDependencies;
+};
+
+export type CrossPlatformAssociationCandidate = CrossPlatformAssociationProfileSummary & {
+  managerName: string | null;
+  regionName: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function readNullableString(value: unknown): string | null {
+  return value === null ? null : readString(value);
+}
+
+function readNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function readBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function readPlatform(value: unknown): CreatorPlatform | null {
+  return value === 'tiktok' || value === 'douyin' ? value : null;
+}
+
+function mapAssociationEntity(value: unknown, managerName: unknown, regionName: unknown): CrossPlatformAssociationEntitySummary | null {
+  if (!isRecord(value)) return null;
+  const id = readString(value.id);
+  const displayName = readString(value.display_name);
+  const status = readString(value.status);
+  if (!id || !displayName || !status) return null;
+  return {
+    id,
+    displayName,
+    status,
+    isPriority: readBoolean(value.is_priority),
+    operationStatus: readNullableString(value.operation_status),
+    operationStatusReason: readNullableString(value.operation_status_reason),
+    managerEmployeeId: readNullableString(value.manager_employee_id),
+    regionId: readNullableString(value.region_id),
+    managerName: readNullableString(managerName),
+    regionName: readNullableString(regionName),
+  };
+}
+
+function mapAssociationProfile(value: unknown): CrossPlatformAssociationProfileSummary | null {
+  if (!isRecord(value)) return null;
+  const id = readString(value.id);
+  const creatorEntityId = readString(value.creator_entity_id);
+  const platform = readPlatform(value.platform);
+  const creatorName = readString(value.creator_name);
+  const platformAccount = readString(value.platform_account);
+  const platformUserId = readString(value.platform_user_id);
+  if (!id || !creatorEntityId || !platform || !creatorName || !platformAccount || !platformUserId) return null;
+  const revenueCycle = value.revenue_cycle === 'weekly' || value.revenue_cycle === 'monthly' || value.revenue_cycle === 'none' ? value.revenue_cycle : null;
+  const revenueInputMode = value.revenue_input_mode === 'direct' || value.revenue_input_mode === 'cumulative' ? value.revenue_input_mode : null;
+  return { id, creatorEntityId, platform, creatorName, platformAccount, platformUserId, platformPublicId: readNullableString(value.platform_public_id), revenueCycle, revenueInputMode };
+}
+
+function mapAssociationPreflight(value: unknown): CrossPlatformAssociationPreflight {
+  if (!isRecord(value)) throw new Error('关联检查返回格式无效，请刷新后重试。');
+  const retainedEntity = mapAssociationEntity(value.retained_entity, value.retained_manager_name, value.retained_region_name);
+  const sourceEntity = mapAssociationEntity(value.source_entity, value.source_manager_name, value.source_region_name);
+  const sourceProfile = mapAssociationProfile(value.source_profile);
+  if (!retainedEntity || !sourceEntity || !sourceProfile) throw new Error('关联检查缺少必要主体资料，请刷新后重试。');
+  const retainedProfiles = Array.isArray(value.retained_profiles)
+    ? value.retained_profiles.map(mapAssociationProfile).filter((profile): profile is CrossPlatformAssociationProfileSummary => profile !== null)
+    : [];
+  const blockerListIsValid = Array.isArray(value.blockers) && value.blockers.every((blocker) => typeof blocker === 'string');
+  const blockers = blockerListIsValid ? readStringArray(value.blockers) : ['关联检查返回的阻止条件格式无效，请刷新后重新检查。'];
+  const canAssociate = value.can_associate === true && blockerListIsValid;
+  if (canAssociate && retainedProfiles.length === 0) throw new Error('关联检查缺少保留主体平台资料，请刷新后重试。');
+  return {
+    canAssociate,
+    blockers,
+    warnings: readStringArray(value.warnings),
+    retainedEntity,
+    sourceEntity,
+    sourceProfile,
+    retainedProfiles,
+    dependencies: {
+      sourceActiveRoomCount: readNumber(value.source_active_room_count),
+      retainedActiveRoomCount: readNumber(value.retained_active_room_count),
+      sourceActiveCollaboratorCount: readNumber(value.source_active_collaborator_count),
+      sourceActivityCount: readNumber(value.source_activity_count),
+      sourceMilestoneCount: readNumber(value.source_milestone_count),
+      sourceExtraActiveProfileCount: readNumber(value.source_extra_active_profile_count),
+    },
+  };
+}
+
+function mapAssociationCandidate(value: unknown): CrossPlatformAssociationCandidate | null {
+  if (!isRecord(value)) return null;
+  const profile = mapAssociationProfile({
+    id: value.id,
+    creator_entity_id: value.creator_entity_id,
+    platform: value.platform,
+    creator_name: value.creator_name,
+    platform_account: value.platform_account,
+    platform_user_id: value.platform_user_id,
+    platform_public_id: value.platform_public_id,
+  });
+  if (!profile) return null;
+  return { ...profile, managerName: readNullableString(value.manager_name), regionName: readNullableString(value.region_name) };
+}
+
 export const scoutService = {
   async getOptions(): Promise<ScoutOptions> {
     const [regionsResult, employeesResult] = await Promise.all([
@@ -633,6 +792,27 @@ export const scoutService = {
     const { data, error } = await db.rpc('get_creator_entity_management_settings', { p_creator_entity_id: creatorEntityId });
     if (error) throw error;
     return (data ?? []) as CreatorEntityManagementSettings[];
+  },
+
+  async previewCrossPlatformCreatorAssociation(retainedEntityId: string, sourceProfileId: string): Promise<CrossPlatformAssociationPreflight> {
+    const { data, error } = await db.rpc('preview_cross_platform_creator_association', { p_retained_entity_id: retainedEntityId, p_source_profile_id: sourceProfileId });
+    if (error) throw error;
+    return mapAssociationPreflight(data);
+  },
+
+  async searchCrossPlatformCreatorAssociationCandidates(currentProfileId: string, query: string): Promise<CrossPlatformAssociationCandidate[]> {
+    if (query.trim().length < 2) return [];
+    const { data, error } = await db.rpc('search_cross_platform_creator_association_candidates', { p_current_profile_id: currentProfileId, p_query: query.trim() });
+    if (error) throw error;
+    return Array.isArray(data)
+      ? data.map(mapAssociationCandidate).filter((candidate): candidate is CrossPlatformAssociationCandidate => candidate !== null)
+      : [];
+  },
+
+  async associateExistingCrossPlatformCreatorProfiles(retainedEntityId: string, sourceProfileId: string, reason: string) {
+    const { data, error } = await db.rpc('associate_existing_cross_platform_creator_profiles', { p_retained_entity_id: retainedEntityId, p_source_profile_id: sourceProfileId, p_reason: reason.trim() });
+    if (error) throw error;
+    return data as string;
   },
 
   async saveCreatorEntityManagementSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
