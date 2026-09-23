@@ -37,8 +37,15 @@ export type ManagementRevenueManagerOption = Omit<AgentOptionEmployee, 'profile_
 
 export type PersonalManagerCreatorProfile = CreatorProfile & {
   birthday?: string | null;
+  membership_status?: 'active' | 'exited';
   secondary_manager_employee_id?: string | null;
   secondary_manager_display_name?: string | null;
+};
+
+type WeeklyRevenueProfileRpcRow = Record<string, unknown> & {
+  joined_date: string;
+  platform: CreatorPlatform;
+  region_id: string | null;
 };
 
 export type AdjustmentTargetEmployee = Pick<Employee, 'id' | 'employee_code' | 'full_name' | 'nickname' | 'email' | 'region_id'>;
@@ -459,6 +466,17 @@ export const agentService = {
     return creators.map((creator: PersonalManagerCreatorProfile) => ({ ...creator, birthday: creator.creator_entity_id ? birthdayByEntity.get(creator.creator_entity_id) ?? null : null }));
   },
 
+  async listPersonalManagerWeeklyRevenueProfiles(filters: { month?: string; platform?: string; regionId?: string } = {}): Promise<PersonalManagerCreatorProfile[]> {
+    const { data, error } = await db.rpc('list_personal_manager_weekly_revenue_profiles');
+    if (error) throw error;
+    const rows = (data ?? []) as WeeklyRevenueProfileRpcRow[];
+    return rows
+      .filter((row) => !filters.month || String(row.joined_date).startsWith(filters.month))
+      .filter((row) => !filters.platform || row.platform === filters.platform)
+      .filter((row) => !filters.regionId || row.region_id === filters.regionId)
+      .map(mapPersonalManagerCreatorRow);
+  },
+
   async listRevenueData(input: { profileId?: string; month: string; platform?: string; regionId?: string; management?: boolean }) {
     let creatorIds: string[] | null = null;
     if (!input.management && input.profileId) {
@@ -861,6 +879,7 @@ function mapPersonalManagerCreatorRow(row: any): PersonalManagerCreatorProfile {
     }),
     secondary_manager_employee_id: row.secondary_manager_employee_id ?? null,
     secondary_manager_display_name: row.secondary_manager_display_name ?? null,
+    membership_status: row.membership_status === 'exited' ? 'exited' : 'active',
   };
 }
 

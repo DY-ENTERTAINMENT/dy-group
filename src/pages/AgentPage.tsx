@@ -162,7 +162,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
       if (!regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
 
       if (mode === 'revenue' && profile?.id) {
-        setCreators(await agentService.listManagedCreators(profile.id, { regionId: defaultRegion }));
+        setCreators(await agentService.listPersonalManagerWeeklyRevenueProfiles({ regionId: defaultRegion }));
       }
       if (mode === 'creators') {
         setCreators(await agentService.listPersonalManagerCreatorProfiles({ regionId: defaultRegion }));
@@ -1542,7 +1542,7 @@ function CreatorDataPanel(props: {
   completeness: string;
   regionId: string;
   options: AgentOptions;
-  creators: CreatorProfile[];
+  creators: PersonalManagerCreatorProfile[];
   currentEmployeeId: string | null;
   onSearch: (value: string) => void;
   onPlatform: (value: string) => void;
@@ -2358,7 +2358,7 @@ function AgentPeriodRevenuePanel(props: {
   const [activeRow, setActiveRow] = useState<OperationRow | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const sortedCreators = useMemo(() => sortOperationCreators(props.creators), [props.creators]);
+  const sortedCreators = useMemo(() => sortOperationCreators(props.creators.filter(isWeeklyRevenuePendingEligible)), [props.creators]);
   const effectiveDateRange = useMemo(() => getOperationEffectiveDateRange(filters.quickRange, {
     monthDateRange,
     previousPeriod: currentPreviousPeriod,
@@ -3472,7 +3472,11 @@ function parseWeeklyAmount(value: string): { value: number; error: '' } | { valu
   return { value: parsedValue, error: '' };
 }
 
-function sortOperationCreators(creators: CreatorProfile[]) {
+function isWeeklyRevenuePendingEligible(profile: PersonalManagerCreatorProfile) {
+  return profile.revenue_cycle === 'weekly' && profile.membership_status === 'active';
+}
+
+function sortOperationCreators(creators: PersonalManagerCreatorProfile[]) {
   const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
   return [...creators].sort((first, second) => {
     if (first.creator_entity_id && first.creator_entity_id === second.creator_entity_id) {
