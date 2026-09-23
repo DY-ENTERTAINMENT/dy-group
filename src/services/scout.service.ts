@@ -196,6 +196,9 @@ export type CreatorProfile = {
   scout_employee_id: string | null;
   scout_profile_id: string | null;
   manager_employee_id: string | null;
+  is_priority?: boolean;
+  operation_status?: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'other';
+  operation_status_reason?: string | null;
   revenue_cycle?: 'weekly' | 'monthly' | 'none';
   revenue_input_mode?: 'direct' | 'cumulative';
   creator_type: CreatorType;
@@ -294,6 +297,7 @@ const creatorSelect = `
   bank_account,
   created_at,
   updated_at,
+  creator_entity:creator_entities!creator_entity_id(is_priority, operation_status, operation_status_reason),
   regions:region_id(id, code, name),
   scout:employees!creator_profiles_scout_employee_id_fkey(id, full_name, nickname),
   manager:employees!creator_profiles_manager_employee_id_fkey(id, full_name, nickname)
@@ -1095,6 +1099,7 @@ function formatLocalDate(date: Date) {
 }
 
 function mapCreatorRow(row: any): CreatorProfile {
+  const creatorEntity = Array.isArray(row.creator_entity) ? row.creator_entity[0] : row.creator_entity;
   return {
     id: row.id,
     creator_entity_id: row.creator_entity_id,
@@ -1110,6 +1115,9 @@ function mapCreatorRow(row: any): CreatorProfile {
     scout_employee_id: row.scout_employee_id,
     scout_profile_id: row.scout_profile_id,
     manager_employee_id: row.manager_employee_id,
+    is_priority: creatorEntity?.is_priority === true,
+    operation_status: ['normal', 'paused', 'long_term_stopped', 'resigned', 'terminated', 'other'].includes(creatorEntity?.operation_status) ? creatorEntity.operation_status : 'normal',
+    operation_status_reason: typeof creatorEntity?.operation_status_reason === 'string' ? creatorEntity.operation_status_reason : null,
     creator_type: row.creator_type,
     status: row.status,
     bank_account_name: row.bank_account_name,

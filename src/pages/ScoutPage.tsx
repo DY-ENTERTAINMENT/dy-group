@@ -226,6 +226,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('');
   const [creatorRegistrationTypeFilter, setCreatorRegistrationTypeFilter] = useState<CreatorRegistrationType | ''>('');
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
+  const [operationStatusFilter, setOperationStatusFilter] = useState('');
+  const [revenueCycleFilter, setRevenueCycleFilter] = useState('');
+  const [revenueInputModeFilter, setRevenueInputModeFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [candidateStatusFilter, setCandidateStatusFilter] = useState<CandidateStatusFilter>('pending');
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
   const [candidateUidQuery, setCandidateUidQuery] = useState('');
@@ -878,6 +882,10 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           creatorTypeFilter={creatorTypeFilter}
           creatorRegistrationTypeFilter={creatorRegistrationTypeFilter}
           creatorStatusFilter={creatorStatusFilter}
+          operationStatusFilter={operationStatusFilter}
+          revenueCycleFilter={revenueCycleFilter}
+          revenueInputModeFilter={revenueInputModeFilter}
+          priorityFilter={priorityFilter}
           onPlatformFilter={setPlatformFilter}
           onMonthChange={setCreatorStatsMonth}
           onRegionFilter={setRegionFilter}
@@ -886,6 +894,11 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onCreatorTypeFilter={setCreatorTypeFilter}
           onCreatorRegistrationTypeFilter={setCreatorRegistrationTypeFilter}
           onCreatorStatusFilter={setCreatorStatusFilter}
+          onOperationStatusFilter={setOperationStatusFilter}
+          onRevenueCycleFilter={setRevenueCycleFilter}
+          onRevenueInputModeFilter={setRevenueInputModeFilter}
+          onPriorityFilter={setPriorityFilter}
+          onResetManagementFilters={() => { setCreatorStatsMonth(''); setPlatformFilter(''); setRegionFilter(''); setScoutFilter(''); setManagerFilter(''); setCreatorTypeFilter(''); setCreatorRegistrationTypeFilter(''); setCreatorStatusFilter('active'); setOperationStatusFilter(''); setRevenueCycleFilter(''); setRevenueInputModeFilter(''); setPriorityFilter(''); }}
           onRefresh={loadData}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
@@ -1624,6 +1637,15 @@ function CreatorStatsPanel({
   onCreatorTypeFilter,
   onCreatorRegistrationTypeFilter,
   onCreatorStatusFilter,
+  operationStatusFilter,
+  revenueCycleFilter,
+  revenueInputModeFilter,
+  priorityFilter,
+  onOperationStatusFilter,
+  onRevenueCycleFilter,
+  onRevenueInputModeFilter,
+  onPriorityFilter,
+  onResetManagementFilters,
   onRefresh,
   managerDisplayNameByCreatorId,
   onEdit,
@@ -1644,6 +1666,10 @@ function CreatorStatsPanel({
   creatorTypeFilter: string;
   creatorRegistrationTypeFilter: CreatorRegistrationType | '';
   creatorStatusFilter: CreatorStatusFilter;
+  operationStatusFilter: string;
+  revenueCycleFilter: string;
+  revenueInputModeFilter: string;
+  priorityFilter: string;
   onPlatformFilter: (value: string) => void;
   onMonthChange: (value: string) => void;
   onRegionFilter: (value: string) => void;
@@ -1652,6 +1678,11 @@ function CreatorStatsPanel({
   onCreatorTypeFilter: (value: string) => void;
   onCreatorRegistrationTypeFilter: (value: CreatorRegistrationType | '') => void;
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
+  onOperationStatusFilter: (value: string) => void;
+  onRevenueCycleFilter: (value: string) => void;
+  onRevenueInputModeFilter: (value: string) => void;
+  onPriorityFilter: (value: string) => void;
+  onResetManagementFilters: () => void;
   onRefresh: () => void;
   managerDisplayNameByCreatorId: Record<string, string>;
   onEdit: (creator: CreatorProfile) => void;
@@ -1670,8 +1701,12 @@ function CreatorStatsPanel({
       creatorType: creatorTypeFilter,
       registrationType: creatorRegistrationTypeFilter,
       status: creatorStatusFilter,
+      operationStatus: operationStatusFilter,
+      revenueCycle: revenueCycleFilter,
+      revenueInputMode: revenueInputModeFilter,
+      priority: priorityFilter,
     }),
-    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, platformFilter, regionFilter, scoutFilter],
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, revenueInputModeFilter, scoutFilter],
   );
   const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1685,7 +1720,7 @@ function CreatorStatsPanel({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [creatorRegistrationTypeFilter, creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, pageSize]);
+  }, [creatorRegistrationTypeFilter, creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, operationStatusFilter, revenueCycleFilter, revenueInputModeFilter, priorityFilter, pageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -1706,6 +1741,10 @@ function CreatorStatsPanel({
         creatorTypeFilter={creatorTypeFilter}
         creatorRegistrationTypeFilter={creatorRegistrationTypeFilter}
         creatorStatusFilter={creatorStatusFilter}
+        operationStatusFilter={operationStatusFilter}
+        revenueCycleFilter={revenueCycleFilter}
+        revenueInputModeFilter={revenueInputModeFilter}
+        priorityFilter={priorityFilter}
         onPlatformFilter={onPlatformFilter}
         onMonthChange={onMonthChange}
         onSearchQuery={setCreatorSearchQuery}
@@ -1715,6 +1754,11 @@ function CreatorStatsPanel({
         onCreatorTypeFilter={onCreatorTypeFilter}
         onCreatorRegistrationTypeFilter={onCreatorRegistrationTypeFilter}
         onCreatorStatusFilter={onCreatorStatusFilter}
+        onOperationStatusFilter={onOperationStatusFilter}
+        onRevenueCycleFilter={onRevenueCycleFilter}
+        onRevenueInputModeFilter={onRevenueInputModeFilter}
+        onPriorityFilter={onPriorityFilter}
+        onReset={onResetManagementFilters}
         onRefresh={onRefresh}
       />
       {loading ? (
@@ -1777,6 +1821,10 @@ function CreatorFilters(props: {
   creatorTypeFilter: string;
   creatorRegistrationTypeFilter: CreatorRegistrationType | '';
   creatorStatusFilter: CreatorStatusFilter;
+  operationStatusFilter: string;
+  revenueCycleFilter: string;
+  revenueInputModeFilter: string;
+  priorityFilter: string;
   onPlatformFilter: (value: string) => void;
   onMonthChange: (value: string) => void;
   onSearchQuery: (value: string) => void;
@@ -1786,6 +1834,11 @@ function CreatorFilters(props: {
   onCreatorTypeFilter: (value: string) => void;
   onCreatorRegistrationTypeFilter: (value: CreatorRegistrationType | '') => void;
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
+  onOperationStatusFilter: (value: string) => void;
+  onRevenueCycleFilter: (value: string) => void;
+  onRevenueInputModeFilter: (value: string) => void;
+  onPriorityFilter: (value: string) => void;
+  onReset: () => void;
   onRefresh: () => void;
 }) {
   return (
@@ -1842,6 +1895,19 @@ function CreatorFilters(props: {
           <option value="all">全部</option>
         </SelectField>
       ) : null}
+      <SelectField label="运营状态" value={props.operationStatusFilter} onChange={props.onOperationStatusFilter}>
+        <option value="">全部</option><option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="other">其他</option>
+      </SelectField>
+      <SelectField label="流水周期" value={props.revenueCycleFilter} onChange={props.onRevenueCycleFilter}>
+        <option value="">全部</option><option value="weekly">周流水</option><option value="monthly">月流水</option><option value="none">无需流水</option>
+      </SelectField>
+      <SelectField label="填写方式" value={props.revenueInputModeFilter} onChange={props.onRevenueInputModeFilter}>
+        <option value="">全部</option><option value="direct">直接填写</option><option value="cumulative">累计计算</option>
+      </SelectField>
+      <SelectField label="重点关注" value={props.priorityFilter} onChange={props.onPriorityFilter}>
+        <option value="">全部</option><option value="priority">重点关注</option><option value="normal">非重点</option>
+      </SelectField>
+      <button className="secondary-action creator-refresh-action" type="button" onClick={() => { props.onSearchQuery(''); props.onReset(); }}>重置</button>
       <button className="secondary-action creator-refresh-action" type="button" onClick={props.onRefresh}>
         <RefreshCw size={16} />
         <span>刷新</span>
@@ -1886,6 +1952,7 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
               <td>
                 <strong className="creator-row-name">{group.displayName}</strong>
                 <span className={`creator-row-registration creator-row-registration--${group.profiles.some((creator) => creator.registration_type === 'existing_creator') ? 'existing' : 'new'}`}>{getCreatorRegistrationTypeLabel(group.profiles)}</span>
+                <CreatorManagementBadges creator={group.profiles[0]} entityLevel />
               </td>
               <td>
                 <div className="creator-platform-lines">
@@ -1899,6 +1966,7 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
                         <span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}：{creator.platform_account}</span>
                         <span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音UID'}：{creator.platform_user_id}</span>
                         <span>主播形式：{creatorTypeLabels[creator.creator_type]}</span>
+                        <CreatorManagementBadges creator={creator} />
                       </span>
                     </div>
                   ))}
@@ -1984,6 +2052,15 @@ function CreatorTypeBadge({ type }: { type: CreatorType }) {
 
 function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
   return <span className={`creator-status-badge creator-status-badge--${status}`}>{getCreatorStatusLabel(status)}</span>;
+}
+
+function CreatorManagementBadges({ creator, entityLevel = false }: { creator: CreatorProfile; entityLevel?: boolean }) {
+  const operationStatus = creator.operation_status ?? 'normal';
+  const revenueCycle = creator.revenue_cycle == null ? 'weekly' : ['weekly', 'monthly', 'none'].includes(creator.revenue_cycle) ? creator.revenue_cycle : 'none';
+  const revenueInputMode = creator.revenue_input_mode === 'cumulative' ? 'cumulative' : 'direct';
+  const operationLabels: Record<string, string> = { normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' };
+  const cycleLabels: Record<string, string> = { weekly: '周流水', monthly: '月流水', none: '无需流水' };
+  return <span className="creator-management-badges">{entityLevel && creator.is_priority ? <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}{entityLevel ? <span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabels[operationStatus] ?? '其他'}</span> : <><span className="creator-management-badge creator-management-badge--cycle">{cycleLabels[revenueCycle] ?? '无需流水'}</span>{revenueCycle !== 'none' ? <span className="creator-management-badge creator-management-badge--input">{revenueInputMode === 'cumulative' ? '累计计算' : '直接填写'}</span> : null}</>}</span>;
 }
 
 function PlatformLogo({ platform }: { platform: CreatorPlatform }) {
@@ -4269,6 +4346,10 @@ function filterCreatorGroups(
     creatorType: string;
     registrationType: CreatorRegistrationType | '';
     status: CreatorStatusFilter;
+    operationStatus: string;
+    revenueCycle: string;
+    revenueInputMode: string;
+    priority: string;
   },
 ) {
   const searchQuery = filters.searchQuery.trim().toLowerCase();
@@ -4276,22 +4357,31 @@ function filterCreatorGroups(
   return groups.filter((group) => {
     const profiles = group.profiles;
     const hasProfile = (matches: (creator: CreatorProfile) => boolean) => profiles.some(matches);
+    const operationStatus = profiles[0]?.operation_status ?? 'normal';
+    const isPriority = profiles[0]?.is_priority ?? false;
 
-    if (filters.month && !hasProfile((creator) => (creator.guild_joined_date ?? creator.joined_date).startsWith(filters.month))) return false;
+    if (filters.operationStatus && operationStatus !== filters.operationStatus) return false;
+    if (filters.priority === 'priority' && !isPriority) return false;
+    if (filters.priority === 'normal' && isPriority) return false;
     if (filters.platform === 'dual_platform') {
       const platforms = new Set(profiles.map((creator) => creator.platform));
       if (!platforms.has('tiktok') || !platforms.has('douyin')) return false;
-    } else if (filters.platform && !hasProfile((creator) => creator.platform === filters.platform)) return false;
-    if (filters.regionId && !hasProfile((creator) => creator.region_id === filters.regionId)) return false;
-    if (filters.scoutId && !hasProfile((creator) => creator.scout_employee_id === filters.scoutId)) return false;
-    if (filters.managerId && !hasProfile((creator) => creator.manager_employee_id === filters.managerId)) return false;
-    if (filters.creatorType && !hasProfile((creator) => creator.creator_type === filters.creatorType)) return false;
-    if (filters.registrationType && !hasProfile((creator) => creator.registration_type === filters.registrationType)) return false;
-    if (filters.status !== 'all' && !hasProfile((creator) => (creator.status ?? 'active') === filters.status)) return false;
-    if (searchQuery && !hasProfile((creator) =>
-      [creator.creator_name, creator.platform_account, creator.platform_user_id, creator.platform_public_id ?? '']
-        .some((value) => value.toLowerCase().includes(searchQuery)),
-    )) return false;
+    }
+    if (!hasProfile((creator) => {
+      const revenueCycle = creator.revenue_cycle ?? 'weekly';
+      const revenueInputMode = creator.revenue_input_mode ?? 'direct';
+      return (!filters.month || (creator.guild_joined_date ?? creator.joined_date).startsWith(filters.month))
+        && (!filters.platform || filters.platform === 'dual_platform' || creator.platform === filters.platform)
+        && (!filters.regionId || creator.region_id === filters.regionId)
+        && (!filters.scoutId || creator.scout_employee_id === filters.scoutId)
+        && (!filters.managerId || creator.manager_employee_id === filters.managerId)
+        && (!filters.creatorType || creator.creator_type === filters.creatorType)
+        && (!filters.registrationType || creator.registration_type === filters.registrationType)
+        && (filters.status === 'all' || (creator.status ?? 'active') === filters.status)
+        && (!filters.revenueCycle || revenueCycle === filters.revenueCycle)
+        && (!filters.revenueInputMode || (revenueCycle !== 'none' && revenueInputMode === filters.revenueInputMode))
+        && (!searchQuery || [creator.creator_name, creator.platform_account, creator.platform_user_id, creator.platform_public_id ?? ''].some((value) => value.toLowerCase().includes(searchQuery)));
+    })) return false;
     return true;
   });
 }

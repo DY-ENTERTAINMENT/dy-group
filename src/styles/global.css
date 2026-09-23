@@ -9169,6 +9169,14 @@ button.leave-chip:disabled {
   background: #e4e4e7;
 }
 
+.creator-management-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.creator-management-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 2px 7px; border-radius: 999px; background: #f1f5f9; color: #526174; font-size: 11px; font-weight: 750; line-height: 1.1; white-space: nowrap; }
+.creator-management-badge--priority { background: #fff7df; color: #926d15; }
+.creator-management-badge--operation-normal { background: #edf8f2; color: #27765a; }
+.creator-management-badge--operation-paused, .creator-management-badge--operation-long_term_stopped { background: #fff7e8; color: #9a6813; }
+.creator-management-badge--operation-resigned, .creator-management-badge--operation-terminated, .creator-management-badge--operation-other { background: #f3f4f6; color: #697386; }
+.creator-management-badge--input { background: #f5f3ff; color: #6855a5; }
+
 .creator-view-button {
   display: inline-flex;
   align-items: center;
