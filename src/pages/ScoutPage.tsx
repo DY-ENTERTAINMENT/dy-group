@@ -2169,6 +2169,23 @@ function CreatorDetailDrawer({
             ) : null}
           </DrawerSection>
 
+          <DrawerSection title="主播管理">
+            <div className="creator-drawer-field-grid">
+              <DrawerField label="重点关注" value={primaryCreator.is_priority ? '⭐ 重点关注' : '普通关注'} />
+              <DrawerField label="运营状态" value={getOperationStatusLabel(primaryCreator.operation_status)} />
+              <DrawerField label="状态原因" value={primaryCreator.operation_status_reason ?? '—'} />
+            </div>
+          </DrawerSection>
+
+          <DrawerSection title="平台流水设置">
+            <div className="creator-platform-revenue-settings">
+              {sortCreatorProfiles(group.profiles).map((creator) => {
+                const cycle = creator.revenue_cycle ?? 'weekly';
+                return <article key={creator.id} className="creator-platform-revenue-card"><strong><PlatformLogo platform={creator.platform} />{platformLabels[creator.platform]}</strong><span>{creator.platform_account || creator.platform_user_id || '—'}</span><div className="creator-management-badges"><span className="creator-management-badge creator-management-badge--cycle">{getRevenueCycleLabel(cycle)}</span>{cycle !== 'none' ? <span className="creator-management-badge creator-management-badge--input">{creator.revenue_input_mode === 'cumulative' ? '累计计算' : '直接填写'}</span> : null}</div></article>;
+              })}
+            </div>
+          </DrawerSection>
+
           <DrawerSection title="所属资料">
             <div className="creator-drawer-field-grid">
               <DrawerField label="区域" value={getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')} />
@@ -2200,6 +2217,9 @@ function CreatorDetailDrawer({
     </div>
   );
 }
+
+function getOperationStatusLabel(status: CreatorProfile['operation_status']) { return ({ normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' }[status ?? 'normal']); }
+function getRevenueCycleLabel(cycle: CreatorProfile['revenue_cycle']) { return ({ weekly: '周流水', monthly: '月流水', none: '无需流水' }[cycle ?? 'weekly']); }
 
 function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
   return (

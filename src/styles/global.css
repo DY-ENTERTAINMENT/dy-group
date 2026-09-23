@@ -9176,6 +9176,7 @@ button.leave-chip:disabled {
 .creator-management-badge--operation-paused, .creator-management-badge--operation-long_term_stopped { background: #fff7e8; color: #9a6813; }
 .creator-management-badge--operation-resigned, .creator-management-badge--operation-terminated, .creator-management-badge--operation-other { background: #f3f4f6; color: #697386; }
 .creator-management-badge--input { background: #f5f3ff; color: #6855a5; }
+.creator-platform-revenue-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }.creator-platform-revenue-card { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 9px; }.creator-platform-revenue-card > strong { display: inline-flex; align-items: center; gap: 6px; }.creator-platform-revenue-card > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
 .creator-view-button {
   display: inline-flex;
