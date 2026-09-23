@@ -203,12 +203,11 @@ export type AgentOfflineRevenueKpiSummary = {
 };
 
 export type WeeklyRevenueSaveInput = {
-  recordId?: string;
   creatorProfileId: string;
   weekStartDate: string;
-  weekEndDate: string;
   revenueAmount: number;
   agentNote: string;
+  idempotencyKey: string;
 };
 
 export type CumulativeRevenueContext = {
@@ -578,7 +577,7 @@ export const agentService = {
   },
 
   async submitWeeklyRevenue(input: WeeklyRevenueSaveInput): Promise<WeeklyRevenueRecord> {
-    return saveWeeklyRevenueRecord(input, 'submitted');
+    return saveWeeklyRevenueRecord(input);
   },
 
   async getCumulativeRevenueContext(creatorProfileId: string, dataDate: string): Promise<CumulativeRevenueContext> {
@@ -791,48 +790,16 @@ function normalizeRevenuePeriodMonth(month: string) {
   throw new Error('流水周期月份必须是 YYYY-MM 或 YYYY-MM-DD。');
 }
 
-async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput, status: Extract<WeeklyRevenueStatus, 'submitted'>) {
-  await ensureWeeklyRevenuePeriodFlow(input.weekStartDate, input.weekEndDate);
-
-  if (input.recordId) {
-    const { data, error } = await db.rpc('update_own_creator_weekly_revenue_record', {
-      p_record_id: input.recordId,
-      p_revenue_amount: input.revenueAmount,
-      p_agent_note: input.agentNote.trim() || null,
-    });
-    if (error) throw error;
-    return mapWeeklyRevenueRow(data);
-  }
-
-  const payload = {
-    creator_profile_id: input.creatorProfileId,
-    week_start_date: input.weekStartDate,
-    week_end_date: input.weekEndDate,
-    revenue_amount: input.revenueAmount,
-    agent_note: input.agentNote.trim() || null,
-    status,
-    source: 'manual',
-  };
-
-  const query = db
-    .from('creator_weekly_revenue_records')
-    .insert(payload)
-    .select(weeklyRevenueSelect)
-    .single();
-
-  const { data, error } = await query;
+async function saveWeeklyRevenueRecord(input: WeeklyRevenueSaveInput) {
+  const { data, error } = await db.rpc('save_direct_creator_weekly_revenue', {
+    p_creator_profile_id: input.creatorProfileId,
+    p_data_date: input.weekStartDate,
+    p_revenue_amount: input.revenueAmount,
+    p_agent_note: input.agentNote.trim() || null,
+    p_idempotency_key: input.idempotencyKey,
+  });
   if (error) throw error;
   return mapWeeklyRevenueRow(data);
-}
-
-async function ensureWeeklyRevenuePeriodFlow(weekStartDate: string, weekEndDate: string) {
-  const { data, error } = await db.rpc('creator_weekly_revenue_period_end', { p_period_start: weekStartDate });
-  if (error) {
-    throw new Error('周期流水数据库 003 尚未启用，暂不能保存新周期流水。');
-  }
-  if (data && String(data) !== weekEndDate) {
-    throw new Error('前端周期与数据库周期规则不一致，暂不能保存。');
-  }
 }
 
 function mapCreatorRow(row: any): CreatorProfile {

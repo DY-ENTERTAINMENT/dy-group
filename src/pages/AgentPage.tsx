@@ -2989,7 +2989,17 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
   const [agentNote, setAgentNote] = useState(row.record?.agent_note ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const unitLabel = getCreatorRevenueUnitLabel(row.creator.platform);
+
+  useEffect(() => {
+    setIdempotencyKey(null);
+  }, [row.creator.id, row.period.startIso]);
+
+  function closeModal() {
+    setIdempotencyKey(null);
+    onClose();
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3001,15 +3011,17 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
 
     setSaving(true);
     setError('');
+    const requestIdempotencyKey = idempotencyKey ?? crypto.randomUUID();
+    if (!idempotencyKey) setIdempotencyKey(requestIdempotencyKey);
     try {
       const record = await agentService.submitWeeklyRevenue({
-        recordId: row.record?.id,
         creatorProfileId: row.creator.id,
         weekStartDate: row.period.startIso,
-        weekEndDate: row.period.endIso,
         revenueAmount: parsedAmount.value,
         agentNote,
+        idempotencyKey: requestIdempotencyKey,
       });
+      setIdempotencyKey(null);
       onSubmitted(record);
     } catch (saveError) {
       setError(`提交失败：${getErrorMessage(saveError)}`);
@@ -3022,8 +3034,8 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
     <SystemModal
       title={row.status === 'filled' ? '编辑周期流水' : '填写周期流水'}
       ariaLabel="周期流水"
-      onClose={onClose}
-      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="weekly-operation-form" disabled={saving}>保存</button></>}
+      onClose={closeModal}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={closeModal}>关闭</button><button className="primary-button compact-button" type="submit" form="weekly-operation-form" disabled={saving}>保存</button></>}
     >
       <form id="weekly-operation-form" className="weekly-operation-form" onSubmit={submit}>
         <div className="agent-operation-modal-head">
@@ -3041,13 +3053,13 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
         <label className="form-field agent-weekly-revenue-field">
           <span>流水</span>
           <div className="agent-weekly-revenue-input-row">
-            <input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="尚未填写" />
+            <input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => { setIdempotencyKey(null); setAmount(event.target.value); }} placeholder="尚未填写" />
             <b>{unitLabel}</b>
           </div>
         </label>
         <label className="form-field agent-weekly-revenue-note">
           <span>备注</span>
-          <textarea value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" />
+          <textarea value={agentNote} onChange={(event) => { setIdempotencyKey(null); setAgentNote(event.target.value); }} placeholder="选填" />
         </label>
         {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
       </form>
