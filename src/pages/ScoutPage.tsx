@@ -162,6 +162,9 @@ const emptyCreatorEntitySharedForm: CreatorEntitySharedFormValues = {
   bank_account: '',
   secondary_scout_employee_id: '',
   secondary_manager_employee_id: '',
+  is_priority: false,
+  operation_status: 'normal',
+  operation_status_reason: '',
   platforms: [],
 };
 
@@ -474,6 +477,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     try {
       if (editingCreatorEntityId) {
         await scoutService.saveCreatorEntitySharedData(editingCreatorEntityId, creatorEntitySharedForm);
+        await scoutService.saveCreatorEntityManagementSettings(editingCreatorEntityId, creatorEntitySharedForm);
         await scoutService.updateCreatorEntityPlatformProfiles(editingCreatorEntityId, creatorEntitySharedForm.platforms);
         setMessage('主播共同资料已更新。');
       } else if (editingCreator) {
@@ -653,10 +657,11 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     if (creator.creator_entity_id) {
       setError('');
       try {
-        const [collaborators, entityProfiles, birthday] = await Promise.all([
+        const [collaborators, entityProfiles, birthday, managementSettings] = await Promise.all([
           scoutService.getCreatorEntityCollaborators(creator.creator_entity_id),
           scoutService.listCreatorEntityActivePlatformProfiles(creator.creator_entity_id),
           scoutService.getCreatorEntityBirthday(creator.creator_entity_id),
+          scoutService.getCreatorEntityManagementSettings(creator.creator_entity_id),
         ]);
         setCreatorEntityCollaborators(collaborators);
         setEditingCreator(null);
@@ -674,7 +679,13 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           bank_account: creator.bank_account ?? '',
           secondary_scout_employee_id: collaborators.find((collaborator) => collaborator.assignment_type === 'scout')?.employee_id ?? '',
           secondary_manager_employee_id: collaborators.find((collaborator) => collaborator.assignment_type === 'manager')?.employee_id ?? '',
-          platforms: entityProfiles,
+          is_priority: managementSettings[0]?.is_priority ?? false,
+          operation_status: managementSettings[0]?.operation_status ?? 'normal',
+          operation_status_reason: managementSettings[0]?.operation_status_reason ?? '',
+          platforms: entityProfiles.map((profile) => {
+            const setting = managementSettings.find((item) => item.creator_profile_id === profile.id);
+            return { ...profile, revenue_cycle: setting?.revenue_cycle ?? 'weekly', revenue_input_mode: setting?.revenue_input_mode ?? 'direct' };
+          }),
         });
         setCreatorModalOpen(true);
       } catch (collaboratorError) {
@@ -3809,6 +3820,15 @@ function CreatorEntitySharedModal(props: {
           <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => updateValues({ manager_employee_id: value })} placeholder="搜索经纪人" requireQueryBeforeResults excludeLeftOptions required />
           <SearchableEmployeeSelect label="第二位经纪人" value={props.values.secondary_manager_employee_id} options={secondaryManagerOptions.filter((manager) => manager.id !== props.values.manager_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_manager_employee_id: value })} onClear={() => updateValues({ secondary_manager_employee_id: '' })} placeholder="搜索第二位经纪人" requireQueryBeforeResults excludeLeftOptions />
 
+          <div className="form-section-title">主播管理设置</div>
+          <SelectField label="重点关注" value={props.values.is_priority ? 'priority' : 'normal'} onChange={(value) => updateValues({ is_priority: value === 'priority' })}>
+            <option value="normal">普通</option><option value="priority">⭐ 重点关注</option>
+          </SelectField>
+          <SelectField label="运营状态" value={props.values.operation_status} onChange={(value) => updateValues({ operation_status: value as CreatorEntitySharedFormValues['operation_status'] })}>
+            <option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="other">其他</option>
+          </SelectField>
+          <label className="form-field form-field-wide"><span>运营状态原因</span><textarea value={props.values.operation_status_reason} onChange={(event) => updateValues({ operation_status_reason: event.target.value })} placeholder="选填" /></label>
+
           {props.values.platforms.map((platformValues) => {
             const isTikTok = platformValues.platform === 'tiktok';
             return (
@@ -3824,6 +3844,12 @@ function CreatorEntitySharedModal(props: {
                       {creatorTypeLabels[type]}
                     </option>
                   ))}
+                </SelectField>
+                <SelectField label="流水周期" value={platformValues.revenue_cycle ?? 'weekly'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_cycle: value as 'weekly' | 'monthly' | 'none' })}>
+                  <option value="weekly">每周</option><option value="monthly">每月</option><option value="none">不要求</option>
+                </SelectField>
+                <SelectField label="流水填写方式" value={platformValues.revenue_input_mode ?? 'direct'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_input_mode: value as 'direct' | 'cumulative' })}>
+                  <option value="direct">直接填写流水</option><option value="cumulative">累计流水自动计算（仅配置）</option>
                 </SelectField>
               </div>
             );

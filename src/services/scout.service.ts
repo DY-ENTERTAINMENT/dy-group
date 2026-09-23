@@ -147,6 +147,9 @@ export type CreatorEntitySharedFormValues = {
   bank_account: string;
   secondary_scout_employee_id: string;
   secondary_manager_employee_id: string;
+  is_priority: boolean;
+  operation_status: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'other';
+  operation_status_reason: string;
   platforms: CreatorEntityPlatformEditValues[];
 };
 
@@ -158,6 +161,8 @@ export type CreatorEntityPlatformEditValues = {
   platform_account: string;
   platform_public_id: string;
   creator_type: CreatorType;
+  revenue_cycle?: 'weekly' | 'monthly' | 'none';
+  revenue_input_mode?: 'direct' | 'cumulative';
 };
 
 export type CreatorEntityCollaborator = {
@@ -166,6 +171,7 @@ export type CreatorEntityCollaborator = {
   display_name: string;
   employee_status: EmployeeStatus;
 };
+export type CreatorEntityManagementSettings = { is_priority: boolean; operation_status: CreatorEntitySharedFormValues['operation_status']; operation_status_reason: string | null; creator_profile_id: string; revenue_cycle: 'weekly' | 'monthly' | 'none'; revenue_input_mode: 'direct' | 'cumulative' };
 
 export type CreatorAdditionalPlatformFormValues = {
   joined_date: string;
@@ -619,6 +625,21 @@ export const scoutService = {
     const { data, error } = await db.rpc('get_creator_entity_birthday', { p_creator_entity_id: creatorEntityId });
     if (error) throw error;
     return data ?? null;
+  },
+
+  async getCreatorEntityManagementSettings(creatorEntityId: string) {
+    const { data, error } = await db.rpc('get_creator_entity_management_settings', { p_creator_entity_id: creatorEntityId });
+    if (error) throw error;
+    return (data ?? []) as CreatorEntityManagementSettings[];
+  },
+
+  async saveCreatorEntityManagementSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
+    const { error } = await db.rpc('save_creator_entity_management_settings', {
+      p_creator_entity_id: creatorEntityId, p_is_priority: values.is_priority,
+      p_operation_status: values.operation_status, p_operation_status_reason: values.operation_status_reason.trim() || null,
+      p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: p.revenue_input_mode ?? 'direct' })),
+    });
+    if (error) throw error;
   },
 
   async updateCreatorEntityPlatformProfiles(creatorEntityId: string, profiles: CreatorEntityPlatformEditValues[]) {
