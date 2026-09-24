@@ -2273,6 +2273,8 @@ type OperationFilters = {
   status: '' | OperationStatus;
   platform: OperationPlatformFilter;
   creatorType: '' | '5+1' | 'non_5_1';
+  revenueInputMode: '' | 'direct' | 'cumulative';
+  priority: '' | 'priority' | 'normal';
   search: string;
   periodStart: string;
   customStart: string;
@@ -2345,6 +2347,8 @@ function AgentPeriodRevenuePanel(props: {
     status: '',
     platform: '',
     creatorType: '',
+    revenueInputMode: '',
+    priority: '',
     search: '',
     periodStart: '',
     customStart: monthDateRange.startIso,
@@ -2354,6 +2358,7 @@ function AgentPeriodRevenuePanel(props: {
   const [recordsByPeriod, setRecordsByPeriod] = useState<Record<string, Record<string, WeeklyRevenueRecord>>>({});
   const [previousRecords, setPreviousRecords] = useState<Record<string, WeeklyRevenueRecord>>({});
   const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyRefreshRevision, setWeeklyRefreshRevision] = useState(0);
   const [featureUnavailable, setFeatureUnavailable] = useState(false);
   const [message, setMessage] = useState('');
   const [activeRow, setActiveRow] = useState<OperationRow | null>(null);
@@ -2446,7 +2451,7 @@ function AgentPeriodRevenuePanel(props: {
     return () => {
       active = false;
     };
-  }, [currentPreviousPeriod, effectivePeriodOptions, sortedCreators]);
+  }, [currentPreviousPeriod, effectivePeriodOptions, sortedCreators, weeklyRefreshRevision]);
 
   const currentRows = useMemo(
     () => buildOperationStreamerRows(sortedCreators, effectivePeriodOptions, recordsByPeriod, filters, todayIso),
@@ -2466,6 +2471,10 @@ function AgentPeriodRevenuePanel(props: {
 
   function updateFilter<Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function resetRowFilters() {
+    setFilters((current) => ({ ...current, status: '', platform: '', creatorType: '', revenueInputMode: '', priority: '', search: '' }));
   }
 
   function updateMonth(value: string) {
@@ -2506,7 +2515,7 @@ function AgentPeriodRevenuePanel(props: {
     setFilters((current) => ({ ...current, quickRange: 'previous', status: 'missing', periodStart: reminderPreviousPeriod.startIso }));
   }
 
-  function updateRecord(record: WeeklyRevenueRecord) {
+  function updateRecord(record: WeeklyRevenueRecord, successMessage = '周期流水已保存。') {
     setRecordsByPeriod((current) => ({
       ...current,
       [record.week_start_date]: {
@@ -2514,8 +2523,13 @@ function AgentPeriodRevenuePanel(props: {
         [record.creator_profile_id]: record,
       },
     }));
-    setMessage('周期流水已保存。');
+    setMessage(successMessage);
     setActiveRow(null);
+  }
+
+  function refreshRevenueWorkbench() {
+    setWeeklyRefreshRevision((current) => current + 1);
+    props.onRefresh();
   }
 
   function updateSettingsMonthPeriods(periods: RevenuePeriodRange[]) {
@@ -2563,6 +2577,7 @@ function AgentPeriodRevenuePanel(props: {
             refreshing={props.loading || weeklyLoading || periodLoading}
             canSetPeriods={canSetPeriods}
             onOpenPeriodSettings={() => setPeriodModalOpen(true)}
+            onResetFilters={resetRowFilters}
           />
 
           <CurrentOperationTable
@@ -2587,6 +2602,7 @@ function AgentPeriodRevenuePanel(props: {
           row={activeRow}
           onClose={() => setActiveRow(null)}
           onSubmitted={updateRecord}
+          onRefresh={refreshRevenueWorkbench}
         />
       ) : null}
 
@@ -2633,11 +2649,13 @@ function OperationFilterBar(props: {
   refreshing: boolean;
   canSetPeriods: boolean;
   onOpenPeriodSettings: () => void;
+  onResetFilters: () => void;
 }) {
   const dateRangeLabel = formatDateRangeText(props.effectiveDateRange.startIso, props.effectiveDateRange.endIso);
 
   return (
     <div className="agent-operation-filter-panel">
+      <p className="agent-operation-filter-description">填写方式及重点关注根据主播资料中的「主播管理设置」自动同步；如需调整，请前往主播资料编辑。累计填写根据平台当前累计流水自动计算周期流水，直接填写沿用原有周流水填写方式。</p>
       <div className="agent-operation-filter-row agent-operation-filter-row--primary">
         <div className="agent-operation-quick-range" role="group" aria-label="时间范围">
           <span>时间范围</span>
@@ -2689,12 +2707,23 @@ function OperationFilterBar(props: {
       </div>
       <div className="agent-operation-filter-row agent-operation-filter-row--secondary">
         <TextField label="搜索" value={props.filters.search} onChange={(value) => props.onFilter('search', value)} placeholder="搜索主播名 / 平台 UID / 平台账号" />
+        <SelectField label="填写方式" value={props.filters.revenueInputMode} onChange={(value) => props.onFilter('revenueInputMode', value as OperationFilters['revenueInputMode'])}>
+          <option value="">全部</option>
+          <option value="direct">直接填写</option>
+          <option value="cumulative">累计填写</option>
+        </SelectField>
+        <SelectField label="重点关注" value={props.filters.priority} onChange={(value) => props.onFilter('priority', value as OperationFilters['priority'])}>
+          <option value="">全部</option>
+          <option value="priority">重点主播</option>
+          <option value="normal">普通主播</option>
+        </SelectField>
         {props.canSetPeriods ? (
           <button className="secondary-button compact-button agent-period-settings-button" type="button" onClick={props.onOpenPeriodSettings}>
             <Settings size={15} />
             <span>设置本月周期</span>
           </button>
         ) : null}
+        <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onResetFilters}>重置筛选</button>
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onRefresh} disabled={props.refreshing}><RefreshCw size={15} /><span>刷新</span></button>
       </div>
     </div>
@@ -2977,9 +3006,9 @@ function RevenuePeriodSettingsModal({ month, periods, saving, onClose, onSaved }
   );
 }
 
-function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
+function WeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord, successMessage?: string) => void; onRefresh: () => void }) {
   if (row.creator.revenue_input_mode === 'cumulative') {
-    return <CumulativeWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} />;
+    return <CumulativeWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} onRefresh={onRefresh} />;
   }
   return <DirectWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} />;
 }
@@ -3067,53 +3096,128 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
   );
 }
 
-function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
+function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord, successMessage?: string) => void; onRefresh: () => void }) {
+  const permissions = usePermissions();
+  // The backend derives its canonical week from this date. Use the selected cell's
+  // canonical period start so an historical cell can never silently target today.
+  const dataDate = row.period.startIso;
   const [amount, setAmount] = useState('');
-  const [dataDate, setDataDate] = useState(getMalaysiaDate(new Date()));
   const [agentNote, setAgentNote] = useState('');
   const [context, setContext] = useState<CumulativeRevenueContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(true);
+  const [contextRevision, setContextRevision] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetAmount, setResetAmount] = useState('');
+  const [resetReason, setResetReason] = useState('');
+  const [resetIdempotencyKey, setResetIdempotencyKey] = useState<string | null>(null);
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetError, setResetError] = useState('');
   const unitLabel = getCreatorRevenueUnitLabel(row.creator.platform);
   const parsedAmount = parseWeeklyAmount(amount);
+  const parsedResetAmount = parseWeeklyAmount(resetAmount);
   const isFirstBaseline = !context?.chainActive;
+  const isHistoricalCumulativePeriod = Boolean(context?.chainActive && context.latestDataDate && dataDate < context.latestDataDate);
   const isDecrease = !parsedAmount.error && context?.latestCumulativeAmount != null && parsedAmount.value < context.latestCumulativeAmount;
   const preview = !parsedAmount.error && context?.latestCumulativeAmount != null && !isFirstBaseline && !isDecrease
     ? (context.openingCumulativeAmount == null ? parsedAmount.value - context.latestCumulativeAmount : parsedAmount.value - context.openingCumulativeAmount)
     : null;
 
+  function refreshContext() {
+    setContextRevision((current) => current + 1);
+  }
+
+  function clearSubmissionKey() {
+    setIdempotencyKey(null);
+    setSuccess('');
+  }
+
   useEffect(() => {
     let active = true;
+    setLoadingContext(true);
     agentService.getCumulativeRevenueContext(row.creator.id, dataDate)
       .then((value) => { if (active) setContext(value); })
       .catch((loadError) => { if (active) setError(`读取累计基准失败：${getErrorMessage(loadError)}`); })
       .finally(() => { if (active) setLoadingContext(false); });
     return () => { active = false; };
+  }, [contextRevision, dataDate, row.creator.id]);
+
+  useEffect(() => {
+    setIdempotencyKey(null);
+    setResetIdempotencyKey(null);
   }, [dataDate, row.creator.id]);
+
+  function openReset() {
+    setResetOpen(true);
+    setResetError('');
+    setResetIdempotencyKey(null);
+    setResetAmount(context?.latestCumulativeAmount == null ? '' : formatAmountInput(context.latestCumulativeAmount));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isHistoricalCumulativePeriod) { setError(cumulativeChronologyMessage); return; }
     if (parsedAmount.error) { setError(parsedAmount.error); return; }
     if (isDecrease) { setError('当前累计低于上次累计。请联系 Super Admin 重置基准；系统不会生成负流水。'); return; }
     setSaving(true);
     setError('');
+    const requestIdempotencyKey = idempotencyKey ?? crypto.randomUUID();
+    if (!idempotencyKey) setIdempotencyKey(requestIdempotencyKey);
     try {
       const result = await agentService.submitCumulativeRevenue({
-        creatorProfileId: row.creator.id, cumulativeAmount: parsedAmount.value, dataDate, agentNote, idempotencyKey: crypto.randomUUID(),
+        creatorProfileId: row.creator.id, cumulativeAmount: parsedAmount.value, dataDate, agentNote, idempotencyKey: requestIdempotencyKey,
       });
-      if (result.weeklyRecord) onSubmitted(result.weeklyRecord);
-      else onClose();
+      setIdempotencyKey(null);
+      refreshContext();
+      onRefresh();
+      if (result.weeklyRecord) {
+        onSubmitted(result.weeklyRecord, '累计流水填写成功。本周流水已按后台计算更新。');
+        return;
+      }
+      setAmount('');
+      setSuccess('累计流水基准已建立。下一次填写新的平台累计流水时，系统将自动计算期间新增流水。');
     } catch (saveError) {
-      setError(`提交失败：${getErrorMessage(saveError)}`);
+      const detail = getErrorMessage(saveError);
+      setError(isCumulativeChronologyError(detail)
+        ? cumulativeChronologyMessage
+        : `提交失败：${detail}${isAmbiguousRevenueRequest(saveError) ? ' 请求结果未确认，请使用相同内容重试；系统会使用同一幂等键安全处理。' : ''}`);
     } finally {
       setSaving(false);
     }
   }
 
+  async function submitReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (parsedResetAmount.error) { setResetError(parsedResetAmount.error); return; }
+    if (!resetReason.trim()) { setResetError('请填写重置原因。'); return; }
+    setResetSaving(true);
+    setResetError('');
+    const requestIdempotencyKey = resetIdempotencyKey ?? crypto.randomUUID();
+    if (!resetIdempotencyKey) setResetIdempotencyKey(requestIdempotencyKey);
+    try {
+      await agentService.resetCumulativeRevenueBaseline({
+        creatorProfileId: row.creator.id, baselineAmount: parsedResetAmount.value, dataDate, reason: resetReason, idempotencyKey: requestIdempotencyKey,
+      });
+      setResetIdempotencyKey(null);
+      setResetOpen(false);
+      setResetReason('');
+      refreshContext();
+      onRefresh();
+      setSuccess('累计流水基准已重置并建立新的基准。历史流水不会被删除。');
+    } catch (saveError) {
+      const detail = getErrorMessage(saveError);
+      setResetError(`重置失败：${detail}${isAmbiguousRevenueRequest(saveError) ? ' 请求结果未确认，请使用相同内容重试；系统会使用同一幂等键安全处理。' : ''}`);
+    } finally {
+      setResetSaving(false);
+    }
+  }
+
   return (
     <SystemModal title="填写累计流水" ariaLabel="累计流水" onClose={onClose}
-      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="cumulative-weekly-operation-form" disabled={saving || loadingContext}>{saving ? '保存中...' : '保存'}</button></>}
+      footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button><button className="primary-button compact-button" type="submit" form="cumulative-weekly-operation-form" disabled={saving || loadingContext || isHistoricalCumulativePeriod}>{saving ? '保存中...' : isFirstBaseline ? '建立基准' : '确认填写'}</button></>}
     >
       <form id="cumulative-weekly-operation-form" className="weekly-operation-form" onSubmit={submit}>
         <div className="agent-operation-modal-head"><PlatformPill platform={row.creator.platform} /><OperationStatusBadge status={row.status} /></div>
@@ -3121,19 +3225,35 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Oper
           <DrawerField label="主播" value={row.creator.creator_name || '-'} />
           <DrawerField label="平台" value={platformLabels[row.creator.platform]} />
           <DrawerField label="UID" value={row.creator.platform_user_id} />
-          <DrawerField label="周期" value={row.period.label} />
-          <DrawerField label="上次累计" value={context?.latestCumulativeAmount == null ? '-' : `${formatRevenueAmount(context.latestCumulativeAmount)} ${unitLabel}`} />
+          <DrawerField label="填写周期" value={row.period.label} />
+          <DrawerField label="上次平台累计" value={context?.latestCumulativeAmount == null ? '-' : `${formatRevenueAmount(context.latestCumulativeAmount)} ${unitLabel}`} />
           <DrawerField label="本期基准" value={context?.openingCumulativeAmount == null ? '-' : `${formatRevenueAmount(context.openingCumulativeAmount)} ${unitLabel}`} />
         </div>
         {loadingContext ? <p className="agent-operation-alert">正在读取累计基准...</p> : null}
-        {isFirstBaseline && !loadingContext ? <p className="form-alert agent-operation-alert">首次累计，仅建立基准，不产生本期流水。</p> : null}
-        <label className="form-field agent-weekly-revenue-field"><span>数据日期</span><input type="date" value={dataDate} onChange={(event) => setDataDate(event.target.value)} required /></label>
-        <label className="form-field agent-weekly-revenue-field"><span>后台当前累计</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入当前累计" /><b>{unitLabel}</b></div></label>
-        {preview != null ? <p className="form-success agent-operation-alert">预计本期流水：{formatRevenueAmount(preview)} {unitLabel}</p> : null}
-        {isDecrease ? <p className="form-alert agent-operation-alert">当前累计低于上次累计，不能保存。请联系 Super Admin 处理 reset。</p> : null}
-        <label className="form-field agent-weekly-revenue-note"><span>备注</span><textarea value={agentNote} onChange={(event) => setAgentNote(event.target.value)} placeholder="选填" /></label>
+        {isFirstBaseline && !loadingContext ? <p className="form-alert agent-operation-alert">当前需要重新建立累计流水基准。首次填写仅建立累计流水计算基准，不会产生本周期流水。</p> : null}
+        {isHistoricalCumulativePeriod && context?.latestDataDate ? <p className="form-alert agent-operation-alert">{cumulativeChronologyMessage}<br />当前填写周期：{row.period.label}<br />最新累计记录：{formatDateForPeriod(parseIsoDate(context.latestDataDate))}</p> : null}
+        {success ? <p className="form-success agent-operation-alert">{success}</p> : null}
+        <label className="form-field agent-weekly-revenue-field"><span>平台当前累计</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => { clearSubmissionKey(); setAmount(event.target.value); }} placeholder="请输入当前累计" disabled={isHistoricalCumulativePeriod} /><b>{unitLabel}</b></div></label>
+        {preview != null ? <p className="form-success agent-operation-alert">本周期预计流水：+{formatRevenueAmount(preview)} {unitLabel}（后台提交结果为准）</p> : null}
+        {isDecrease ? <p className="form-alert agent-operation-alert">当前累计低于上次累计，不能保存。请联系 Super Admin 重置基准；系统不会生成负流水。</p> : null}
+        <label className="form-field agent-weekly-revenue-note"><span>备注</span><textarea value={agentNote} onChange={(event) => { clearSubmissionKey(); setAgentNote(event.target.value); }} placeholder="选填" /></label>
         {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
       </form>
+
+      {permissions.isSuperAdmin && context?.chainActive && !loadingContext ? (
+        <div className="agent-operation-reset-section">
+          <button className="secondary-button compact-button" type="button" onClick={openReset}>重置累计基准</button>
+          {resetOpen ? (
+            <form className="weekly-operation-form" onSubmit={submitReset}>
+              <p className="form-alert agent-operation-alert">重置不会删除历史流水。重置后将以新的累计值建立基准，之后的累计填写会自动计算期间新增流水。</p>
+              <label className="form-field agent-weekly-revenue-field"><span>新的累计基准</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={resetAmount} onChange={(event) => { setResetIdempotencyKey(null); setResetAmount(event.target.value); }} placeholder="请输入新的累计基准" /><b>{unitLabel}</b></div></label>
+              <label className="form-field agent-weekly-revenue-note"><span>重置原因</span><textarea value={resetReason} onChange={(event) => { setResetIdempotencyKey(null); setResetReason(event.target.value); }} required placeholder="必须填写" /></label>
+              {resetError ? <p className="form-alert agent-operation-alert">{resetError}</p> : null}
+              <div className="form-actions"><button className="secondary-button compact-button" type="button" onClick={() => setResetOpen(false)}>取消</button><button className="danger-button compact-button" type="submit" disabled={resetSaving}>{resetSaving ? '重置中...' : '确认重置累计基准'}</button></div>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
     </SystemModal>
   );
 }
@@ -3531,6 +3651,12 @@ function buildOperationStreamerRows(
     if (filters.creatorType === 'non_5_1') {
       visibleProfiles = visibleProfiles.filter((profile) => profile.creator_type !== '5+1');
     }
+    if (filters.revenueInputMode) {
+      visibleProfiles = visibleProfiles.filter((profile) => profile.revenue_cycle !== 'none' && (profile.revenue_input_mode ?? 'direct') === filters.revenueInputMode);
+    }
+    if (filters.priority) {
+      visibleProfiles = visibleProfiles.filter((profile) => (profile.is_priority === true) === (filters.priority === 'priority'));
+    }
     if (visibleProfiles.length === 0) return [];
 
     if (normalizedSearch && !matchesOperationSearch(visibleProfiles, normalizedSearch)) return [];
@@ -3861,5 +3987,16 @@ function getErrorMessage(error: unknown) {
     if (typeof message === 'string' && message.trim()) return message;
   }
   return '未知错误';
+}
+
+function isAmbiguousRevenueRequest(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return /network|fetch|timeout|timed out|connection|offline|abort/.test(message);
+}
+
+const cumulativeChronologyMessage = '当前累计流水已有较新的记录，不能补填更早周期的累计值。请填写最新周期，或由管理员检查累计基准。';
+
+function isCumulativeChronologyError(message: string) {
+  return message.includes('Data date cannot be earlier than the latest cumulative observation.');
 }
 

@@ -226,6 +226,11 @@ export type CumulativeRevenueSubmitResult = {
   calculatedPeriodAmount: number | null;
 };
 
+export type CumulativeRevenueResetResult = {
+  entryKind: 'reset';
+  idempotent: boolean;
+};
+
 export type RevenuePeriodSettingSource = 'custom' | 'fallback';
 
 export type RevenuePeriodSetting = {
@@ -612,6 +617,21 @@ export const agentService = {
     };
   },
 
+  async resetCumulativeRevenueBaseline(input: { creatorProfileId: string; baselineAmount: number; dataDate: string; reason: string; idempotencyKey: string }): Promise<CumulativeRevenueResetResult> {
+    const { data, error } = await db.rpc('reset_creator_cumulative_revenue_baseline', {
+      p_creator_profile_id: input.creatorProfileId,
+      p_new_baseline_amount: input.baselineAmount,
+      p_data_date: input.dataDate,
+      p_reason: input.reason.trim(),
+      p_idempotency_key: input.idempotencyKey,
+    });
+    if (error) throw error;
+    return {
+      entryKind: 'reset',
+      idempotent: Boolean(data?.idempotent),
+    };
+  },
+
   async listAdjustments(profileId: string): Promise<AdjustmentRequest[]> {
     const { data, error } = await db
       .from('creator_adjustment_requests')
@@ -815,6 +835,7 @@ function mapCreatorRow(row: any): CreatorProfile {
     scout_employee_id: row.scout_employee_id,
     scout_profile_id: row.scout_profile_id,
     manager_employee_id: row.manager_employee_id,
+    is_priority: row.is_priority === true,
     revenue_cycle: row.revenue_cycle ?? 'weekly',
     revenue_input_mode: row.revenue_input_mode ?? 'direct',
     creator_type: row.creator_type,

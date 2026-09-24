@@ -254,6 +254,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
   const [associationOpen, setAssociationOpen] = useState(false);
+  const [associationCurrentEntityId, setAssociationCurrentEntityId] = useState<string | null>(null);
   const [associationCurrentProfile, setAssociationCurrentProfile] = useState<CreatorEntityPlatformEditValues | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -696,7 +697,6 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           operation_status_reason: managementSettings[0]?.operation_status_reason ?? '',
           platforms: configuredPlatforms,
         });
-        setAssociationCurrentProfile(configuredPlatforms.find((profile) => profile.id === creator.id) ?? null);
         setCreatorModalOpen(true);
       } catch (collaboratorError) {
         setError(`读取第二协作者失败：${getErrorMessage(collaboratorError)}`);
@@ -733,6 +733,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorEntityForm(emptyCreatorEntityForm);
     setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
     setCreatorEntityCollaborators([]);
+    setAssociationCurrentEntityId(null);
     setAssociationCurrentProfile(null);
   }
 
@@ -763,6 +764,24 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       creator_type: primaryCreator.creator_type,
     });
     setAddingCreatorPlatform({ creatorEntityId: primaryCreator.creator_entity_id, platform });
+  }
+
+  async function openExistingCrossPlatformAssociation(group: CreatorProfileGroup) {
+    const currentCreator = group.profiles[0];
+    const creatorEntityId = currentCreator?.creator_entity_id;
+    if (!permissions.isSuperAdmin || !creatorEntityId || group.profiles.length !== 1) return;
+
+    setError('');
+    try {
+      const profiles = await scoutService.listCreatorEntityActivePlatformProfiles(creatorEntityId);
+      const currentProfile = profiles.find((profile) => profile.id === currentCreator.id);
+      if (!currentProfile) throw new Error('无法读取当前平台账号，请关闭详情后重试。');
+      setAssociationCurrentEntityId(creatorEntityId);
+      setAssociationCurrentProfile(currentProfile);
+      setAssociationOpen(true);
+    } catch (associationError) {
+      setError(`读取平台账号失败：${getErrorMessage(associationError)}`);
+    }
   }
 
   function closeCreatorAdditionalPlatformModal() {
@@ -914,10 +933,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           canEdit={mode === 'management-streamers' && canManageCreators}
           canManageStatus={canManageCreatorStatus}
+          canAssociateExistingPlatform={permissions.isSuperAdmin}
           onClose={closeCreatorDetails}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
           onAddPlatform={openCreatorAdditionalPlatform}
+          onAssociateExistingPlatform={openExistingCrossPlatformAssociation}
         />
       ) : null}
 
@@ -980,7 +1001,6 @@ export function ScoutPage({ mode }: ScoutPageProps) {
             onChange={setCreatorEntitySharedForm}
             onClose={closeCreatorModal}
             onSubmit={submitCreator}
-            onOpenCrossPlatformAssociation={permissions.isSuperAdmin && associationCurrentProfile ? () => { setCreatorModalOpen(false); setAssociationOpen(true); } : undefined}
           />
         ) : (
           <CreatorModal
@@ -1000,7 +1020,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         )
       ) : null}
 
-      {associationOpen && editingCreatorEntityId && associationCurrentProfile ? <CrossPlatformAssociationModal currentProfile={associationCurrentProfile} currentEntityId={editingCreatorEntityId} onClose={() => setAssociationOpen(false)} onSuccess={() => { setAssociationOpen(false); setAssociationCurrentProfile(null); setEditingCreatorEntityId(null); setCreatorEntitySharedForm(emptyCreatorEntitySharedForm); setMessage('双平台账号已关联。'); loadData(); }} /> : null}
+      {associationOpen && associationCurrentEntityId && associationCurrentProfile ? <CrossPlatformAssociationModal currentProfile={associationCurrentProfile} currentEntityId={associationCurrentEntityId} onClose={() => { setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); }} onSuccess={() => { const associatedEntityId = associationCurrentEntityId; setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); setMessage('双平台账号已关联。'); void (async () => { const refreshedCreators = await loadData(); const refreshedGroup = refreshedCreators ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId).find((group) => group.profiles.some((profile) => profile.creator_entity_id === associatedEntityId)) : null; if (refreshedGroup) setSelectedCreatorGroup(refreshedGroup); if (associatedEntityId) { try { setCreatorEntityCollaborators(await scoutService.getCreatorEntityCollaborators(associatedEntityId)); } catch { setCreatorEntityCollaborators([]); } } })(); }} /> : null}
 
       {addingCreatorPlatform ? (
         <CreatorAdditionalPlatformModal
@@ -1966,7 +1986,7 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
                         <span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}：{creator.platform_account}</span>
                         <span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音UID'}：{creator.platform_user_id}</span>
                         <span>主播形式：{creatorTypeLabels[creator.creator_type]}</span>
-                        <CreatorManagementBadges creator={creator} />
+                        <CreatorRevenueSettingMeta creator={creator} />
                       </span>
                     </div>
                   ))}
@@ -2056,11 +2076,14 @@ function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
 
 function CreatorManagementBadges({ creator, entityLevel = false }: { creator: CreatorProfile; entityLevel?: boolean }) {
   const operationStatus = creator.operation_status ?? 'normal';
-  const revenueCycle = creator.revenue_cycle == null ? 'weekly' : ['weekly', 'monthly', 'none'].includes(creator.revenue_cycle) ? creator.revenue_cycle : 'none';
-  const revenueInputMode = creator.revenue_input_mode === 'cumulative' ? 'cumulative' : 'direct';
   const operationLabels: Record<string, string> = { normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' };
-  const cycleLabels: Record<string, string> = { weekly: '周流水', monthly: '月流水', none: '无需流水' };
-  return <span className="creator-management-badges">{entityLevel && creator.is_priority ? <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}{entityLevel ? <span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabels[operationStatus] ?? '其他'}</span> : <><span className="creator-management-badge creator-management-badge--cycle">{cycleLabels[revenueCycle] ?? '无需流水'}</span>{revenueCycle !== 'none' ? <span className="creator-management-badge creator-management-badge--input">{revenueInputMode === 'cumulative' ? '累计计算' : '直接填写'}</span> : null}</>}</span>;
+  return entityLevel ? <span className="creator-management-badges">{creator.is_priority ? <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}<span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabels[operationStatus] ?? '其他'}</span></span> : null;
+}
+
+function CreatorRevenueSettingMeta({ creator }: { creator: CreatorProfile }) {
+  const cycle = creator.revenue_cycle === 'monthly' ? '月流水' : creator.revenue_cycle === 'none' ? '不需要填写' : '周流水';
+  const value = creator.revenue_cycle === 'none' ? cycle : `${cycle} · ${creator.revenue_input_mode === 'cumulative' ? '累计填写' : '直接填写'}`;
+  return <span>流水：{value}</span>;
 }
 
 function PlatformLogo({ platform }: { platform: CreatorPlatform }) {
@@ -2073,20 +2096,24 @@ function CreatorDetailDrawer({
   managerDisplayNameByCreatorId,
   canEdit,
   canManageStatus,
+  canAssociateExistingPlatform,
   onClose,
   onEdit,
   onStatus,
   onAddPlatform,
+  onAssociateExistingPlatform,
 }: {
   group: CreatorProfileGroup;
   collaborators: CreatorEntityCollaborator[];
   managerDisplayNameByCreatorId: Record<string, string>;
   canEdit: boolean;
   canManageStatus: boolean;
+  canAssociateExistingPlatform: boolean;
   onClose: () => void;
   onEdit: (creator: CreatorProfile) => void;
   onStatus: (creator: CreatorProfile) => void;
   onAddPlatform: (group: CreatorProfileGroup, platform: CreatorPlatform) => void;
+  onAssociateExistingPlatform: (group: CreatorProfileGroup) => void;
 }) {
   const primaryCreator = group.profiles[0];
   const secondaryScoutName = collaborators.find((collaborator) => collaborator.assignment_type === 'scout')?.display_name ?? '—';
@@ -2161,12 +2188,16 @@ function CreatorDetailDrawer({
                 ) : null}
               </article>
             ))}
-            {canEdit && missingPlatform ? (
-              <button className="secondary-button compact-button" type="button" onClick={() => onAddPlatform(group, missingPlatform)}>
+            {missingPlatform ? <div className="creator-platform-actions">
+              {canEdit ? <button className="secondary-button compact-button" type="button" onClick={() => onAddPlatform(group, missingPlatform)}>
                 <Plus size={15} />
-                <span>添加{platformLabels[missingPlatform]}</span>
-              </button>
-            ) : null}
+                <span>新增{platformLabels[missingPlatform]}账号</span>
+              </button> : null}
+              {canAssociateExistingPlatform ? <button className="secondary-button compact-button" type="button" onClick={() => onAssociateExistingPlatform(group)}>
+                <Layers size={15} />
+                <span>关联现有{platformLabels[missingPlatform]}账号</span>
+              </button> : null}
+            </div> : null}
           </DrawerSection>
 
           <DrawerSection title="主播管理">
@@ -3873,7 +3904,6 @@ function CreatorEntitySharedModal(props: {
   onChange: (values: CreatorEntitySharedFormValues) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onOpenCrossPlatformAssociation?: () => void;
 }) {
   const updateValues = (values: Partial<CreatorEntitySharedFormValues>) => {
     props.onChange({ ...props.values, ...values });
@@ -3906,7 +3936,6 @@ function CreatorEntitySharedModal(props: {
           <button className="primary-button compact-button" type="submit" form="creator-entity-shared-form" disabled={props.saving}>
             {props.saving ? '保存中...' : '确认'}
           </button>
-          {props.onOpenCrossPlatformAssociation ? <button className="secondary-button compact-button" type="button" onClick={props.onOpenCrossPlatformAssociation}>关联双平台账号</button> : null}
         </>
       }
     >

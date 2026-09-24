@@ -6552,6 +6552,13 @@ button.leave-chip:disabled {
   padding: 12px;
 }
 
+.agent-operation-filter-description {
+  color: #7b8798;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .agent-operation-filter-row {
   align-items: end;
   display: flex;
@@ -6684,6 +6691,10 @@ button.leave-chip:disabled {
 
 .agent-operation-filter-row--secondary > .form-field {
   width: 320px;
+}
+
+.agent-operation-filter-row--secondary > .form-field:not(:first-child) {
+  width: 150px;
 }
 
 .agent-operation-refresh-button {
@@ -9175,7 +9186,7 @@ button.leave-chip:disabled {
 .creator-management-badge--operation-normal { background: #edf8f2; color: #27765a; }
 .creator-management-badge--operation-paused, .creator-management-badge--operation-long_term_stopped { background: #fff7e8; color: #9a6813; }
 .creator-management-badge--operation-resigned, .creator-management-badge--operation-terminated, .creator-management-badge--operation-other { background: #f3f4f6; color: #697386; }
-.creator-management-badge--input { background: #f5f3ff; color: #6855a5; }
+.creator-management-badge--input { background: #f1f5f9; color: #526174; }
 .creator-platform-revenue-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }.creator-platform-revenue-card { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 9px; }.creator-platform-revenue-card > strong { display: inline-flex; align-items: center; gap: 6px; }.creator-platform-revenue-card > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
 .creator-view-button {
@@ -9386,6 +9397,73 @@ button.leave-chip:disabled {
 
 .creator-platform-actions .secondary-button:active:not(:disabled) {
   background: #dbeafe;
+}
+
+.cross-platform-association-candidate-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.cross-platform-association-candidate {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cross-platform-association-candidate:last-child {
+  border-bottom: 0;
+}
+
+.cross-platform-association-candidate > div:last-child {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.cross-platform-association-profile {
+  display: grid;
+  gap: 3px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.cross-platform-association-profile strong {
+  color: #172033;
+}
+
+.cross-platform-association-preview-intro,
+.cross-platform-association-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.cross-platform-association-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.cross-platform-association-comparison > div {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+}
+
+.cross-platform-association-comparison > div > p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.cross-platform-association-arrow {
+  color: #2563eb;
+  font-size: 22px;
 }
 
 .creator-drawer-field-grid {
