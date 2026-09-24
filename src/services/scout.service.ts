@@ -509,9 +509,10 @@ export const scoutService = {
     }));
   },
 
-  async listOnboardingScoutOptions(registrationType: CreatorRegistrationType): Promise<OnboardingScoutOption[]> {
+  async listOnboardingScoutOptions(registrationType: CreatorRegistrationType, regionId: string): Promise<OnboardingScoutOption[]> {
     const { data, error } = await db.rpc('get_scout_onboarding_scout_options', {
       p_registration_type: registrationType,
+      p_region_id: regionId,
     });
     if (error) throw error;
 

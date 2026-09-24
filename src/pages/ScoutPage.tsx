@@ -330,6 +330,23 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     void loadData();
   }, [creatorStatusFilter, dailyWorkWeek, mode, month, profile?.id, regionFilter, workloadGranularity, workloadView]);
 
+  useEffect(() => {
+    if (!creatorModalOpen || editingCreator) return;
+    const values = editingCreatorEntityId ? creatorEntitySharedForm : creatorEntityForm;
+    if (!values.region_id || !values.registration_type) return;
+    let cancelled = false;
+    void scoutService.listOnboardingScoutOptions(values.registration_type, values.region_id).then((nextOptions) => {
+      if (cancelled) return;
+      if (values.registration_type === 'existing_creator') setHistoricalOnboardingScoutOptions(nextOptions);
+      else setOnboardingScoutOptions(nextOptions);
+    }).catch((scoutOptionsError) => {
+      console.error('Failed to load target-region onboarding scout options', scoutOptionsError);
+      if (values.registration_type === 'existing_creator') setHistoricalOnboardingScoutOptions([]);
+      else setOnboardingScoutOptions([]);
+    });
+    return () => { cancelled = true; };
+  }, [creatorEntityForm, creatorEntitySharedForm, creatorModalOpen, editingCreator, editingCreatorEntityId]);
+
   async function loadData() {
     if (!profile?.id && !isManagementMode) return;
     setLoading(true);
@@ -374,13 +391,13 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       }
 
       try {
-        setOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions('new_onboarding'));
+        setOnboardingScoutOptions([]);
       } catch (scoutOptionsError) {
         console.error('Failed to load onboarding scout options', scoutOptionsError);
         setOnboardingScoutOptions([]);
       }
       try {
-        setHistoricalOnboardingScoutOptions(await scoutService.listOnboardingScoutOptions('existing_creator'));
+        setHistoricalOnboardingScoutOptions([]);
       } catch (historicalScoutOptionsError) {
         console.error('Failed to load historical onboarding scout options', historicalScoutOptionsError);
         setHistoricalOnboardingScoutOptions([]);
@@ -640,7 +657,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   }
 
   function openCreatorCreate(registrationType: CreatorRegistrationType = 'new_onboarding') {
-    const currentEmployee = onboardingScoutOptions.find((employee) => employee.id === options.employees.find((option) => option.profile_id === profile?.id)?.id);
+    const currentEmployee = options.employees.find((employee) => employee.profile_id === profile?.id);
     setEditingCreator(null);
     setEditingCreatorEntityId(null);
     setCreatorForm({
@@ -3906,7 +3923,12 @@ function CreatorEntitySharedModal(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const updateValues = (values: Partial<CreatorEntitySharedFormValues>) => {
-    props.onChange({ ...props.values, ...values });
+    const regionChanged = values.region_id !== undefined && values.region_id !== props.values.region_id;
+    props.onChange({
+      ...props.values,
+      ...values,
+      ...(regionChanged ? { scout_employee_id: '', secondary_scout_employee_id: '' } : {}),
+    });
   };
   const updatePlatform = (platform: CreatorPlatform, values: Partial<CreatorEntitySharedFormValues['platforms'][number]>) => {
     props.onChange({
@@ -3953,8 +3975,8 @@ function CreatorEntitySharedModal(props: {
               </option>
             ))}
           </SelectField>
-          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} regionId={props.values.region_id} onChange={(value) => updateValues({ scout_employee_id: value })} placeholder="搜索星探" requireQueryBeforeResults excludeLeftOptions required />
-          <SearchableEmployeeSelect label="第二位星探" value={props.values.secondary_scout_employee_id} options={secondaryScoutOptions.filter((scout) => scout.id !== props.values.scout_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_scout_employee_id: value })} onClear={() => updateValues({ secondary_scout_employee_id: '' })} placeholder="搜索第二位星探" requireQueryBeforeResults excludeLeftOptions />
+          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} onChange={(value) => updateValues({ scout_employee_id: value })} placeholder="搜索星探" requireQueryBeforeResults excludeLeftOptions required />
+          <SearchableEmployeeSelect label="第二位星探" value={props.values.secondary_scout_employee_id} options={secondaryScoutOptions.filter((scout) => scout.id !== props.values.scout_employee_id)} onChange={(value) => updateValues({ secondary_scout_employee_id: value })} onClear={() => updateValues({ secondary_scout_employee_id: '' })} placeholder="搜索第二位星探" requireQueryBeforeResults excludeLeftOptions />
           <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => updateValues({ manager_employee_id: value })} placeholder="搜索经纪人" requireQueryBeforeResults excludeLeftOptions required />
           <SearchableEmployeeSelect label="第二位经纪人" value={props.values.secondary_manager_employee_id} options={secondaryManagerOptions.filter((manager) => manager.id !== props.values.manager_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_manager_employee_id: value })} onClear={() => updateValues({ secondary_manager_employee_id: '' })} placeholder="搜索第二位经纪人" requireQueryBeforeResults excludeLeftOptions />
 
@@ -4023,6 +4045,10 @@ function CreatorModal(props: {
 
   function updateEntity(values: Partial<CreatorEntityFormValues>) {
     const nextValues = { ...props.entityValues, ...values, platforms: { ...props.entityValues.platforms } };
+    if (values.region_id !== undefined && values.region_id !== props.entityValues.region_id) {
+      nextValues.scout_employee_id = '';
+      nextValues.secondary_scout_employee_id = '';
+    }
     if (values.guild_joined_date !== undefined) {
       (Object.keys(nextValues.platforms) as CreatorPlatform[]).forEach((platform) => {
         nextValues.platforms[platform] = { ...nextValues.platforms[platform], joined_date: values.guild_joined_date ?? '' };
@@ -4091,12 +4117,12 @@ function CreatorModal(props: {
                 </option>
               ))}
             </SelectField>
-            <SearchableEmployeeSelect label="星探" value={props.entityValues.scout_employee_id} options={props.scoutOptions} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ scout_employee_id: value })} placeholder="搜索星探" required />
+            <SearchableEmployeeSelect label="星探" value={props.entityValues.scout_employee_id} options={props.scoutOptions} onChange={(value) => updateEntity({ scout_employee_id: value })} placeholder="搜索星探" required />
             <SearchableEmployeeSelect label="经纪人" value={props.entityValues.manager_employee_id} options={props.managerOptions} onChange={(value) => updateEntity({ manager_employee_id: value })} placeholder="搜索经纪人" required />
             <div className="form-field-wide collaborator-row">
               <label className="collaborator-toggle"><input type="checkbox" checked={props.entityValues.has_secondary_scout} onChange={(event) => updateEntity({ has_secondary_scout: event.target.checked })} /> 还有第二位星探</label>
               {props.entityValues.has_secondary_scout ? (
-                <SearchableEmployeeSelect label="第二位星探" hideLabel value={props.entityValues.secondary_scout_employee_id} options={props.scoutOptions.filter((scout) => scout.id !== props.entityValues.scout_employee_id)} regionId={props.entityValues.region_id} onChange={(value) => updateEntity({ secondary_scout_employee_id: value })} placeholder="搜索星探" required />
+                <SearchableEmployeeSelect label="第二位星探" hideLabel value={props.entityValues.secondary_scout_employee_id} options={props.scoutOptions.filter((scout) => scout.id !== props.entityValues.scout_employee_id)} onChange={(value) => updateEntity({ secondary_scout_employee_id: value })} placeholder="搜索星探" required />
               ) : null}
             </div>
             <div className="form-field-wide collaborator-row">
@@ -4172,7 +4198,7 @@ function CreatorModal(props: {
           <TextField label={platformIdLabel} value={props.values.platform_user_id} onChange={(value) => props.onChange({ ...props.values, platform_user_id: value })} required />
           <TextField label={platformAccountLabel} value={props.values.platform_account} onChange={(value) => props.onChange({ ...props.values, platform_account: value })} required />
           <TextField label={props.values.platform === 'tiktok' ? 'User ID' : '抖音号'} value={props.values.platform_public_id} onChange={(value) => props.onChange({ ...props.values, platform_public_id: value })} />
-          <SelectField label="区域" value={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, region_id: value })} required>
+          <SelectField label="区域" value={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, region_id: value, scout_employee_id: value === props.values.region_id ? props.values.scout_employee_id : '' })} required>
             <option value="">请选择</option>
             {props.options.regions.map((region) => (
               <option key={region.id} value={region.id}>
@@ -4181,7 +4207,7 @@ function CreatorModal(props: {
             ))}
           </SelectField>
           <TextField label={platformNameLabel} value={props.values.creator_name} onChange={(value) => props.onChange({ ...props.values, creator_name: value })} required />
-          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} regionId={props.values.region_id} onChange={(value) => props.onChange({ ...props.values, scout_employee_id: value })} placeholder="搜索星探" required />
+          <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} onChange={(value) => props.onChange({ ...props.values, scout_employee_id: value })} placeholder="搜索星探" required />
           <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => props.onChange({ ...props.values, manager_employee_id: value })} placeholder="搜索经纪人" required />
           <SelectField label="主播形式" value={props.values.creator_type} onChange={(value) => props.onChange({ ...props.values, creator_type: value as CreatorType })}>
             {creatorTypes.map((type) => (
