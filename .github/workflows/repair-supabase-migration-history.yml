@@ -17,10 +17,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: supabase-production-migrations
-  cancel-in-progress: false
-
 jobs:
   validate-release:
     name: Validate pending Supabase Production migrations
