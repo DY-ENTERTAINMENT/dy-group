@@ -2,6 +2,11 @@ name: Deploy Supabase Migrations
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_migrations:
+        description: "Expected pending migration filenames, one per line"
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -16,8 +21,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-release:
+    name: Validate pending Supabase Production migrations
+    uses: ./.github/workflows/repair-supabase-migration-history.yml
+    with:
+      expected_migrations: ${{ inputs.expected_migrations }}
+    secrets: inherit
+
   deploy:
     name: Deploy migrations to Supabase Production
+    needs: validate-release
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
@@ -32,7 +45,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: latest
+          version: 2.117.0
 
       - name: Validate required secrets
         shell: bash
@@ -41,6 +54,10 @@ jobs:
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; }
           test -n "$SUPABASE_PROJECT_REF" || { echo "Missing SUPABASE_PROJECT_REF"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing SUPABASE_DB_PASSWORD"; exit 1; }
+          [[ "$SUPABASE_PROJECT_REF" == "ulbrmsybdacdhkbkeqwo" ]] || {
+            echo "Production project ref guard failed"
+            exit 1
+          }
 
       - name: Link Supabase Production project
         shell: bash

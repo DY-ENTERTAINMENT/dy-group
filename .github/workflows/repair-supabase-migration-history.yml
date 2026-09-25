@@ -7,6 +7,12 @@ on:
         description: "Expected pending migration filenames, one per line"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      expected_migrations:
+        description: "Expected pending migration filenames, one per line"
+        required: true
+        type: string
 
 permissions:
   contents: read
