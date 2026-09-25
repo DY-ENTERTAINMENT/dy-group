@@ -792,7 +792,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   async function openExistingCrossPlatformAssociation(group: CreatorProfileGroup) {
     const currentCreator = group.profiles[0];
     const creatorEntityId = currentCreator?.creator_entity_id;
-    if (!permissions.isSuperAdmin || !creatorEntityId || group.profiles.length !== 1) return;
+    if (!canLinkExistingPlatformAccount || !creatorEntityId || group.profiles.length !== 1) return;
 
     setError('');
     try {
