@@ -216,6 +216,11 @@ export type CumulativeRevenueContext = {
   latestDataDate: string | null;
   openingCumulativeAmount: number | null;
   estimatedPeriodAmount: number | null;
+  baselineCalculationPolicy: 'zero_start_current_period' | 'ordinary_next_period' | 'legacy_unknown';
+  baselineEffectiveWeekStartDate: string | null;
+  canCalculateSelectedPeriod: boolean;
+  requiresBaselineInitialization: boolean;
+  requiresBaselineReset: boolean;
 };
 
 export type CumulativeRevenueSubmitResult = {
@@ -605,6 +610,11 @@ export const agentService = {
       latestDataDate: row?.latest_data_date ?? null,
       openingCumulativeAmount: row?.opening_cumulative_amount == null ? null : Number(row.opening_cumulative_amount),
       estimatedPeriodAmount: row?.estimated_period_amount == null ? null : Number(row.estimated_period_amount),
+      baselineCalculationPolicy: row?.baseline_calculation_policy ?? 'legacy_unknown',
+      baselineEffectiveWeekStartDate: row?.baseline_effective_week_start_date ?? null,
+      canCalculateSelectedPeriod: Boolean(row?.can_calculate_selected_period),
+      requiresBaselineInitialization: Boolean(row?.requires_baseline_initialization),
+      requiresBaselineReset: Boolean(row?.requires_baseline_reset),
     };
   },
 
@@ -625,6 +635,12 @@ export const agentService = {
       previousCumulativeAmount: data.previous_cumulative_amount == null ? null : Number(data.previous_cumulative_amount),
       calculatedPeriodAmount: data.calculated_period_amount == null ? null : Number(data.calculated_period_amount),
     };
+  },
+
+  async initializeCumulativeRevenueBaseline(input: { creatorProfileId: string; baselineAmount: number | null; policy: 'zero_start_current_period' | 'ordinary_next_period'; dataDate: string; agentNote: string; idempotencyKey: string }): Promise<CumulativeRevenueResetResult> {
+    const { data, error } = await db.rpc('initialize_creator_cumulative_revenue_baseline', { p_creator_profile_id: input.creatorProfileId, p_new_baseline_amount: input.baselineAmount, p_baseline_calculation_policy: input.policy, p_data_date: input.dataDate, p_note: input.agentNote.trim() || null, p_idempotency_key: input.idempotencyKey });
+    if (error) throw error;
+    return { entryKind: 'reset', idempotent: Boolean(data?.idempotent) };
   },
 
   async submitCumulativeRevenueWithBackfills(input: { creatorProfileId: string; cumulativeAmount: number; dataDate: string; agentNote: string; idempotencyKey: string; backfills: CumulativeRevenueBackfill[] }): Promise<CumulativeRevenueSubmitResult> {
@@ -652,10 +668,11 @@ export const agentService = {
     return (data ?? []).map((row: any) => ({ periodStart: row.period_start, periodEnd: row.period_end }));
   },
 
-  async resetCumulativeRevenueBaseline(input: { creatorProfileId: string; baselineAmount: number; dataDate: string; reason: string; idempotencyKey: string }): Promise<CumulativeRevenueResetResult> {
+  async resetCumulativeRevenueBaseline(input: { creatorProfileId: string; baselineAmount: number | null; policy: 'zero_start_current_period' | 'ordinary_next_period'; dataDate: string; reason: string; idempotencyKey: string }): Promise<CumulativeRevenueResetResult> {
     const { data, error } = await db.rpc('reset_creator_cumulative_revenue_baseline', {
       p_creator_profile_id: input.creatorProfileId,
       p_new_baseline_amount: input.baselineAmount,
+      p_baseline_calculation_policy: input.policy,
       p_data_date: input.dataDate,
       p_reason: input.reason.trim(),
       p_idempotency_key: input.idempotencyKey,

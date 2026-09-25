@@ -3115,6 +3115,8 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetAmount, setResetAmount] = useState('');
+  const [resetPolicy, setResetPolicy] = useState<'zero_start_current_period' | 'ordinary_next_period'>('ordinary_next_period');
+  const [initializePolicy, setInitializePolicy] = useState<'zero_start_current_period' | 'ordinary_next_period'>('zero_start_current_period');
   const [resetReason, setResetReason] = useState('');
   const [resetIdempotencyKey, setResetIdempotencyKey] = useState<string | null>(null);
   const [resetSaving, setResetSaving] = useState(false);
@@ -3125,7 +3127,7 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
   const isFirstBaseline = !context?.chainActive;
   const isHistoricalCumulativePeriod = Boolean(context?.chainActive && context.latestDataDate && dataDate < context.latestDataDate);
   const isDecrease = !parsedAmount.error && context?.latestCumulativeAmount != null && parsedAmount.value < context.latestCumulativeAmount;
-  const preview = !parsedAmount.error && context?.latestCumulativeAmount != null && !isFirstBaseline && !isDecrease
+  const preview = !parsedAmount.error && context?.canCalculateSelectedPeriod && context?.latestCumulativeAmount != null && !isFirstBaseline && !isDecrease
     ? (context.openingCumulativeAmount == null ? parsedAmount.value - context.latestCumulativeAmount : parsedAmount.value - context.openingCumulativeAmount)
     : null;
 
@@ -3160,6 +3162,7 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
     setResetOpen(true);
     setResetError('');
     setResetIdempotencyKey(null);
+    setResetPolicy('ordinary_next_period');
     setResetAmount(context?.latestCumulativeAmount == null ? '' : formatAmountInput(context.latestCumulativeAmount));
   }
 
@@ -3175,13 +3178,15 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
     const requestIdempotencyKey = idempotencyKey ?? crypto.randomUUID();
     if (!idempotencyKey) setIdempotencyKey(requestIdempotencyKey);
     try {
-      const result = missingPeriods.length > 0
+      const result = context?.requiresBaselineInitialization
+        ? await agentService.initializeCumulativeRevenueBaseline({ creatorProfileId: row.creator.id, baselineAmount: initializePolicy === 'zero_start_current_period' ? null : parsedAmount.value, policy: initializePolicy, dataDate, agentNote, idempotencyKey: requestIdempotencyKey })
+        : missingPeriods.length > 0
         ? await agentService.submitCumulativeRevenueWithBackfills({ creatorProfileId: row.creator.id, cumulativeAmount: parsedAmount.value, dataDate, agentNote, idempotencyKey: requestIdempotencyKey, backfills })
         : await agentService.submitCumulativeRevenue({ creatorProfileId: row.creator.id, cumulativeAmount: parsedAmount.value, dataDate, agentNote, idempotencyKey: requestIdempotencyKey });
       setIdempotencyKey(null);
       refreshContext();
       onRefresh();
-      if (result.weeklyRecord) {
+      if ('weeklyRecord' in result && result.weeklyRecord) {
         onSubmitted(result.weeklyRecord, '累计流水填写成功。本周流水已按后台计算更新。');
         return;
       }
@@ -3199,15 +3204,15 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
 
   async function submitReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (parsedResetAmount.error) { setResetError(parsedResetAmount.error); return; }
+    if (resetPolicy === 'ordinary_next_period' && parsedResetAmount.error) { setResetError(parsedResetAmount.error); return; }
     if (!resetReason.trim()) { setResetError('请填写重置原因。'); return; }
     setResetSaving(true);
     setResetError('');
     const requestIdempotencyKey = resetIdempotencyKey ?? crypto.randomUUID();
     if (!resetIdempotencyKey) setResetIdempotencyKey(requestIdempotencyKey);
     try {
-      await agentService.resetCumulativeRevenueBaseline({
-        creatorProfileId: row.creator.id, baselineAmount: parsedResetAmount.value, dataDate, reason: resetReason, idempotencyKey: requestIdempotencyKey,
+    await agentService.resetCumulativeRevenueBaseline({
+      creatorProfileId: row.creator.id, baselineAmount: resetPolicy === 'zero_start_current_period' ? null : parsedResetAmount.value, policy: resetPolicy, dataDate, reason: resetReason, idempotencyKey: requestIdempotencyKey,
       });
       setResetIdempotencyKey(null);
       setResetOpen(false);
@@ -3243,7 +3248,10 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
         {missingPeriods.length > 0 ? <div className="agent-operation-reset-section"><p className="form-alert agent-operation-alert">发现未填写周期。请填写实际周流水，系统会从当前累计增长中扣除这些补录金额。</p>{missingPeriods.map((period) => <label key={period.periodStart} className="form-field agent-weekly-revenue-field"><span>{period.periodStart.replace(/-/g, '/')} - {period.periodEnd.replace(/-/g, '/')} 人工填写该周流水</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={backfillAmounts[period.periodStart] ?? ''} onChange={(event) => { clearSubmissionKey(); setBackfillAmounts((current) => ({ ...current, [period.periodStart]: event.target.value })); }} /><b>{unitLabel}</b></div></label>)}</div> : null}
         {success ? <p className="form-success agent-operation-alert">{success}</p> : null}
         <label className="form-field agent-weekly-revenue-field"><span>{row.creator.platform === 'tiktok' ? 'TikTok 后台当前累计' : '抖音后台当前累计'}</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={amount} onChange={(event) => { clearSubmissionKey(); setAmount(event.target.value); }} placeholder="请输入当前累计" disabled={isHistoricalCumulativePeriod} /><b>{unitLabel}</b></div></label>
-        {preview != null ? <p className="form-success agent-operation-alert">当前周期自动计算：+{formatRevenueAmount(preview - missingPeriods.reduce((sum, period) => sum + (Number(backfillAmounts[period.periodStart]) || 0), 0))} {unitLabel}（后台提交结果为准）</p> : null}
+        {preview != null ? <p className="form-success agent-operation-alert">当前周期预计流水：+{formatRevenueAmount(preview - missingPeriods.reduce((sum, period) => sum + (Number(backfillAmounts[period.periodStart]) || 0), 0))} {unitLabel}（后台提交结果为准）</p> : null}
+        {context?.requiresBaselineInitialization ? <><p className="form-alert agent-operation-alert">首次启用累计计算：请选择计算起点。</p><label className="form-field"><span><input type="radio" checked={initializePolicy === 'zero_start_current_period'} onChange={() => { clearSubmissionKey(); setInitializePolicy('zero_start_current_period'); }} /> 从 0 开始计算</span></label><label className="form-field"><span><input type="radio" checked={initializePolicy === 'ordinary_next_period'} onChange={() => { clearSubmissionKey(); setInitializePolicy('ordinary_next_period'); }} /> 以当前后台累计作为起点</span></label></> : null}
+        {context?.requiresBaselineReset ? <p className="form-alert agent-operation-alert">此累计基准来自旧版本，需要 Super Admin 重新确认计算起点。</p> : null}
+        {context?.chainActive && !context.canCalculateSelectedPeriod && !context.requiresBaselineReset ? <p className="form-alert agent-operation-alert">此数值仅作为累计计算起点，本周期不会产生流水。请从生效周期开始填写。</p> : null}
         {isDecrease ? <p className="form-alert agent-operation-alert">当前累计低于上次累计，不能保存。请联系 Super Admin 重置基准；系统不会生成负流水。</p> : null}
         <label className="form-field agent-weekly-revenue-note"><span>备注</span><textarea value={agentNote} onChange={(event) => { clearSubmissionKey(); setAgentNote(event.target.value); }} placeholder="选填" /></label>
         {error ? <p className="form-alert agent-operation-alert">{error}</p> : null}
@@ -3254,8 +3262,10 @@ function CumulativeWeeklyRevenueModal({ row, onClose, onSubmitted, onRefresh }: 
           <button className="secondary-button compact-button" type="button" onClick={openReset}>重置累计基准</button>
           {resetOpen ? (
             <form className="weekly-operation-form" onSubmit={submitReset}>
-              <p className="form-alert agent-operation-alert">重置不会删除历史流水。重置后将以新的累计值建立基准，之后的累计填写会自动计算期间新增流水。</p>
-              <label className="form-field agent-weekly-revenue-field"><span>新的累计基准</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={resetAmount} onChange={(event) => { setResetIdempotencyKey(null); setResetAmount(event.target.value); }} placeholder="请输入新的累计基准" /><b>{unitLabel}</b></div></label>
+              <p className="form-alert agent-operation-alert">重置不会删除历史流水。请选择新基准的计算方式。</p>
+              <label className="form-field"><span><input type="radio" checked={resetPolicy === 'zero_start_current_period'} onChange={() => { setResetIdempotencyKey(null); setResetPolicy('zero_start_current_period'); }} /> 从 0 开始计算</span><small>适用于确认之前没有需要扣除的累计流水；当前周期第一次填写即可计算流水。</small></label>
+              <label className="form-field"><span><input type="radio" checked={resetPolicy === 'ordinary_next_period'} onChange={() => { setResetIdempotencyKey(null); setResetPolicy('ordinary_next_period'); }} /> 以当前后台累计作为起点</span><small>当前累计只作为计算起点，不会计入当前周期流水；从下一周期开始自动计算。</small></label>
+              {resetPolicy === 'ordinary_next_period' ? <label className="form-field agent-weekly-revenue-field"><span>当前后台累计</span><div className="agent-weekly-revenue-input-row"><input inputMode="decimal" min="0" type="number" value={resetAmount} onChange={(event) => { setResetIdempotencyKey(null); setResetAmount(event.target.value); }} placeholder="请输入当前累计" /><b>{unitLabel}</b></div></label> : null}
               <label className="form-field agent-weekly-revenue-note"><span>重置原因</span><textarea value={resetReason} onChange={(event) => { setResetIdempotencyKey(null); setResetReason(event.target.value); }} required placeholder="必须填写" /></label>
               {resetError ? <p className="form-alert agent-operation-alert">{resetError}</p> : null}
               <div className="form-actions"><button className="secondary-button compact-button" type="button" onClick={() => setResetOpen(false)}>取消</button><button className="danger-button compact-button" type="submit" disabled={resetSaving}>{resetSaving ? '重置中...' : '确认重置累计基准'}</button></div>
