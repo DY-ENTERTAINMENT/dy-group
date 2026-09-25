@@ -351,6 +351,10 @@ export type CrossPlatformAssociationDependencies = {
   sourceExtraActiveProfileCount: number;
 };
 
+export type CrossPlatformAssociationRoom = { id: string; name: string; roomNumber: string };
+export type CrossPlatformAssociationRoomState = 'none' | 'source_only' | 'retained_only' | 'same_room' | 'different_rooms';
+export type CrossPlatformAssociationRoomResolution = 'auto' | 'keep_source' | 'keep_retained';
+
 export type CrossPlatformAssociationPreflight = {
   canAssociate: boolean;
   blockers: string[];
@@ -360,6 +364,11 @@ export type CrossPlatformAssociationPreflight = {
   sourceProfile: CrossPlatformAssociationProfileSummary;
   retainedProfiles: CrossPlatformAssociationProfileSummary[];
   dependencies: CrossPlatformAssociationDependencies;
+  roomState: CrossPlatformAssociationRoomState;
+  sourceRoom: CrossPlatformAssociationRoom | null;
+  retainedRoom: CrossPlatformAssociationRoom | null;
+  roomResolutionRequired: boolean;
+  recommendedRoomResolution: CrossPlatformAssociationRoomResolution;
 };
 
 export type CrossPlatformAssociationCandidate = CrossPlatformAssociationProfileSummary & {
@@ -442,6 +451,15 @@ function mapAssociationPreflight(value: unknown): CrossPlatformAssociationPrefli
   const blockers = blockerListIsValid ? readStringArray(value.blockers) : ['关联检查返回的阻止条件格式无效，请刷新后重新检查。'];
   const canAssociate = value.can_associate === true && blockerListIsValid;
   if (canAssociate && retainedProfiles.length === 0) throw new Error('关联检查缺少保留主体平台资料，请刷新后重试。');
+  const mapRoom = (room: unknown): CrossPlatformAssociationRoom | null => {
+    if (!isRecord(room)) return null;
+    const id = readString(room.id);
+    const name = readString(room.name);
+    const roomNumber = readString(room.room_number);
+    return id && name && roomNumber ? { id, name, roomNumber } : null;
+  };
+  const roomState = value.room_state === 'source_only' || value.room_state === 'retained_only' || value.room_state === 'same_room' || value.room_state === 'different_rooms' ? value.room_state : 'none';
+  const recommendedRoomResolution = value.recommended_room_resolution === 'keep_source' || value.recommended_room_resolution === 'keep_retained' ? value.recommended_room_resolution : 'auto';
   return {
     canAssociate,
     blockers,
@@ -450,6 +468,11 @@ function mapAssociationPreflight(value: unknown): CrossPlatformAssociationPrefli
     sourceEntity,
     sourceProfile,
     retainedProfiles,
+    roomState,
+    sourceRoom: mapRoom(value.source_room),
+    retainedRoom: mapRoom(value.retained_room),
+    roomResolutionRequired: value.room_resolution_required === true,
+    recommendedRoomResolution,
     dependencies: {
       sourceActiveRoomCount: readNumber(value.source_active_room_count),
       retainedActiveRoomCount: readNumber(value.retained_active_room_count),
@@ -814,8 +837,8 @@ export const scoutService = {
       : [];
   },
 
-  async associateExistingCrossPlatformCreatorProfiles(retainedEntityId: string, sourceProfileId: string, reason: string) {
-    const { data, error } = await db.rpc('associate_existing_cross_platform_creator_profiles', { p_retained_entity_id: retainedEntityId, p_source_profile_id: sourceProfileId, p_reason: reason.trim() });
+  async associateExistingCrossPlatformCreatorProfiles(retainedEntityId: string, sourceProfileId: string, reason: string, roomResolution: CrossPlatformAssociationRoomResolution) {
+    const { data, error } = await db.rpc('associate_existing_cross_platform_creator_profiles', { p_retained_entity_id: retainedEntityId, p_source_profile_id: sourceProfileId, p_reason: reason.trim(), p_room_resolution: roomResolution });
     if (error) throw error;
     return data as string;
   },

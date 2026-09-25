@@ -343,7 +343,7 @@ function buildDashboardRoom(
     .filter((entity): entity is OfflineLiveRoomCreatorEntity => Boolean(entity))
     .map((entity) => ({
       entityId: entity.id,
-      displayName: entity.display_name,
+      displayName: formatCreatorDisplayName(entity),
       profiles: entity.profiles.map((profile) => {
         const records = getRecordsForProfile(profile.id, periods, recordsByProfileAndPeriod);
         return {
@@ -441,6 +441,12 @@ function getEntityDisplayName(currentName: string, profile: CreatorProfile) {
 function sortCreatorProfiles(profiles: CreatorProfile[]) {
   const platformOrder: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 1 };
   return [...profiles].sort((first, second) => platformOrder[first.platform] - platformOrder[second.platform]);
+}
+
+function formatCreatorDisplayName(entity: OfflineLiveRoomCreatorEntity) {
+  const primary = entity.profiles[0]?.creator_name || entity.display_name;
+  const other = entity.profiles.find((profile) => profile.creator_name && profile.creator_name !== primary)?.creator_name;
+  return other ? `${primary}（${platformLabels[entity.profiles.find((profile) => profile.creator_name === other)?.platform ?? 'tiktok']}：${other}）` : primary;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

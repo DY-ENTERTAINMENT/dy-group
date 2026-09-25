@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SystemModal } from './SystemModal';
-import { platformLabels, scoutService, type CreatorEntityPlatformEditValues, type CrossPlatformAssociationCandidate, type CrossPlatformAssociationPreflight } from '../services/scout.service';
+import { platformLabels, scoutService, type CreatorEntityPlatformEditValues, type CrossPlatformAssociationCandidate, type CrossPlatformAssociationPreflight, type CrossPlatformAssociationRoomResolution } from '../services/scout.service';
 
 type Props = { currentEntityId: string; currentProfile: CreatorEntityPlatformEditValues; onClose: () => void; onSuccess: () => void };
 type DisplayProfile = { platform: 'tiktok' | 'douyin'; platformAccount: string; platformPublicId: string | null; platformUserId: string; revenueCycle: string | null; revenueInputMode: string | null };
@@ -37,6 +37,7 @@ export function CrossPlatformAssociationModal({ currentEntityId, currentProfile,
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [roomResolution, setRoomResolution] = useState<CrossPlatformAssociationRoomResolution>('auto');
   const requestSequence = useRef(0);
   const targetPlatform = currentProfile.platform === 'tiktok' ? 'douyin' : 'tiktok';
   const targetLabel = platformLabels[targetPlatform];
@@ -44,7 +45,7 @@ export function CrossPlatformAssociationModal({ currentEntityId, currentProfile,
     ? '搜索主播名字 / 抖音用户名 / 抖音号 / UID'
     : '搜索主播名字 / TikTok 用户名 / TikTok ID / User ID';
 
-  function clearPreflight() { setPreflight(null); setReason(''); setConfirming(false); setError(''); }
+  function clearPreflight() { setPreflight(null); setReason(''); setConfirming(false); setRoomResolution('auto'); setError(''); }
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
@@ -65,15 +66,15 @@ export function CrossPlatformAssociationModal({ currentEntityId, currentProfile,
   async function runPreflight() {
     if (!candidate) return;
     setLoading(true); setError('');
-    try { setPreflight(await scoutService.previewCrossPlatformCreatorAssociation(currentEntityId, candidate.id)); }
+    try { const next = await scoutService.previewCrossPlatformCreatorAssociation(currentEntityId, candidate.id); setPreflight(next); setRoomResolution(next.recommendedRoomResolution); }
     catch (previewError) { setPreflight(null); setError((previewError as Error).message || '关联预览失败。'); }
     finally { setLoading(false); }
   }
 
   async function executeAssociation() {
-    if (!candidate || !preflight?.canAssociate || !confirming || !reason.trim() || submitting) return;
+    if (!candidate || !preflight?.canAssociate || !confirming || !reason.trim() || submitting || (preflight.roomResolutionRequired && roomResolution === 'auto')) return;
     setSubmitting(true); setError('');
-    try { await scoutService.associateExistingCrossPlatformCreatorProfiles(currentEntityId, candidate.id, reason); onSuccess(); }
+    try { await scoutService.associateExistingCrossPlatformCreatorProfiles(currentEntityId, candidate.id, reason, roomResolution); onSuccess(); }
     catch (associationError) { setPreflight(null); setConfirming(false); setError((associationError as Error).message || '关联执行失败；请重新预览。'); }
     finally { setSubmitting(false); }
   }
@@ -93,10 +94,14 @@ export function CrossPlatformAssociationModal({ currentEntityId, currentProfile,
         {preflight ? <section className="cross-platform-association-preview"><h4>{preflight.canAssociate ? '关联预览' : '无法关联'}</h4>
           <div className="cross-platform-association-comparison"><div><p>当前账号</p><ProfileDetails profile={currentDisplayProfile(currentProfile)} creatorName={preflight.retainedEntity.displayName} managerName={preflight.retainedEntity.managerName} regionName={preflight.retainedEntity.regionName} /></div><strong className="cross-platform-association-arrow">↕</strong><div><p>将关联</p><ProfileDetails profile={preflight.sourceProfile} creatorName={preflight.sourceEntity.displayName} managerName={preflight.sourceEntity.managerName} regionName={preflight.sourceEntity.regionName} /></div></div>
           <p>关联后两个平台账号将属于同一个主播身份，平台资料及流水仍分别保存。</p>
+          {preflight.roomState === 'source_only' && preflight.sourceRoom ? <p>关联后将继续保留：{preflight.sourceRoom.roomNumber}号直播间（{preflight.sourceRoom.name}）。</p> : null}
+          {preflight.roomState === 'retained_only' && preflight.retainedRoom ? <p>关联后将继续保留：{preflight.retainedRoom.roomNumber}号直播间（{preflight.retainedRoom.name}）。</p> : null}
+          {preflight.roomState === 'same_room' && preflight.sourceRoom ? <p>两个账号当前均属于 {preflight.sourceRoom.roomNumber}号直播间（{preflight.sourceRoom.name}），关联后继续保留该直播间。</p> : null}
+          {preflight.roomState === 'different_rooms' && preflight.sourceRoom && preflight.retainedRoom ? <fieldset className="form-field"><legend>检测到直播间冲突</legend><p>将关联账号：{preflight.sourceRoom.roomNumber}号直播间（{preflight.sourceRoom.name}）</p><p>当前账号：{preflight.retainedRoom.roomNumber}号直播间（{preflight.retainedRoom.name}）</p><label><input type="radio" name="room-resolution" checked={roomResolution === 'keep_source'} onChange={() => setRoomResolution('keep_source')} /> 保留 {preflight.sourceRoom.roomNumber}号直播间</label><label><input type="radio" name="room-resolution" checked={roomResolution === 'keep_retained'} onChange={() => setRoomResolution('keep_retained')} /> 保留 {preflight.retainedRoom.roomNumber}号直播间</label></fieldset> : null}
           {preflight.blockers.map((blocker) => <p className="form-alert" key={blocker}>{blocker}</p>)}
           {preflight.warnings.map((warning) => <p key={warning}>注意：{warning}</p>)}
           <p>依赖：来源活跃直播间 {preflight.dependencies.sourceActiveRoomCount}；来源协作者 {preflight.dependencies.sourceActiveCollaboratorCount}；来源额外活跃 Profile {preflight.dependencies.sourceExtraActiveProfileCount}；活动 {preflight.dependencies.sourceActivityCount}；里程碑 {preflight.dependencies.sourceMilestoneCount}。</p>
-          {preflight.canAssociate ? <><label className="form-field"><span>关联原因（必填）</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label><button className="primary-button compact-button" type="button" disabled={!reason.trim()} onClick={() => setConfirming(true)}>确认关联</button></> : null}
+          {preflight.canAssociate ? <><label className="form-field"><span>关联原因（必填）</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label><button className="primary-button compact-button" type="button" disabled={!reason.trim() || (preflight.roomResolutionRequired && roomResolution === 'auto')} onClick={() => setConfirming(true)}>确认关联</button></> : null}
         </section> : null}
         {error ? <p className="form-alert">{error}</p> : null}
       </div>
