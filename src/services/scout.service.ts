@@ -163,6 +163,9 @@ export type CreatorEntityPlatformEditValues = {
   creator_type: CreatorType;
   revenue_cycle?: 'weekly' | 'monthly' | 'none';
   revenue_input_mode?: 'direct' | 'cumulative';
+  pending_revenue_input_mode?: 'direct' | 'cumulative' | null;
+  revenue_input_mode_effective_date?: string | null;
+  effective_revenue_input_mode?: 'direct' | 'cumulative';
 };
 
 export type CreatorEntityCollaborator = {
@@ -201,6 +204,9 @@ export type CreatorProfile = {
   operation_status_reason?: string | null;
   revenue_cycle?: 'weekly' | 'monthly' | 'none';
   revenue_input_mode?: 'direct' | 'cumulative';
+  pending_revenue_input_mode?: 'direct' | 'cumulative' | null;
+  revenue_input_mode_effective_date?: string | null;
+  effective_revenue_input_mode?: 'direct' | 'cumulative';
   creator_type: CreatorType;
   status?: CreatorStatus;
   bank_account_name?: string | null;

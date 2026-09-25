@@ -226,6 +226,13 @@ export type CumulativeRevenueSubmitResult = {
   calculatedPeriodAmount: number | null;
 };
 
+export type CumulativeRevenueBackfill = {
+  periodStart: string;
+  weeklyAmount: number;
+};
+
+export type CumulativeMissingPeriod = { periodStart: string; periodEnd: string };
+
 export type CumulativeRevenueResetResult = {
   entryKind: 'reset';
   idempotent: boolean;
@@ -268,6 +275,9 @@ const creatorSelect = `
   manager_employee_id,
   revenue_cycle,
   revenue_input_mode,
+  pending_revenue_input_mode,
+  revenue_input_mode_effective_date,
+  effective_revenue_input_mode,
   status,
   creator_type,
   bank_name,
@@ -617,6 +627,31 @@ export const agentService = {
     };
   },
 
+  async submitCumulativeRevenueWithBackfills(input: { creatorProfileId: string; cumulativeAmount: number; dataDate: string; agentNote: string; idempotencyKey: string; backfills: CumulativeRevenueBackfill[] }): Promise<CumulativeRevenueSubmitResult> {
+    const { data, error } = await db.rpc('submit_creator_cumulative_revenue_with_backfills', {
+      p_creator_profile_id: input.creatorProfileId,
+      p_cumulative_amount: input.cumulativeAmount,
+      p_data_date: input.dataDate,
+      p_idempotency_key: input.idempotencyKey,
+      p_backfills: input.backfills.map((backfill) => ({ period_start: backfill.periodStart, weekly_amount: backfill.weeklyAmount })),
+      p_note: input.agentNote.trim() || null,
+    });
+    if (error) throw error;
+    return {
+      entryKind: data.entry_kind,
+      idempotent: Boolean(data.idempotent),
+      weeklyRecord: data.weekly_record ? mapWeeklyRevenueRow(data.weekly_record) : null,
+      previousCumulativeAmount: data.previous_cumulative_amount == null ? null : Number(data.previous_cumulative_amount),
+      calculatedPeriodAmount: data.calculated_period_amount == null ? null : Number(data.calculated_period_amount),
+    };
+  },
+
+  async listCumulativeMissingPeriods(creatorProfileId: string, dataDate: string): Promise<CumulativeMissingPeriod[]> {
+    const { data, error } = await db.rpc('list_creator_cumulative_missing_periods', { p_creator_profile_id: creatorProfileId, p_data_date: dataDate });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({ periodStart: row.period_start, periodEnd: row.period_end }));
+  },
+
   async resetCumulativeRevenueBaseline(input: { creatorProfileId: string; baselineAmount: number; dataDate: string; reason: string; idempotencyKey: string }): Promise<CumulativeRevenueResetResult> {
     const { data, error } = await db.rpc('reset_creator_cumulative_revenue_baseline', {
       p_creator_profile_id: input.creatorProfileId,
@@ -838,6 +873,9 @@ function mapCreatorRow(row: any): CreatorProfile {
     is_priority: row.is_priority === true,
     revenue_cycle: row.revenue_cycle ?? 'weekly',
     revenue_input_mode: row.revenue_input_mode ?? 'direct',
+    pending_revenue_input_mode: row.pending_revenue_input_mode ?? null,
+    revenue_input_mode_effective_date: row.revenue_input_mode_effective_date ?? null,
+    effective_revenue_input_mode: row.effective_revenue_input_mode ?? row.revenue_input_mode ?? 'direct',
     creator_type: row.creator_type,
     status: row.status,
     bank_account_name: row.bank_account_name,
