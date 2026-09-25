@@ -68,8 +68,8 @@ begin
  elsif source_room_id=retained_room_id then final_room_id:=retained_room_id;
  elsif p_room_resolution='keep_source' then final_room_id:=source_room_id;
  else final_room_id:=retained_room_id; end if;
- if source_assignment.id is not null then update public.offline_live_room_creators set status='inactive',ended_at=v_now where id=source_assignment.id; end if;
  if retained_assignment.id is not null and final_room_id is distinct from retained_room_id then update public.offline_live_room_creators set status='inactive',ended_at=v_now where id=retained_assignment.id; end if;
+ if source_assignment.id is not null then update public.offline_live_room_creators set status='inactive',ended_at=v_now where id=source_assignment.id; end if;
  if final_room_id is not null and (retained_assignment.id is null or final_room_id is distinct from retained_room_id) then insert into public.offline_live_room_creators(room_id,creator_entity_id,status,assigned_at) values(final_room_id,r.id,'active',v_now); end if;
  update public.creator_profiles set creator_entity_id=r.id where id=p.id;
  insert into public.creator_entity_association_history(source_entity_id,retained_entity_id,moved_profile_id,source_platform,source_manager_employee_id,retained_manager_employee_id,source_region_id,retained_region_id,performed_by,reason,source_room_id,retained_room_id,final_room_id,room_resolution) values(s.id,r.id,p.id,p.platform,s.manager_employee_id,r.manager_employee_id,s.region_id,r.region_id,auth.uid(),btrim(p_reason),source_room_id,retained_room_id,final_room_id,p_room_resolution) returning id into h;
