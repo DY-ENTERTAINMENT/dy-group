@@ -20,6 +20,11 @@ begin
   if viewer_profile.status <> 'approved' then return false; end if;
   select * into viewer_employee from public.employees where profile_id = viewer_profile.id and deleted_at is null limit 1;
   if viewer_employee.id is null then return false; end if;
+  if exists (
+    select 1 from public.employee_permission_overrides p
+    where p.employee_id = viewer_employee.id and p.permission_key = p_permission_key and p.effect = 'deny'
+      and case when p_action = 'view' then p.can_view else p.can_view and p.can_use end
+  ) then return false; end if;
   return exists (
     select 1 from public.job_title_permission_templates p where p.job_title_id = viewer_employee.job_title_id and p.permission_key = p_permission_key and case when p_action='view' then p.can_view else p.can_view and p.can_use end
     union all
@@ -35,8 +40,8 @@ returns boolean language sql stable security definer set search_path = public, p
     select 1 from public.creator_entities e
     where e.id = p_creator_entity_id and e.status = 'active' and public.current_user_can_access_region(e.region_id)
       and (
-        public.current_user_has_permission('management-streamer-stats', 'view')
-        or (public.current_user_has_permission('agent-creator-data', 'view') and (
+        public.current_user_has_permission('management-streamer-stats', 'use')
+        or (public.current_user_has_permission('agent-creator-data', 'use') and (
           e.manager_employee_id = public.current_user_employee_id()
           or exists (select 1 from public.creator_collaborator_assignments c where c.creator_entity_id=e.id and c.assignment_type='manager' and c.assignment_role='secondary' and c.employee_id=public.current_user_employee_id() and c.status='active')
         ))
