@@ -150,6 +150,12 @@ const independentPermissionItems: PermissionItem[] = [
     level: 0,
   },
 ];
+const agentSensitivePermissionItems: PermissionItem[] = [
+  { key: 'agent-creator-management-settings', name: '编辑主播管理设置', parentKey: 'agent', level: 1 },
+  { key: 'agent-creator-revenue-settings', name: '修改主播流水设置', parentKey: 'agent', level: 1 },
+  { key: 'agent-creator-platform-account-link', name: '关联现有平台账号', parentKey: 'agent', level: 1 },
+];
+const agentSensitivePermissionKeys = new Set(agentSensitivePermissionItems.map((item) => item.key));
 const scoutAssignmentEligiblePermissionKey = 'scout-assignment-eligible';
 
 export function SettingsPage() {
@@ -1362,7 +1368,7 @@ function buildPermissionItems(): PermissionItem[] {
     return [{ key: groupKey, name: getPermissionGroupName(groupKey), parentKey: null, level: 0 }, ...children];
   });
 
-  return [...groupedItems, ...independentPermissionItems];
+  return [...groupedItems, ...agentSensitivePermissionItems, ...independentPermissionItems];
 }
 
 function getMenuPermissionKey(item: MenuItem) {
@@ -1398,7 +1404,7 @@ function createDefaultPermissionState(items: PermissionItem[], target: Permissio
   });
 
   items
-    .filter((item) => item.parentKey && defaultKeys.includes(item.parentKey))
+    .filter((item) => item.parentKey && defaultKeys.includes(item.parentKey) && !agentSensitivePermissionKeys.has(item.key))
     .forEach((item) => {
       permissions[item.key] = { view: true, use: true };
     });
@@ -1494,7 +1500,7 @@ function getDefaultPermissionKeys(name: string) {
 function updatePermissionTree(state: PermissionState, items: PermissionItem[], key: string, field: keyof PermissionAccess, checked: boolean): PermissionState {
   const next = { ...state };
   const targetItem = items.find((item) => item.key === key);
-  const childItems = items.filter((item) => item.parentKey === key);
+  const childItems = items.filter((item) => item.parentKey === key && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
   const affectedItems = targetItem?.parentKey ? [targetItem] : [targetItem, ...childItems].filter(Boolean);
 
   affectedItems.forEach((item) => {
@@ -1516,7 +1522,7 @@ function updatePermissionTree(state: PermissionState, items: PermissionItem[], k
 function updateSpecialBatchTree(state: PermissionState, items: PermissionItem[], key: string, checked: boolean): PermissionState {
   const next = { ...state };
   const targetItem = items.find((item) => item.key === key);
-  const childItems = items.filter((item) => item.parentKey === key);
+  const childItems = items.filter((item) => item.parentKey === key && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
   const affectedItems = targetItem?.parentKey ? [targetItem] : [targetItem, ...childItems].filter(Boolean);
 
   affectedItems.forEach((item) => {

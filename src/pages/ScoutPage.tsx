@@ -205,6 +205,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const isManagementMode = mode.startsWith('management');
   const canManageCreators = permissions.canUse(isManagementMode ? 'management-streamer-stats' : 'scout-onboarding');
   const canManageCreatorStatus = mode === 'management-streamers' && permissions.isSuperAdmin;
+  const canEditCreatorManagementSettings = mode === 'management-streamers' && permissions.canUse('agent-creator-management-settings');
+  const canEditCreatorRevenueSettings = mode === 'management-streamers' && permissions.canUse('agent-creator-revenue-settings');
+  const canLinkExistingPlatformAccount = mode === 'management-streamers' && permissions.canUse('agent-creator-platform-account-link');
   const [options, setOptions] = useState<ScoutOptions>({ regions: [], employees: [] });
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
   const [onboardingScoutOptions, setOnboardingScoutOptions] = useState<OnboardingScoutOption[]>([]);
@@ -502,9 +505,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
     try {
       if (editingCreatorEntityId) {
-        await scoutService.saveCreatorEntitySharedData(editingCreatorEntityId, creatorEntitySharedForm);
-        await scoutService.saveCreatorEntityManagementSettings(editingCreatorEntityId, creatorEntitySharedForm);
-        await scoutService.updateCreatorEntityPlatformProfiles(editingCreatorEntityId, creatorEntitySharedForm.platforms);
+        if (canManageCreators) {
+          await scoutService.saveCreatorEntitySharedData(editingCreatorEntityId, creatorEntitySharedForm);
+          await scoutService.updateCreatorEntityPlatformProfiles(editingCreatorEntityId, creatorEntitySharedForm.platforms);
+        }
+        if (canEditCreatorManagementSettings) await scoutService.saveCreatorEntityManagementSettings(editingCreatorEntityId, creatorEntitySharedForm);
+        if (canEditCreatorRevenueSettings) await scoutService.saveCreatorEntityRevenueSettings(editingCreatorEntityId, creatorEntitySharedForm);
         setMessage('主播共同资料已更新。');
       } else if (editingCreator) {
         await scoutService.updateCreator(editingCreator.id, creatorForm);
@@ -909,7 +915,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           options={options}
           isManagement={mode === 'management-streamers'}
           month={creatorStatsMonth}
-          canEdit={mode === 'management-streamers' && canManageCreators}
+          canEdit={mode === 'management-streamers' && (canManageCreators || canEditCreatorManagementSettings || canEditCreatorRevenueSettings)}
           canManageStatus={canManageCreatorStatus}
           platformFilter={platformFilter}
           regionFilter={regionFilter}
@@ -948,9 +954,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           group={selectedCreatorGroup}
           collaborators={creatorEntityCollaborators}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
-          canEdit={mode === 'management-streamers' && canManageCreators}
+          canEdit={mode === 'management-streamers' && (canManageCreators || canEditCreatorManagementSettings || canEditCreatorRevenueSettings)}
           canManageStatus={canManageCreatorStatus}
-          canAssociateExistingPlatform={permissions.isSuperAdmin}
+          canAssociateExistingPlatform={canLinkExistingPlatformAccount}
           onClose={closeCreatorDetails}
           onEdit={openCreatorEdit}
           onStatus={openCreatorStatus}
@@ -1015,6 +1021,9 @@ export function ScoutPage({ mode }: ScoutPageProps) {
             managerOptions={managerOptions}
             collaborators={creatorEntityCollaborators}
             saving={saving}
+            canEditSharedData={canManageCreators}
+            canEditManagementSettings={canEditCreatorManagementSettings}
+            canEditRevenueSettings={canEditCreatorRevenueSettings}
             onChange={setCreatorEntitySharedForm}
             onClose={closeCreatorModal}
             onSubmit={submitCreator}
@@ -3918,6 +3927,9 @@ function CreatorEntitySharedModal(props: {
   managerOptions: OnboardingManagerOption[];
   collaborators: CreatorEntityCollaborator[];
   saving: boolean;
+  canEditSharedData: boolean;
+  canEditManagementSettings: boolean;
+  canEditRevenueSettings: boolean;
   onChange: (values: CreatorEntitySharedFormValues) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -3963,7 +3975,7 @@ function CreatorEntitySharedModal(props: {
     >
       <form id="creator-entity-shared-form" onSubmit={props.onSubmit}>
         <div className="form-grid">
-          <div className="form-section-title">共同资料</div>
+          {props.canEditSharedData ? <><div className="form-section-title">共同资料</div>
           <TextField label="主播名字" value={props.values.display_name} onChange={(value) => updateValues({ display_name: value })} required />
           <TextField label="生日" type="date" value={props.values.birthday} onChange={(value) => updateValues({ birthday: value })} />
           <TextField label={props.values.registration_type === 'existing_creator' ? '真实入公会日期' : '入会日期'} type="date" value={props.values.guild_joined_date} onChange={(value) => updateValues({ guild_joined_date: value })} required />
@@ -3978,22 +3990,22 @@ function CreatorEntitySharedModal(props: {
           <SearchableEmployeeSelect label="星探" value={props.values.scout_employee_id} options={props.scoutOptions} onChange={(value) => updateValues({ scout_employee_id: value })} placeholder="搜索星探" requireQueryBeforeResults excludeLeftOptions required />
           <SearchableEmployeeSelect label="第二位星探" value={props.values.secondary_scout_employee_id} options={secondaryScoutOptions.filter((scout) => scout.id !== props.values.scout_employee_id)} onChange={(value) => updateValues({ secondary_scout_employee_id: value })} onClear={() => updateValues({ secondary_scout_employee_id: '' })} placeholder="搜索第二位星探" requireQueryBeforeResults excludeLeftOptions />
           <SearchableEmployeeSelect label="经纪人" value={props.values.manager_employee_id} options={props.managerOptions} onChange={(value) => updateValues({ manager_employee_id: value })} placeholder="搜索经纪人" requireQueryBeforeResults excludeLeftOptions required />
-          <SearchableEmployeeSelect label="第二位经纪人" value={props.values.secondary_manager_employee_id} options={secondaryManagerOptions.filter((manager) => manager.id !== props.values.manager_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_manager_employee_id: value })} onClear={() => updateValues({ secondary_manager_employee_id: '' })} placeholder="搜索第二位经纪人" requireQueryBeforeResults excludeLeftOptions />
+          <SearchableEmployeeSelect label="第二位经纪人" value={props.values.secondary_manager_employee_id} options={secondaryManagerOptions.filter((manager) => manager.id !== props.values.manager_employee_id)} regionId={props.values.region_id} onChange={(value) => updateValues({ secondary_manager_employee_id: value })} onClear={() => updateValues({ secondary_manager_employee_id: '' })} placeholder="搜索第二位经纪人" requireQueryBeforeResults excludeLeftOptions /></> : null}
 
-          <div className="form-section-title">主播管理设置</div>
+          {props.canEditManagementSettings ? <><div className="form-section-title">主播管理设置</div>
           <SelectField label="重点关注" value={props.values.is_priority ? 'priority' : 'normal'} onChange={(value) => updateValues({ is_priority: value === 'priority' })}>
             <option value="normal">普通</option><option value="priority">⭐ 重点关注</option>
           </SelectField>
           <SelectField label="运营状态" value={props.values.operation_status} onChange={(value) => updateValues({ operation_status: value as CreatorEntitySharedFormValues['operation_status'] })}>
             <option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="other">其他</option>
           </SelectField>
-          <label className="form-field form-field-wide"><span>运营状态原因</span><textarea value={props.values.operation_status_reason} onChange={(event) => updateValues({ operation_status_reason: event.target.value })} placeholder="选填" /></label>
+          <label className="form-field form-field-wide"><span>运营状态原因</span><textarea value={props.values.operation_status_reason} onChange={(event) => updateValues({ operation_status_reason: event.target.value })} placeholder="选填" /></label></> : null}
 
           {props.values.platforms.map((platformValues) => {
             const isTikTok = platformValues.platform === 'tiktok';
             return (
               <div className="form-grid form-field-wide" key={platformValues.id}>
-                <div className="form-section-title platform-form-section-title">{platformLabels[platformValues.platform]} 资料</div>
+                {props.canEditSharedData ? <><div className="form-section-title platform-form-section-title">{platformLabels[platformValues.platform]} 资料</div>
                 <TextField label="入会日期" type="date" value={platformValues.joined_date} onChange={(value) => updatePlatform(platformValues.platform, { joined_date: value })} required />
                 <TextField label={isTikTok ? 'TikTok 用户名' : '抖音用户名'} value={platformValues.platform_account} onChange={(value) => updatePlatform(platformValues.platform, { platform_account: value })} required />
                 <TextField label={isTikTok ? 'TikTok User ID' : '抖音 User ID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platformValues.platform, { platform_user_id: value })} required />
@@ -4004,13 +4016,13 @@ function CreatorEntitySharedModal(props: {
                       {creatorTypeLabels[type]}
                     </option>
                   ))}
-                </SelectField>
-                <SelectField label="流水周期" value={platformValues.revenue_cycle ?? 'weekly'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_cycle: value as 'weekly' | 'monthly' | 'none' })}>
+                </SelectField></> : null}
+                {props.canEditRevenueSettings ? <><SelectField label="流水周期" value={platformValues.revenue_cycle ?? 'weekly'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_cycle: value as 'weekly' | 'monthly' | 'none' })}>
                   <option value="weekly">每周</option><option value="monthly">每月</option><option value="none">不要求</option>
                 </SelectField>
                 <SelectField label="流水填写方式" value={platformValues.revenue_input_mode ?? 'direct'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_input_mode: value as 'direct' | 'cumulative' })}>
                   <option value="direct">直接填写流水</option><option value="cumulative">累计流水自动计算（仅配置）</option>
-                </SelectField>
+                </SelectField></> : null}
               </div>
             );
           })}

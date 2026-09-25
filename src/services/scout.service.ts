@@ -821,9 +821,16 @@ export const scoutService = {
   },
 
   async saveCreatorEntityManagementSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
-    const { error } = await db.rpc('save_creator_entity_management_settings', {
+    const { error } = await db.rpc('save_creator_entity_management_controls', {
       p_creator_entity_id: creatorEntityId, p_is_priority: values.is_priority,
       p_operation_status: values.operation_status, p_operation_status_reason: values.operation_status_reason.trim() || null,
+    });
+    if (error) throw error;
+  },
+
+  async saveCreatorEntityRevenueSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
+    const { error } = await db.rpc('save_creator_entity_revenue_settings', {
+      p_creator_entity_id: creatorEntityId,
       p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: p.revenue_input_mode ?? 'direct' })),
     });
     if (error) throw error;
