@@ -1,0 +1,129 @@
+name: Repair Production Migration History 202609280001
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type REPAIR-202609280001 to mark this already-applied migration as applied in production history"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migration-history-repair-202609280001
+  cancel-in-progress: false
+
+jobs:
+  repair-history:
+    name: Repair production history for 202609280001 only
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      MIGRATION_VERSION: "202609280001"
+      MIGRATION_FILE: "202609280001_management_revenue_creator_count_and_representative_options.sql"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.117.0
+
+      - name: Validate confirmation and production guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "REPAIR-202609280001" || {
+            echo "Confirmation did not match the required value."
+            exit 1
+          }
+          test "$MIGRATION_VERSION" = "202609280001" || {
+            echo "Unexpected migration version guard failure."
+            exit 1
+          }
+          test "$MIGRATION_FILE" = "202609280001_management_revenue_creator_count_and_representative_options.sql" || {
+            echo "Unexpected migration filename guard failure."
+            exit 1
+          }
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; }
+          test -n "$SUPABASE_PROJECT_REF" || { echo "Missing SUPABASE_PROJECT_REF"; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing SUPABASE_DB_PASSWORD"; exit 1; }
+          [[ "$SUPABASE_PROJECT_REF" == "ulbrmsybdacdhkbkeqwo" ]] || {
+            echo "Production project ref guard failed"
+            exit 1
+          }
+          test -f "supabase/migrations/$MIGRATION_FILE" || {
+            echo "Required local migration file is missing."
+            exit 1
+          }
+
+      - name: Link Supabase Production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Check production migration history before repair
+        id: before
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_before.txt"
+          if awk -F '|' -v version="$MIGRATION_VERSION" '
+            NF >= 3 {
+              remote = $2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote)
+              if (remote == version) found = 1
+            }
+            END { exit(found ? 0 : 1) }
+          ' "$RUNNER_TEMP/migration_list_before.txt"; then
+            echo "Migration history already records $MIGRATION_VERSION; no repair will be performed."
+            echo "already_applied=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Migration history does not record $MIGRATION_VERSION; repair is eligible."
+            echo "already_applied=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark exactly 202609280001 as applied
+        if: steps.before.outputs.already_applied == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration repair --status applied 202609280001 --linked
+
+      - name: Verify production migration history after repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_after.txt"
+          awk -F '|' -v version="$MIGRATION_VERSION" '
+            NF >= 3 {
+              local_version = $1
+              remote_version = $2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", local_version)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote_version)
+              if (local_version == version && remote_version == version) found = 1
+            }
+            END { exit(found ? 0 : 1) }
+          ' "$RUNNER_TEMP/migration_list_after.txt" || {
+            echo "Migration history verification failed for $MIGRATION_VERSION."
+            exit 1
+          }
+
+      - name: Verify no pending migration in dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          dry_run_output="$(supabase db push --dry-run --linked 2>&1)"
+          printf '%s\n' "$dry_run_output"
+          if printf '%s\n' "$dry_run_output" | grep -Eq "(^|[[:space:]•])${MIGRATION_VERSION}_${MIGRATION_FILE#${MIGRATION_VERSION}_}([[:space:]]|$)"; then
+            echo "$MIGRATION_VERSION is still pending after history repair."
+            exit 1
+          fi
