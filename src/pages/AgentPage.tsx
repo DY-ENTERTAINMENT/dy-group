@@ -150,7 +150,7 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
 
   useEffect(() => {
     void loadData();
-  }, [mode, profile?.id, month, regionId]);
+  }, [mode, permissions.isSuperAdmin, profile?.id, month, regionId]);
 
   async function loadData() {
     if (!profile?.id && !isManagement) return;
@@ -159,8 +159,9 @@ export function AgentPage({ mode }: { mode: AgentPageMode }) {
     try {
       const nextOptions = await agentService.getOptions(profile?.id);
       setOptions(nextOptions);
-      const defaultRegion = regionId || nextOptions.currentEmployee?.region_id || '';
-      if (!regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
+      const useGlobalRevenueScope = mode === 'revenue' && permissions.isSuperAdmin;
+      const defaultRegion = regionId || (useGlobalRevenueScope ? '' : nextOptions.currentEmployee?.region_id || '');
+      if (!useGlobalRevenueScope && !regionId && nextOptions.currentEmployee?.region_id && (mode === 'revenue' || mode === 'creators')) setRegionId(nextOptions.currentEmployee.region_id);
 
       if (mode === 'revenue' && profile?.id) {
         setCreators(await agentService.listPersonalManagerWeeklyRevenueProfiles({ regionId: defaultRegion }));
