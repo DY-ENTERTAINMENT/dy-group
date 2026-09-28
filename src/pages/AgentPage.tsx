@@ -2277,6 +2277,7 @@ type OperationFilters = {
   creatorType: '' | '5+1' | 'non_5_1';
   revenueInputMode: '' | 'direct' | 'cumulative';
   priority: '' | 'priority' | 'normal';
+  managerEmployeeId: string;
   search: string;
   periodStart: string;
   customStart: string;
@@ -2351,6 +2352,7 @@ function AgentPeriodRevenuePanel(props: {
     creatorType: '',
     revenueInputMode: '',
     priority: '',
+    managerEmployeeId: '',
     search: '',
     periodStart: '',
     customStart: monthDateRange.startIso,
@@ -2366,6 +2368,7 @@ function AgentPeriodRevenuePanel(props: {
   const [activeRow, setActiveRow] = useState<OperationRow | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [managerOptions, setManagerOptions] = useState<ManagementRevenueManagerOption[]>([]);
   const sortedCreators = useMemo(() => sortOperationCreators(props.creators.filter(isWeeklyRevenuePendingEligible)), [props.creators]);
   const effectiveDateRange = useMemo(() => getOperationEffectiveDateRange(filters.quickRange, {
     monthDateRange,
@@ -2382,6 +2385,28 @@ function AgentPeriodRevenuePanel(props: {
   const settingsMonthPeriods = periodsByMonth[settingsMonth] ?? [];
   const reminderPreviousPeriod = settingsMonth === todayMonth ? currentPreviousPeriod : null;
   const canSetPeriods = permissions.canUse('agent-revenue-period-settings');
+
+  useEffect(() => {
+    let active = true;
+    if (!permissions.isSuperAdmin) {
+      setManagerOptions([]);
+      return () => { active = false; };
+    }
+
+    agentService.listManagementRevenueManagerOptions()
+      .then((options) => { if (active) setManagerOptions(options); })
+      .catch(() => { if (active) setManagerOptions([]); });
+
+    return () => { active = false; };
+  }, [permissions.isSuperAdmin]);
+
+  useEffect(() => {
+    if (!filters.managerEmployeeId || !props.regionId) return;
+    const selectedManager = managerOptions.find((manager) => manager.id === filters.managerEmployeeId);
+    if (selectedManager && selectedManager.region_id !== props.regionId) {
+      setFilters((current) => ({ ...current, managerEmployeeId: '' }));
+    }
+  }, [filters.managerEmployeeId, managerOptions, props.regionId]);
 
   useEffect(() => {
     if (effectivePeriodOptions.length === 0) return;
@@ -2476,7 +2501,7 @@ function AgentPeriodRevenuePanel(props: {
   }
 
   function resetRowFilters() {
-    setFilters((current) => ({ ...current, status: '', platform: '', creatorType: '', revenueInputMode: '', priority: '', search: '' }));
+    setFilters((current) => ({ ...current, status: '', platform: '', creatorType: '', revenueInputMode: '', priority: '', managerEmployeeId: '', search: '' }));
   }
 
   function updateMonth(value: string) {
@@ -2572,6 +2597,8 @@ function AgentPeriodRevenuePanel(props: {
             effectiveDateRange={effectiveDateRange}
             regionId={props.regionId}
             regions={props.options.regions}
+            canFilterManagers={permissions.isSuperAdmin}
+            managerOptions={managerOptions}
             onQuickRange={updateQuickRange}
             onFilter={updateFilter}
             onRegion={props.onRegion}
@@ -2644,6 +2671,8 @@ function OperationFilterBar(props: {
   effectiveDateRange: OperationDateRange;
   regionId: string;
   regions: AgentOptions['regions'];
+  canFilterManagers: boolean;
+  managerOptions: ManagementRevenueManagerOption[];
   onQuickRange: (value: OperationQuickRange) => void;
   onFilter: <Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) => void;
   onRegion: (value: string) => void;
@@ -2701,6 +2730,14 @@ function OperationFilterBar(props: {
           <option value="">全部</option>
           {props.regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}
         </SelectField>
+        {props.canFilterManagers ? (
+          <SearchableRevenueManagerFilter
+            value={props.filters.managerEmployeeId}
+            options={props.managerOptions}
+            regionId={props.regionId}
+            onChange={(value) => props.onFilter('managerEmployeeId', value)}
+          />
+        ) : null}
         <SelectField label="状态" value={props.filters.status} onChange={(value) => props.onFilter('status', value as OperationFilters['status'])}>
           <option value="">全部</option>
           <option value="missing">未填写</option>
@@ -2727,6 +2764,49 @@ function OperationFilterBar(props: {
         ) : null}
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onResetFilters}>重置筛选</button>
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onRefresh} disabled={props.refreshing}><RefreshCw size={15} /><span>刷新</span></button>
+      </div>
+    </div>
+  );
+}
+
+function SearchableRevenueManagerFilter({ value, options, regionId, onChange }: { value: string; options: ManagementRevenueManagerOption[]; regionId: string; onChange: (value: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedManager = options.find((option) => option.id === value);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleOptions = options.filter((option) => {
+    if (regionId && option.region_id !== regionId) return false;
+    if (!normalizedQuery) return true;
+    return [getEmployeeName(option), option.full_name, option.nickname, option.email].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
+  });
+  const selectedName = selectedManager ? getEmployeeName(selectedManager) : '';
+
+  useEffect(() => {
+    if (!value) setQuery('');
+  }, [value]);
+
+  return (
+    <div className="form-field agent-operation-manager-filter">
+      <span>经纪人</span>
+      <div>
+        <input
+          type="search"
+          value={isOpen ? query : selectedName || query}
+          placeholder="全部经纪人"
+          onFocus={() => { setQuery(''); setIsOpen(true); }}
+          onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+          onChange={(event) => { setQuery(event.target.value); setIsOpen(true); }}
+        />
+        {value ? <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(''); setQuery(''); setIsOpen(false); }} aria-label="清除经纪人筛选">清除</button> : null}
+        {isOpen ? (
+          <div className="agent-operation-manager-options" role="listbox" aria-label="经纪人">
+            {visibleOptions.length ? visibleOptions.map((option) => (
+              <button key={option.id} type="button" role="option" aria-selected={option.id === value} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(option.id); setQuery(''); setIsOpen(false); }}>
+                {getEmployeeName(option)}
+              </button>
+            )) : <p>没有符合条件的经纪人</p>}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -3662,6 +3742,9 @@ function buildOperationStreamerRows(
     if (filters.platform === 'dual_platform' && (!hasTikTok || !hasDouyin)) return [];
 
     let visibleProfiles = profiles;
+    if (filters.managerEmployeeId) {
+      visibleProfiles = visibleProfiles.filter((profile) => profile.manager_employee_id === filters.managerEmployeeId);
+    }
     if (filters.platform && filters.platform !== 'dual_platform') {
       visibleProfiles = visibleProfiles.filter((profile) => profile.platform === filters.platform);
     }
