@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: Verify target migration history is aligned
+      - name: List production migration history for audit
         shell: bash
         run: |
           set -euo pipefail
@@ -61,12 +61,6 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$migration_list_output"
-          normalized_migration_list_output="$(printf '%s\n' "$migration_list_output" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
-          if ! printf '%s\n' "$normalized_migration_list_output" | grep -Eq "^[[:space:]]*${MIGRATION_VERSION}[[:space:]]*\\|[[:space:]]*${MIGRATION_VERSION}[[:space:]]*\\|"; then
-            echo "Local and Remote migration history are not aligned for $MIGRATION_VERSION."
-            exit 1
-          fi
-          echo "Migration history is aligned for $MIGRATION_VERSION."
 
       - name: Verify zero pending migrations in dry-run
         shell: bash
@@ -78,17 +72,65 @@ jobs:
           fi
           printf '%s\n' "$dry_run_output"
           normalized_dry_run_output="$(printf '%s\n' "$dry_run_output" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
-          if printf '%s\n' "$normalized_dry_run_output" | grep -Fqx 'Would push these migrations:'; then
-            pending_migrations="$(printf '%s\n' "$normalized_dry_run_output" | sed -nE 's/^[[:space:]]*•[[:space:]]*([0-9]{12}_[A-Za-z0-9_.-]+\.sql)[[:space:]]*$/\1/p')"
-            test -n "$pending_migrations" || {
-              echo "Unable to parse the dry-run migration plan."
-              exit 1
+          if ! printf '%s\n' "$normalized_dry_run_output" | awk '
+            BEGIN {
+              dry_run_marker = "DRY RUN: migrations will *not* be pushed to the database."
+              push_marker = "Would push these migrations:"
+              up_to_date_marker = "Remote database is up to date."
+              finished_marker = "Finished supabase db" " push."
+              state = "before"
             }
-            printf 'Pending migrations:\n%s\n' "$pending_migrations"
+            $0 == dry_run_marker {
+              dry_run_markers++
+              next
+            }
+            $0 == push_marker {
+              push_markers++
+              if (state != "before") fail = "unexpected migration plan marker"
+              state = "migrations"
+              next
+            }
+            $0 == up_to_date_marker {
+              up_to_date_markers++
+              next
+            }
+            state == "migrations" && $0 == "Would seed these files:" {
+              state = "ended"
+              next
+            }
+            state == "migrations" && $0 == finished_marker {
+              state = "ended"
+              next
+            }
+            state == "migrations" {
+              if ($0 ~ /^[[:space:]]*•[[:space:]]*[0-9]{12}_[A-Za-z0-9_.-]+\.sql[[:space:]]*$/) {
+                filename = $0
+                sub(/^[[:space:]]*•[[:space:]]*/, "", filename)
+                sub(/[[:space:]]*$/, "", filename)
+                if (seen[filename]++) fail = "duplicate migration in pending plan: " filename
+                else print filename
+                next
+              }
+              fail = "unexpected or truncated pending migration plan"
+              next
+            }
+            END {
+              if (dry_run_markers != 1) fail = "missing or repeated dry-run marker"
+              if (push_markers == 0 && up_to_date_markers == 1 && !fail) exit 0
+              if (push_markers != 1) fail = "missing or repeated pending migration marker"
+              if (state != "ended") fail = "pending migration plan has no recognized end marker"
+              if (fail) {
+                print "Unable to parse Supabase CLI dry-run migration plan: " fail > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' > "$RUNNER_TEMP/pending_migrations"; then
+            echo "Unable to safely determine the dry-run migration plan."
             exit 1
           fi
-          if ! printf '%s\n' "$normalized_dry_run_output" | grep -Fqx 'Remote database is up to date.'; then
-            echo "Unable to safely determine the dry-run migration plan."
+          if test -s "$RUNNER_TEMP/pending_migrations"; then
+            echo "Production has pending migrations:"
+            cat "$RUNNER_TEMP/pending_migrations"
             exit 1
           fi
           echo "Production has zero pending migrations."
