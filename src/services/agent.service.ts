@@ -34,6 +34,7 @@ export type AgentOptions = {
 };
 
 export type ManagementRevenueManagerOption = Omit<AgentOptionEmployee, 'profile_id'>;
+export type RevenueRepresentativeOption = Pick<Employee, 'id' | 'full_name' | 'nickname'>;
 
 export type PersonalManagerCreatorProfile = CreatorProfile & {
   birthday?: string | null;
@@ -447,6 +448,35 @@ export const agentService = {
     const { data, error } = await db.rpc('list_management_revenue_manager_options');
     if (error) throw error;
     return (data ?? []) as ManagementRevenueManagerOption[];
+  },
+
+  async listManagementRevenueRepresentativeOptions(input: { startDate: string; endDate: string; platform?: '' | CreatorPlatform; creatorType?: '' | '5+1' | 'non_5_1'; status?: ManagementRevenueStatusFilter; regionId?: string }): Promise<RevenueRepresentativeOption[]> {
+    const { data, error } = await db.rpc('list_management_revenue_representative_options', {
+      p_start_date: input.startDate,
+      p_end_date: input.endDate,
+      p_platform: input.platform || null,
+      p_creator_type: input.creatorType || null,
+      p_region_id: input.regionId || null,
+      p_status: input.status || null,
+    });
+    if (error) throw error;
+    return (data ?? []) as RevenueRepresentativeOption[];
+  },
+
+  async listCurrentRevenueRepresentativeOptions(regionId?: string): Promise<RevenueRepresentativeOption[]> {
+    const { data, error } = await db.rpc('list_current_revenue_representative_options', {
+      p_region_id: regionId || null,
+    });
+    if (error) throw error;
+    return (data ?? []) as RevenueRepresentativeOption[];
+  },
+
+  async getManagementRevenueCreatorEntityCount(regionId?: string): Promise<number> {
+    const { data, error } = await db.rpc('get_management_revenue_creator_entity_count', {
+      p_region_id: regionId || null,
+    });
+    if (error) throw error;
+    return Number(data ?? 0);
   },
 
   async listManagedCreators(profileId: string, filters: { month?: string; platform?: string; regionId?: string }) {

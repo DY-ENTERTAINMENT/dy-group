@@ -34,6 +34,7 @@ import {
   type ManagementRevenueManagerOption,
   type ManagementRevenueRecord,
   type PersonalManagerCreatorProfile,
+  type RevenueRepresentativeOption,
   type RevenuePeriodSetting,
   type RevenuePeriodSettingSaveInput,
   type WeeklyRevenueRecord,
@@ -463,6 +464,15 @@ const managementMonthShortcutOptions: { value: 'current' | 'previous' | 'last3' 
   { value: 'year', label: '本年' },
 ];
 
+function managementRevenueMonthDateRange(startMonth: string, endMonth: string) {
+  const [safeStart, safeEnd] = startMonth <= endMonth ? [startMonth, endMonth] : [endMonth, startMonth];
+  const [endYear, endMonthNumber] = safeEnd.split('-').map(Number);
+  return {
+    startDate: `${safeStart}-01`,
+    endDate: `${safeEnd}-${String(new Date(endYear, endMonthNumber, 0).getDate()).padStart(2, '0')}`,
+  };
+}
+
 function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const permissions = usePermissions();
   const [filters, setFilters] = useState<ManagementRevenuePanelFilters>(() => ({
@@ -476,7 +486,8 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   }));
   const [managerSearch, setManagerSearch] = useState('');
   const [records, setRecords] = useState<ManagementRevenueRecord[]>([]);
-  const [managerEmployees, setManagerEmployees] = useState<ManagementRevenueManagerOption[]>([]);
+  const [managerEmployees, setManagerEmployees] = useState<RevenueRepresentativeOption[]>([]);
+  const [offlineManagerEmployees, setOfflineManagerEmployees] = useState<ManagementRevenueManagerOption[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState('');
   const [offlineRows, setOfflineRows] = useState<AgentOfflineRevenueKpiSummary[]>([]);
@@ -490,21 +501,20 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [creatorRankingView, setCreatorRankingView] = useState<ManagementRankingView>('tiktok');
   const [tablePage, setTablePage] = useState(1);
   const tablePageSize = 20;
-  const isEligibleManager = (employee: ManagementRevenueManagerOption | undefined) => Boolean(
-    employee
-    && (employee.status === 'active' || employee.status === 'probation')
-    && (employee.job_title_name === 'TALENT AGENT' || employee.job_title_name === 'TALENT AGENT LEAD'),
+  const managerOptionDateRange = useMemo(
+    () => managementRevenueMonthDateRange(filters.startMonth, filters.endMonth),
+    [filters.endMonth, filters.startMonth],
   );
   const rankingRosterRows = useMemo(() => {
     if (filters.creatorSearch.trim() || filters.creatorType) return [];
     return offlineRows.filter((row) => {
       if (filters.managerEmployeeId && row.agent_employee_id !== filters.managerEmployeeId) return false;
-      if (filters.regionId && managerEmployees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
+      if (filters.regionId && offlineManagerEmployees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
       return true;
     });
-  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, managerEmployees, offlineRows]);
+  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, offlineManagerEmployees, offlineRows]);
   const visibleOfflineRows = useMemo(() => {
-    const employeeRegions = new Map(managerEmployees.map((employee) => [employee.id, employee.region_id]));
+    const employeeRegions = new Map(offlineManagerEmployees.map((employee) => [employee.id, employee.region_id]));
 
     return offlineRows
       .filter((row) => !filters.regionId || employeeRegions.get(row.agent_employee_id) === filters.regionId)
@@ -517,7 +527,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
         return first.agent_employee_id.localeCompare(second.agent_employee_id);
       });
-  }, [filters.regionId, managerEmployees, offlineRows]);
+  }, [filters.regionId, offlineManagerEmployees, offlineRows]);
   const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
   const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
@@ -528,12 +538,32 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   useEffect(() => {
     let active = true;
 
-    agentService.listManagementRevenueManagerOptions()
+    agentService.listManagementRevenueRepresentativeOptions({
+      startDate: managerOptionDateRange.startDate,
+      endDate: managerOptionDateRange.endDate,
+      platform: filters.platform,
+      creatorType: filters.creatorType,
+      regionId: filters.regionId,
+    })
       .then((employees) => { if (active) setManagerEmployees(employees); })
       .catch(() => { if (active) setManagerEmployees([]); });
 
     return () => { active = false; };
+  }, [filters.creatorType, filters.platform, filters.regionId, managerOptionDateRange.endDate, managerOptionDateRange.startDate]);
+
+  useEffect(() => {
+    let active = true;
+    agentService.listManagementRevenueManagerOptions()
+      .then((employees) => { if (active) setOfflineManagerEmployees(employees); })
+      .catch(() => { if (active) setOfflineManagerEmployees([]); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (filters.managerEmployeeId && !managerEmployees.some((employee) => employee.id === filters.managerEmployeeId)) {
+      setFilters((current) => ({ ...current, managerEmployeeId: '' }));
+    }
+  }, [filters.managerEmployeeId, managerEmployees]);
 
   useEffect(() => {
     let active = true;
@@ -563,17 +593,14 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const managerOptions = useMemo(() => {
     const normalizedSearch = managerSearch.trim().toLowerCase();
     return managerEmployees.filter((employee) => {
-      if (!isEligibleManager(employee)) return false;
-      if (filters.regionId && employee.region_id !== filters.regionId) return false;
       if (!normalizedSearch) return true;
       return [
         getEmployeeName(employee),
         employee.full_name,
         employee.nickname,
-        employee.email,
       ].join(' ').toLowerCase().includes(normalizedSearch);
     });
-  }, [filters.regionId, managerSearch, managerEmployees]);
+  }, [managerSearch, managerEmployees]);
 
   const summary = useMemo(() => summarizeManagementRevenueRecords(records), [records]);
   const trendPoints = useMemo(() => buildManagementTrendPoints(records, filters.startMonth, filters.endMonth), [filters.endMonth, filters.startMonth, records]);
@@ -608,10 +635,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
 
     const nextRegionId = value as string;
     setFilters((current) => {
-      if (!current.managerEmployeeId || !nextRegionId) return { ...current, regionId: nextRegionId };
-      const selectedEmployee = managerEmployees.find((employee) => employee.id === current.managerEmployeeId);
-      const keepManager = selectedEmployee !== undefined && isEligibleManager(selectedEmployee) && selectedEmployee.region_id === nextRegionId;
-      return { ...current, regionId: nextRegionId, managerEmployeeId: keepManager ? current.managerEmployeeId : '' };
+      return { ...current, regionId: nextRegionId };
     });
   }
 
@@ -684,7 +708,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         <div className="management-revenue-manager-select">
           <SelectField label="经纪人" value={filters.managerEmployeeId} onChange={(value) => updateFilter('managerEmployeeId', value)}>
             <option value="">全部经纪人</option>
-            {managerOptions.map((employee) => <option key={employee.id} value={employee.id}>{getEmployeeName(employee) || employee.email}</option>)}
+            {managerOptions.map((employee) => <option key={employee.id} value={employee.id}>{getEmployeeName(employee) || employee.full_name}</option>)}
           </SelectField>
         </div>
         <div className="management-revenue-creator-search">
@@ -2368,7 +2392,8 @@ function AgentPeriodRevenuePanel(props: {
   const [activeRow, setActiveRow] = useState<OperationRow | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [managerOptions, setManagerOptions] = useState<ManagementRevenueManagerOption[]>([]);
+  const [managerOptions, setManagerOptions] = useState<RevenueRepresentativeOption[]>([]);
+  const [creatorEntityCount, setCreatorEntityCount] = useState<number | null>(null);
   const sortedCreators = useMemo(() => sortOperationCreators(props.creators.filter(isWeeklyRevenuePendingEligible)), [props.creators]);
   const effectiveDateRange = useMemo(() => getOperationEffectiveDateRange(filters.quickRange, {
     monthDateRange,
@@ -2388,25 +2413,34 @@ function AgentPeriodRevenuePanel(props: {
 
   useEffect(() => {
     let active = true;
+    setCreatorEntityCount(null);
+    agentService.getManagementRevenueCreatorEntityCount(props.regionId)
+      .then((count) => { if (active) setCreatorEntityCount(count); })
+      .catch(() => { if (active) setCreatorEntityCount(null); });
+    return () => { active = false; };
+  }, [props.regionId]);
+
+  useEffect(() => {
+    let active = true;
     if (!permissions.isSuperAdmin) {
       setManagerOptions([]);
       return () => { active = false; };
     }
 
-    agentService.listManagementRevenueManagerOptions()
+    agentService.listCurrentRevenueRepresentativeOptions(props.regionId)
       .then((options) => { if (active) setManagerOptions(options); })
       .catch(() => { if (active) setManagerOptions([]); });
 
     return () => { active = false; };
-  }, [permissions.isSuperAdmin]);
+  }, [permissions.isSuperAdmin, props.regionId]);
 
   useEffect(() => {
-    if (!filters.managerEmployeeId || !props.regionId) return;
+    if (!filters.managerEmployeeId) return;
     const selectedManager = managerOptions.find((manager) => manager.id === filters.managerEmployeeId);
-    if (selectedManager && selectedManager.region_id !== props.regionId) {
+    if (!selectedManager) {
       setFilters((current) => ({ ...current, managerEmployeeId: '' }));
     }
-  }, [filters.managerEmployeeId, managerOptions, props.regionId]);
+  }, [filters.managerEmployeeId, managerOptions]);
 
   useEffect(() => {
     if (effectivePeriodOptions.length === 0) return;
@@ -2575,7 +2609,7 @@ function AgentPeriodRevenuePanel(props: {
       {featureUnavailable ? null : (
         <>
           <div className="agent-operation-kpi-grid">
-            <OperationKpiCard label="流水概览" value={<KpiOverview tiktokTotal={summary.tiktokTotal} douyinTotal={summary.douyinTotal} />} detail={`${summary.rows} 位主播`} tone="overview" />
+            <OperationKpiCard label="总人数" value={creatorEntityCount == null ? '-' : `${creatorEntityCount} 人`} detail="全部主播" tone="overview" />
             <OperationKpiCard label="TikTok 总钻石" value={formatRevenueAmount(summary.tiktokTotal)} detail="钻石" tone="tiktok" icon={<img src={tiktokLogoUrl} alt="" aria-hidden="true" />} />
             <OperationKpiCard label="抖音总音浪" value={formatRevenueAmount(summary.douyinTotal)} detail="音浪" tone="douyin" icon={<img src={douyinLogoUrl} alt="" aria-hidden="true" />} />
             <OperationKpiCard label="已填写" value={summary.filled} detail="可填写周期" tone="filled" />
@@ -2653,15 +2687,6 @@ function AgentPeriodRevenuePanel(props: {
   );
 }
 
-function KpiOverview({ tiktokTotal, douyinTotal }: { tiktokTotal: number; douyinTotal: number }) {
-  return (
-    <span className="agent-period-kpi-overview">
-      <span><em>TikTok</em><b>{formatRevenueAmount(tiktokTotal)}</b><small>钻石</small></span>
-      <span><em>抖音</em><b>{formatRevenueAmount(douyinTotal)}</b><small>音浪</small></span>
-    </span>
-  );
-}
-
 function OperationKpiCard({ label, value, detail, tone, icon }: { label: string; value: ReactNode; detail?: string; tone?: OperationStatus | 'overview' | 'tiktok' | 'douyin'; icon?: ReactNode }) {
   return <article className={`agent-operation-kpi-card ${tone ? `agent-operation-kpi-card--${tone}` : ''}`}><div className="agent-period-kpi-head"><span>{label}</span>{icon ? <i>{icon}</i> : null}</div><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</article>;
 }
@@ -2672,7 +2697,7 @@ function OperationFilterBar(props: {
   regionId: string;
   regions: AgentOptions['regions'];
   canFilterManagers: boolean;
-  managerOptions: ManagementRevenueManagerOption[];
+  managerOptions: RevenueRepresentativeOption[];
   onQuickRange: (value: OperationQuickRange) => void;
   onFilter: <Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) => void;
   onRegion: (value: string) => void;
@@ -2734,7 +2759,6 @@ function OperationFilterBar(props: {
           <SearchableRevenueManagerFilter
             value={props.filters.managerEmployeeId}
             options={props.managerOptions}
-            regionId={props.regionId}
             onChange={(value) => props.onFilter('managerEmployeeId', value)}
           />
         ) : null}
@@ -2769,15 +2793,14 @@ function OperationFilterBar(props: {
   );
 }
 
-function SearchableRevenueManagerFilter({ value, options, regionId, onChange }: { value: string; options: ManagementRevenueManagerOption[]; regionId: string; onChange: (value: string) => void }) {
+function SearchableRevenueManagerFilter({ value, options, onChange }: { value: string; options: RevenueRepresentativeOption[]; onChange: (value: string) => void }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const selectedManager = options.find((option) => option.id === value);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleOptions = options.filter((option) => {
-    if (regionId && option.region_id !== regionId) return false;
     if (!normalizedQuery) return true;
-    return [getEmployeeName(option), option.full_name, option.nickname, option.email].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
+    return [getEmployeeName(option), option.full_name, option.nickname].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
   });
   const selectedName = selectedManager ? getEmployeeName(selectedManager) : '';
 
