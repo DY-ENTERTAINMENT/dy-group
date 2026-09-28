@@ -75,16 +75,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_before.txt"
-          sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//' "$RUNNER_TEMP/migration_list_before.txt" > "$RUNNER_TEMP/migration_list_before_normalized.txt"
-          if awk -F '|' -v version="$MIGRATION_VERSION" '
-            NF >= 3 {
-              remote = $2
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote)
-              if (remote == version) found = 1
-            }
-            END { exit(found ? 0 : 1) }
-          ' "$RUNNER_TEMP/migration_list_before_normalized.txt"; then
+          if ! migration_list_before="$(supabase migration list --linked 2>&1)"; then
+            printf '%s\n' "$migration_list_before"
+            exit 1
+          fi
+          printf '%s\n' "$migration_list_before"
+          normalized_migration_list_before="$(printf '%s\n' "$migration_list_before" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
+          if printf '%s\n' "$normalized_migration_list_before" | grep -Eq "^[[:space:]]*[^|]*\\|[[:space:]]*${MIGRATION_VERSION}[[:space:]]*\\|"; then
             echo "Migration history already records $MIGRATION_VERSION; no repair will be performed."
             echo "already_applied=true" >> "$GITHUB_OUTPUT"
           else
@@ -103,29 +100,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_after.txt"
-          sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//' "$RUNNER_TEMP/migration_list_after.txt" > "$RUNNER_TEMP/migration_list_after_normalized.txt"
-          awk -F '|' -v version="$MIGRATION_VERSION" '
-            NF >= 3 {
-              local_version = $1
-              remote_version = $2
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", local_version)
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote_version)
-              if (local_version == version && remote_version == version) found = 1
-            }
-            END { exit(found ? 0 : 1) }
-          ' "$RUNNER_TEMP/migration_list_after_normalized.txt" || {
+          if ! migration_list_after="$(supabase migration list --linked 2>&1)"; then
+            printf '%s\n' "$migration_list_after"
+            exit 1
+          fi
+          printf '%s\n' "$migration_list_after"
+          normalized_migration_list_after="$(printf '%s\n' "$migration_list_after" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
+          if ! printf '%s\n' "$normalized_migration_list_after" | grep -Eq "^[[:space:]]*${MIGRATION_VERSION}[[:space:]]*\\|[[:space:]]*${MIGRATION_VERSION}[[:space:]]*\\|"; then
             echo "Migration history verification failed for $MIGRATION_VERSION."
             exit 1
-          }
+          fi
 
       - name: Verify no pending migration in dry-run
         shell: bash
         run: |
           set -euo pipefail
-          dry_run_output="$(supabase db push --dry-run --linked 2>&1)"
+          if ! dry_run_output="$(supabase db push --dry-run --linked 2>&1)"; then
+            printf '%s\n' "$dry_run_output"
+            exit 1
+          fi
           printf '%s\n' "$dry_run_output"
-          if printf '%s\n' "$dry_run_output" | grep -Eq "(^|[[:space:]•])${MIGRATION_VERSION}_${MIGRATION_FILE#${MIGRATION_VERSION}_}([[:space:]]|$)"; then
-            echo "$MIGRATION_VERSION is still pending after history repair."
+          normalized_dry_run_output="$(printf '%s\n' "$dry_run_output" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
+          if printf '%s\n' "$normalized_dry_run_output" | grep -Fqx 'Would push these migrations:'; then
+            pending_migrations="$(printf '%s\n' "$normalized_dry_run_output" | sed -nE 's/^[[:space:]]*•[[:space:]]*([0-9]{12}_[A-Za-z0-9_.-]+\.sql)[[:space:]]*$/\1/p')"
+            test -n "$pending_migrations" || {
+              echo "Unable to parse the dry-run migration plan."
+              exit 1
+            }
+            printf 'Pending migrations:\n%s\n' "$pending_migrations"
+            if printf '%s\n' "$pending_migrations" | grep -Fxq "$MIGRATION_FILE"; then
+              echo "$MIGRATION_VERSION is still pending after history repair."
+              exit 1
+            fi
+            echo "$MIGRATION_VERSION is not pending; other migrations listed above remain outside this one-time repair workflow."
+          elif printf '%s\n' "$normalized_dry_run_output" | grep -Fqx 'Remote database is up to date.'; then
+            echo "Remote database is up to date."
+          else
+            echo "Unable to safely determine the dry-run migration plan."
             exit 1
           fi
