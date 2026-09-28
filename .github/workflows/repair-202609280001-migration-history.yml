@@ -76,6 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_before.txt"
+          sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//' "$RUNNER_TEMP/migration_list_before.txt" > "$RUNNER_TEMP/migration_list_before_normalized.txt"
           if awk -F '|' -v version="$MIGRATION_VERSION" '
             NF >= 3 {
               remote = $2
@@ -83,7 +84,7 @@ jobs:
               if (remote == version) found = 1
             }
             END { exit(found ? 0 : 1) }
-          ' "$RUNNER_TEMP/migration_list_before.txt"; then
+          ' "$RUNNER_TEMP/migration_list_before_normalized.txt"; then
             echo "Migration history already records $MIGRATION_VERSION; no repair will be performed."
             echo "already_applied=true" >> "$GITHUB_OUTPUT"
           else
@@ -103,6 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           supabase migration list --linked | tee "$RUNNER_TEMP/migration_list_after.txt"
+          sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//' "$RUNNER_TEMP/migration_list_after.txt" > "$RUNNER_TEMP/migration_list_after_normalized.txt"
           awk -F '|' -v version="$MIGRATION_VERSION" '
             NF >= 3 {
               local_version = $1
@@ -112,7 +114,7 @@ jobs:
               if (local_version == version && remote_version == version) found = 1
             }
             END { exit(found ? 0 : 1) }
-          ' "$RUNNER_TEMP/migration_list_after.txt" || {
+          ' "$RUNNER_TEMP/migration_list_after_normalized.txt" || {
             echo "Migration history verification failed for $MIGRATION_VERSION."
             exit 1
           }
