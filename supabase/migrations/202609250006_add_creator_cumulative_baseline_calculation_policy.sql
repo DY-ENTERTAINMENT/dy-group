@@ -41,6 +41,16 @@ begin
   return jsonb_build_object('idempotent',false,'entry_kind','reset','baseline_calculation_policy',p_baseline_calculation_policy,'baseline_effective_week_start_date',v_effective);
 end; $$;
 
+-- Compatibility contract for clients deployed before the explicit-policy UI.
+-- It intentionally preserves ordinary, next-period reset semantics.
+create function public.reset_creator_cumulative_revenue_baseline(
+  p_creator_profile_id uuid, p_new_baseline_amount numeric, p_data_date date, p_reason text, p_idempotency_key uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+  return public.reset_creator_cumulative_revenue_baseline(
+    p_creator_profile_id, p_new_baseline_amount, 'ordinary_next_period', p_data_date, p_reason, p_idempotency_key);
+end; $$;
+
 -- Initialization intentionally keeps the pre-existing agent access model; reset
 -- remains Super Admin only. Both paths require an explicit policy.
 create function public.initialize_creator_cumulative_revenue_baseline(
@@ -75,7 +85,11 @@ begin
  select * into e from public.creator_revenue_cumulative_records where creator_profile_id=c.id and idempotency_key=p_idempotency_key; if e.id is not null then select * into w from public.creator_weekly_revenue_records where id=e.related_weekly_revenue_record_id; return jsonb_build_object('idempotent',true,'entry_kind',e.entry_kind,'weekly_record',to_jsonb(w),'previous_cumulative_amount',e.previous_cumulative_amount,'calculated_period_amount',e.calculated_period_amount); end if;
  select * into s from public.creator_revenue_cumulative_state where creator_profile_id=c.id for update; if s.creator_profile_id is null then insert into public.creator_revenue_cumulative_state(creator_profile_id) values(c.id) returning * into s; end if;
  v_start:=public.creator_weekly_revenue_period_start(p_data_date); v_end:=public.creator_weekly_revenue_period_end(v_start);
- if not s.chain_active then raise exception 'Cumulative baseline must be initialized before submitting revenue.'; end if;
+ if not s.chain_active then
+   insert into public.creator_revenue_cumulative_records(creator_profile_id,creator_entity_id,platform,platform_uid,cumulative_amount,data_date,week_start_date,entered_by_employee_id,source,entry_kind,idempotency_key,note) values(c.id,c.creator_entity_id,c.platform,c.platform_user_id,p_cumulative_amount,p_data_date,v_start,v_employee,p_source,'baseline',p_idempotency_key,nullif(btrim(coalesce(p_note,'')),'')) returning * into raw;
+   update public.creator_revenue_cumulative_state set latest_cumulative_amount=p_cumulative_amount,latest_raw_record_id=raw.id,chain_active=true,chain_generation=chain_generation+1,calculation_resumes_week_start_date=public.creator_weekly_revenue_period_start(public.creator_weekly_revenue_period_end(v_start)+1),baseline_calculation_policy='ordinary_next_period',baseline_effective_week_start_date=public.creator_weekly_revenue_period_start(public.creator_weekly_revenue_period_end(v_start)+1),updated_at=now() where creator_profile_id=c.id;
+   return jsonb_build_object('idempotent',false,'entry_kind','baseline','weekly_record',null,'previous_cumulative_amount',null,'calculated_period_amount',null);
+ end if;
  select exists(select 1 from public.creator_revenue_cumulative_period_state ps join public.creator_weekly_revenue_records qw on qw.id=ps.weekly_revenue_record_id where ps.creator_profile_id=c.id and ps.chain_generation=s.chain_generation and ps.is_active and public.creator_weekly_revenue_is_cumulative(qw)) into v_mature;
  if s.baseline_calculation_policy='legacy_unknown' and not v_mature then raise exception 'This legacy cumulative baseline requires a Super Admin reset.'; end if;
  v_effective:=case when s.baseline_calculation_policy in ('zero_start_current_period','ordinary_next_period') then s.baseline_effective_week_start_date else s.calculation_resumes_week_start_date end;
@@ -140,6 +154,8 @@ end; $$;
 
 revoke all on function public.reset_creator_cumulative_revenue_baseline(uuid,numeric,text,date,text,uuid) from public,anon;
 grant execute on function public.reset_creator_cumulative_revenue_baseline(uuid,numeric,text,date,text,uuid) to authenticated;
+revoke all on function public.reset_creator_cumulative_revenue_baseline(uuid,numeric,date,text,uuid) from public,anon;
+grant execute on function public.reset_creator_cumulative_revenue_baseline(uuid,numeric,date,text,uuid) to authenticated;
 revoke all on function public.initialize_creator_cumulative_revenue_baseline(uuid,numeric,text,date,uuid,text) from public,anon;
 grant execute on function public.initialize_creator_cumulative_revenue_baseline(uuid,numeric,text,date,uuid,text) to authenticated;
 revoke all on function public.submit_creator_cumulative_revenue(uuid,numeric,date,uuid,text,text) from public,anon;
