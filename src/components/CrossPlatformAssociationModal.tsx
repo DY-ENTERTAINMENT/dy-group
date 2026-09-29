@@ -3,7 +3,7 @@ import { SystemModal } from './SystemModal';
 import { platformLabels, scoutService, type CreatorEntityPlatformEditValues, type CrossPlatformAssociationCandidate, type CrossPlatformAssociationPreflight, type CrossPlatformAssociationRoomResolution } from '../services/scout.service';
 
 type Props = { currentEntityId: string; currentProfile: CreatorEntityPlatformEditValues; onClose: () => void; onSuccess: () => void };
-type DisplayProfile = { platform: 'tiktok' | 'douyin'; platformAccount: string; platformPublicId: string | null; platformUserId: string; revenueCycle: string | null; revenueInputMode: string | null };
+type DisplayProfile = { platform: 'tiktok' | 'douyin'; platformAccount: string; platformPublicId: string | null; platformUserId: string; revenueCycle: string | null };
 
 const identity = (profile: DisplayProfile) => `${platformLabels[profile.platform]} · ${profile.platformAccount} · ${profile.platformPublicId || profile.platformUserId}`;
 const currentDisplayProfile = (profile: CreatorEntityPlatformEditValues): DisplayProfile => ({
@@ -12,7 +12,6 @@ const currentDisplayProfile = (profile: CreatorEntityPlatformEditValues): Displa
   platformPublicId: profile.platform_public_id || null,
   platformUserId: profile.platform_user_id,
   revenueCycle: profile.revenue_cycle ?? null,
-  revenueInputMode: profile.revenue_input_mode ?? null,
 });
 
 function ProfileDetails({ profile, creatorName, managerName, regionName }: { profile: DisplayProfile; creatorName: string; managerName: string | null; regionName: string | null }) {

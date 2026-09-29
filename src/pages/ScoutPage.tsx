@@ -231,7 +231,6 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorStatusFilter, setCreatorStatusFilter] = useState<CreatorStatusFilter>('active');
   const [operationStatusFilter, setOperationStatusFilter] = useState('');
   const [revenueCycleFilter, setRevenueCycleFilter] = useState('');
-  const [revenueInputModeFilter, setRevenueInputModeFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [candidateStatusFilter, setCandidateStatusFilter] = useState<CandidateStatusFilter>('pending');
   const [candidateFollowFilter, setCandidateFollowFilter] = useState<CandidateFollowFilter>('all');
@@ -926,7 +925,6 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           creatorStatusFilter={creatorStatusFilter}
           operationStatusFilter={operationStatusFilter}
           revenueCycleFilter={revenueCycleFilter}
-          revenueInputModeFilter={revenueInputModeFilter}
           priorityFilter={priorityFilter}
           onPlatformFilter={setPlatformFilter}
           onMonthChange={setCreatorStatsMonth}
@@ -938,9 +936,8 @@ export function ScoutPage({ mode }: ScoutPageProps) {
           onCreatorStatusFilter={setCreatorStatusFilter}
           onOperationStatusFilter={setOperationStatusFilter}
           onRevenueCycleFilter={setRevenueCycleFilter}
-          onRevenueInputModeFilter={setRevenueInputModeFilter}
           onPriorityFilter={setPriorityFilter}
-          onResetManagementFilters={() => { setCreatorStatsMonth(''); setPlatformFilter(''); setRegionFilter(''); setScoutFilter(''); setManagerFilter(''); setCreatorTypeFilter(''); setCreatorRegistrationTypeFilter(''); setCreatorStatusFilter('active'); setOperationStatusFilter(''); setRevenueCycleFilter(''); setRevenueInputModeFilter(''); setPriorityFilter(''); }}
+          onResetManagementFilters={() => { setCreatorStatsMonth(''); setPlatformFilter(''); setRegionFilter(''); setScoutFilter(''); setManagerFilter(''); setCreatorTypeFilter(''); setCreatorRegistrationTypeFilter(''); setCreatorStatusFilter('active'); setOperationStatusFilter(''); setRevenueCycleFilter(''); setPriorityFilter(''); }}
           onRefresh={loadData}
           managerDisplayNameByCreatorId={managerDisplayNameByCreatorId}
           onEdit={openCreatorEdit}
@@ -1685,11 +1682,9 @@ function CreatorStatsPanel({
   onCreatorStatusFilter,
   operationStatusFilter,
   revenueCycleFilter,
-  revenueInputModeFilter,
   priorityFilter,
   onOperationStatusFilter,
   onRevenueCycleFilter,
-  onRevenueInputModeFilter,
   onPriorityFilter,
   onResetManagementFilters,
   onRefresh,
@@ -1714,7 +1709,6 @@ function CreatorStatsPanel({
   creatorStatusFilter: CreatorStatusFilter;
   operationStatusFilter: string;
   revenueCycleFilter: string;
-  revenueInputModeFilter: string;
   priorityFilter: string;
   onPlatformFilter: (value: string) => void;
   onMonthChange: (value: string) => void;
@@ -1726,7 +1720,6 @@ function CreatorStatsPanel({
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
   onOperationStatusFilter: (value: string) => void;
   onRevenueCycleFilter: (value: string) => void;
-  onRevenueInputModeFilter: (value: string) => void;
   onPriorityFilter: (value: string) => void;
   onResetManagementFilters: () => void;
   onRefresh: () => void;
@@ -1749,10 +1742,9 @@ function CreatorStatsPanel({
       status: creatorStatusFilter,
       operationStatus: operationStatusFilter,
       revenueCycle: revenueCycleFilter,
-      revenueInputMode: revenueInputModeFilter,
       priority: priorityFilter,
     }),
-    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, revenueInputModeFilter, scoutFilter],
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
   );
   const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1766,7 +1758,7 @@ function CreatorStatsPanel({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [creatorRegistrationTypeFilter, creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, operationStatusFilter, revenueCycleFilter, revenueInputModeFilter, priorityFilter, pageSize]);
+  }, [creatorRegistrationTypeFilter, creatorSearchQuery, platformFilter, regionFilter, scoutFilter, managerFilter, creatorTypeFilter, creatorStatusFilter, operationStatusFilter, revenueCycleFilter, priorityFilter, pageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -1789,7 +1781,6 @@ function CreatorStatsPanel({
         creatorStatusFilter={creatorStatusFilter}
         operationStatusFilter={operationStatusFilter}
         revenueCycleFilter={revenueCycleFilter}
-        revenueInputModeFilter={revenueInputModeFilter}
         priorityFilter={priorityFilter}
         onPlatformFilter={onPlatformFilter}
         onMonthChange={onMonthChange}
@@ -1802,7 +1793,6 @@ function CreatorStatsPanel({
         onCreatorStatusFilter={onCreatorStatusFilter}
         onOperationStatusFilter={onOperationStatusFilter}
         onRevenueCycleFilter={onRevenueCycleFilter}
-        onRevenueInputModeFilter={onRevenueInputModeFilter}
         onPriorityFilter={onPriorityFilter}
         onReset={onResetManagementFilters}
         onRefresh={onRefresh}
@@ -1869,7 +1859,6 @@ function CreatorFilters(props: {
   creatorStatusFilter: CreatorStatusFilter;
   operationStatusFilter: string;
   revenueCycleFilter: string;
-  revenueInputModeFilter: string;
   priorityFilter: string;
   onPlatformFilter: (value: string) => void;
   onMonthChange: (value: string) => void;
@@ -1882,7 +1871,6 @@ function CreatorFilters(props: {
   onCreatorStatusFilter: (value: CreatorStatusFilter) => void;
   onOperationStatusFilter: (value: string) => void;
   onRevenueCycleFilter: (value: string) => void;
-  onRevenueInputModeFilter: (value: string) => void;
   onPriorityFilter: (value: string) => void;
   onReset: () => void;
   onRefresh: () => void;
@@ -1946,9 +1934,6 @@ function CreatorFilters(props: {
       </SelectField>
       <SelectField label="流水周期" value={props.revenueCycleFilter} onChange={props.onRevenueCycleFilter}>
         <option value="">全部</option><option value="weekly">周流水</option><option value="monthly">月流水</option><option value="none">无需流水</option>
-      </SelectField>
-      <SelectField label="填写方式" value={props.revenueInputModeFilter} onChange={props.onRevenueInputModeFilter}>
-        <option value="">全部</option><option value="direct">直接填写</option><option value="cumulative">累计计算</option>
       </SelectField>
       <SelectField label="重点关注" value={props.priorityFilter} onChange={props.onPriorityFilter}>
         <option value="">全部</option><option value="priority">重点关注</option><option value="normal">非重点</option>
@@ -2163,8 +2148,7 @@ function CreatorManagementBadges({ creator, entityLevel = false }: { creator: Cr
 
 function CreatorRevenueSettingMeta({ creator }: { creator: CreatorProfile }) {
   const cycle = creator.revenue_cycle === 'monthly' ? '月流水' : creator.revenue_cycle === 'none' ? '不需要填写' : '周流水';
-  const value = creator.revenue_cycle === 'none' ? cycle : `${cycle} · ${creator.revenue_input_mode === 'cumulative' ? '累计填写' : '直接填写'}`;
-  return <span>流水：{value}</span>;
+  return <span>流水：{cycle}</span>;
 }
 
 function PlatformLogo({ platform }: { platform: CreatorPlatform }) {
@@ -2293,7 +2277,7 @@ function CreatorDetailDrawer({
             <div className="creator-platform-revenue-settings">
               {sortCreatorProfiles(group.profiles).map((creator) => {
                 const cycle = creator.revenue_cycle ?? 'weekly';
-                return <article key={creator.id} className="creator-platform-revenue-card"><strong><PlatformLogo platform={creator.platform} />{platformLabels[creator.platform]}</strong><span>{creator.platform_account || creator.platform_user_id || '—'}</span><div className="creator-management-badges"><span className="creator-management-badge creator-management-badge--cycle">{getRevenueCycleLabel(cycle)}</span>{cycle !== 'none' ? <span className="creator-management-badge creator-management-badge--input">{creator.revenue_input_mode === 'cumulative' ? '累计计算' : '直接填写'}</span> : null}</div></article>;
+                return <article key={creator.id} className="creator-platform-revenue-card"><strong><PlatformLogo platform={creator.platform} />{platformLabels[creator.platform]}</strong><span>{creator.platform_account || creator.platform_user_id || '—'}</span><div className="creator-management-badges"><span className="creator-management-badge creator-management-badge--cycle">{getRevenueCycleLabel(cycle)}</span></div></article>;
               })}
             </div>
           </DrawerSection>
@@ -4074,9 +4058,6 @@ function CreatorEntitySharedModal(props: {
                 </SelectField></> : null}
                 {props.canEditRevenueSettings ? <><SelectField label="流水周期" value={platformValues.revenue_cycle ?? 'weekly'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_cycle: value as 'weekly' | 'monthly' | 'none' })}>
                   <option value="weekly">每周</option><option value="monthly">每月</option><option value="none">不要求</option>
-                </SelectField>
-                <SelectField label="流水填写方式" value={platformValues.revenue_input_mode ?? 'direct'} onChange={(value) => updatePlatform(platformValues.platform, { revenue_input_mode: value as 'direct' | 'cumulative' })}>
-                  <option value="direct">直接填写流水</option><option value="cumulative">累计流水自动计算（仅配置）</option>
                 </SelectField></> : null}
               </div>
             );
@@ -4490,7 +4471,6 @@ function filterCreatorGroups(
     status: CreatorStatusFilter;
     operationStatus: string;
     revenueCycle: string;
-    revenueInputMode: string;
     priority: string;
   },
 ) {
@@ -4511,7 +4491,6 @@ function filterCreatorGroups(
     }
     if (!hasProfile((creator) => {
       const revenueCycle = creator.revenue_cycle ?? 'weekly';
-      const revenueInputMode = creator.revenue_input_mode ?? 'direct';
       return (!filters.month || (creator.guild_joined_date ?? creator.joined_date).startsWith(filters.month))
         && (!filters.platform || filters.platform === 'dual_platform' || creator.platform === filters.platform)
         && (!filters.regionId || creator.region_id === filters.regionId)
@@ -4521,7 +4500,6 @@ function filterCreatorGroups(
         && (!filters.registrationType || creator.registration_type === filters.registrationType)
         && (filters.status === 'all' || (creator.status ?? 'active') === filters.status)
         && (!filters.revenueCycle || revenueCycle === filters.revenueCycle)
-        && (!filters.revenueInputMode || (revenueCycle !== 'none' && revenueInputMode === filters.revenueInputMode))
         && (!searchQuery || [creator.creator_name, creator.platform_account, creator.platform_user_id, creator.platform_public_id ?? ''].some((value) => value.toLowerCase().includes(searchQuery)));
     })) return false;
     return true;

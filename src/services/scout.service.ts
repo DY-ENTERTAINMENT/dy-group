@@ -345,7 +345,6 @@ export type CrossPlatformAssociationProfileSummary = {
   platformUserId: string;
   platformPublicId: string | null;
   revenueCycle: 'weekly' | 'monthly' | 'none' | null;
-  revenueInputMode: 'direct' | 'cumulative' | null;
 };
 
 export type CrossPlatformAssociationDependencies = {
@@ -440,8 +439,7 @@ function mapAssociationProfile(value: unknown): CrossPlatformAssociationProfileS
   const platformUserId = readString(value.platform_user_id);
   if (!id || !creatorEntityId || !platform || !creatorName || !platformAccount || !platformUserId) return null;
   const revenueCycle = value.revenue_cycle === 'weekly' || value.revenue_cycle === 'monthly' || value.revenue_cycle === 'none' ? value.revenue_cycle : null;
-  const revenueInputMode = value.revenue_input_mode === 'direct' || value.revenue_input_mode === 'cumulative' ? value.revenue_input_mode : null;
-  return { id, creatorEntityId, platform, creatorName, platformAccount, platformUserId, platformPublicId: readNullableString(value.platform_public_id), revenueCycle, revenueInputMode };
+  return { id, creatorEntityId, platform, creatorName, platformAccount, platformUserId, platformPublicId: readNullableString(value.platform_public_id), revenueCycle };
 }
 
 function mapAssociationPreflight(value: unknown): CrossPlatformAssociationPreflight {
@@ -860,7 +858,7 @@ export const scoutService = {
   async saveCreatorEntityRevenueSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
     const { error } = await db.rpc('save_creator_entity_revenue_settings', {
       p_creator_entity_id: creatorEntityId,
-      p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: p.revenue_input_mode ?? 'direct' })),
+      p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: 'direct' })),
     });
     if (error) throw error;
   },
