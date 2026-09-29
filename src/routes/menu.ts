@@ -123,6 +123,14 @@ export const menuItems: MenuItem[] = [
     group: '经纪人',
   },
   {
+    key: 'agent-monthly-kpi',
+    label: '主播月度 KPI',
+    path: '/tools/agent/monthly-kpi',
+    icon: BarChart3,
+    section: '工作工具',
+    group: '经纪人',
+  },
+  {
     key: 'agent-creator-activity-calendar',
     label: '主播活动总日历',
     path: '/tools/agent/activity-calendar',

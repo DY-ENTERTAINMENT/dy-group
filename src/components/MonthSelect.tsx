@@ -5,16 +5,17 @@ type MonthSelectProps = {
   onChange: (value: string) => void;
   pastYears?: number;
   futureYears?: number;
+  formatOption?: (value: string) => string;
 };
 
-export function MonthSelect({ value, onChange, pastYears = 2, futureYears = 2 }: MonthSelectProps) {
+export function MonthSelect({ value, onChange, pastYears = 2, futureYears = 2, formatOption = formatMonthLabel }: MonthSelectProps) {
   const options = useMemo(() => getMonthOptions(value, pastYears, futureYears), [futureYears, pastYears, value]);
 
   return (
     <select value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map((option) => (
         <option key={option} value={option}>
-          {formatMonthLabel(option)}
+          {formatOption(option)}
         </option>
       ))}
     </select>

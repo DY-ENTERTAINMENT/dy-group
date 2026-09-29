@@ -30,6 +30,7 @@ import { AgentPage } from '../pages/AgentPage';
 import { CreatorActivityCalendarPage } from '../pages/CreatorActivityCalendarPage';
 import { DesignerPage } from '../pages/DesignerPage';
 import { OfflineLiveRoomManagementPage } from '../pages/OfflineLiveRoomManagementPage';
+import { CreatorMonthlyKpiPage } from '../pages/CreatorMonthlyKpiPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
 import { RequireRole } from '../components/RequireRole';
@@ -141,6 +142,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permissionKey="agent-creator-data">
                 <AgentPage mode="creators" />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: getMenuPath('agent-monthly-kpi'),
+            element: (
+              <RequirePermission permissionKey="agent-monthly-kpi">
+                <CreatorMonthlyKpiPage />
               </RequirePermission>
             ),
           },
