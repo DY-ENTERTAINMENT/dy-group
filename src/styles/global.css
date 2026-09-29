@@ -3034,6 +3034,46 @@ a {
   gap: 22px;
 }
 
+.attendance-page-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
+.attendance-page-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
+.attendance-page-tabs button.active { border-bottom-color: var(--primary); color: var(--primary); }
+.today-attendance-filters { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
+.today-attendance-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.today-attendance-stat { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.today-attendance-stat span { color: var(--muted); font-size: 13px; font-weight: 700; }
+.today-attendance-stat strong { font-size: 22px; }
+.today-attendance-stat-working { border-color: #cce8d7; background: #fbfefc; }
+.today-attendance-stat-working strong { color: #397557; }
+.today-attendance-stat-on_break { border-color: #f0dfaf; background: #fffdf8; }
+.today-attendance-stat-on_break strong { color: #9a741c; }
+.today-attendance-stat-clocked_out { border-color: #cfddf2; background: #fbfdff; }
+.today-attendance-stat-clocked_out strong { color: #5274a6; }
+.today-attendance-stat-abnormal { border-color: #efcfd4; background: #fffafb; }
+.today-attendance-stat-abnormal strong { color: #a85c68; }
+.today-attendance-table th:nth-child(3), .today-attendance-table th:nth-child(4), .today-attendance-table th:nth-child(5) { min-width: 100px; }
+.today-punch-cell { display: inline-flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.today-break-cell { display: inline-flex; align-items: center; gap: 7px; }
+.today-break-arrow { color: var(--muted); }
+.today-photo-thumbnail { display: block; width: 38px; height: 38px; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-soft); cursor: pointer; }
+.today-photo-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.today-photo-thumbnail:hover { border-color: var(--primary); }
+.today-photo-loading, .today-photo-denied { color: var(--muted); font-size: 12px; }
+.today-photo-denied { color: #85808a; }
+.today-photo-large { display: block; width: 100%; max-height: min(62vh, 560px); border-radius: 8px; object-fit: contain; background: var(--panel-soft); }
+.today-status, .today-notice { display: inline-flex; margin: 2px 5px 2px 0; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.today-status-not_started { color: #69717a; background: #f0f2f4; }
+.today-status-working { color: #397557; background: #e7f4eb; }
+.today-status-on_break { color: #9a741c; background: #fff5dc; }
+.today-status-clocked_out { color: #5274a6; background: #eaf1fb; }
+.today-notice { color: #a85c68; background: #fbecef; }
+.today-detail-head { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.today-detail-notices { display: grid; gap: 6px; margin-bottom: 14px; }
+.today-detail-notices p { display: flex; align-items: center; gap: 6px; margin: 0; color: #a85c68; font-size: 13px; font-weight: 700; }
+.today-timeline { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.today-timeline li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.today-timeline li > div { display: grid; gap: 4px; }
+.today-timeline li span { color: var(--muted); font-size: 13px; }
+
 .employee-rest-management-page { display: grid; gap: 18px; }
 .employee-rest-management-page .rest-management-filters { grid-template-columns: repeat(4, minmax(180px, 1fr)); align-items: end; }
 .employee-rest-management-page .rest-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
@@ -13961,5 +14001,35 @@ button.leave-chip:disabled {
 
   .leave-balance-management-header .secondary-action {
     width: fit-content;
+  }
+}
+
+/* Scoped responsive layout for the Phase 1A today-attendance panel. */
+@media (min-width: 1100px) {
+  .attendance-management-page .today-attendance-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1099px) {
+  .attendance-management-page .today-attendance-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-management-page .today-attendance-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .attendance-management-page .today-attendance-filters,
+  .attendance-management-page .today-attendance-stats {
+    grid-template-columns: 1fr;
+  }
+  .attendance-management-page .today-break-cell {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .attendance-management-page .today-break-arrow {
+    display: none;
   }
 }

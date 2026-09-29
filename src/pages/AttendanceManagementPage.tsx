@@ -76,6 +76,19 @@ type AbnormalReviewSnapshot = {
 type AbnormalCenterTab = 'pending' | 'abnormal';
 
 type EmployeeStatusFilter = 'working-attendance' | 'all-working' | 'attendance-exempt' | 'left' | 'all';
+type AttendanceTab = 'today' | 'statistics';
+type TodayAttendanceStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out';
+
+type TodayAttendanceRow = {
+  employee: AttendanceEmployee;
+  records: AttendanceRecord[];
+  clockIn: AttendanceRecord | null;
+  breakStart: AttendanceRecord | null;
+  breakEnd: AttendanceRecord | null;
+  clockOut: AttendanceRecord | null;
+  status: TodayAttendanceStatus;
+  notices: string[];
+};
 
 const leaveTypeLabels: Record<LeaveType, string> = {
   annual: '年假',
@@ -88,6 +101,15 @@ export function AttendanceManagementPage() {
   const { profile } = useAuth();
   const permissions = usePermissions();
   const canUseAttendance = permissions.canUse('attendance-management');
+  const [activeTab, setActiveTab] = useState<AttendanceTab>('today');
+  const [todayDate, setTodayDate] = useState(malaysiaDateKey(new Date()));
+  const [todaySearch, setTodaySearch] = useState('');
+  const [todayStatusFilter, setTodayStatusFilter] = useState<TodayAttendanceStatus | 'abnormal' | ''>('');
+  const [todayEmployees, setTodayEmployees] = useState<AttendanceEmployee[]>([]);
+  const [todayRecords, setTodayRecords] = useState<AttendanceRecord[]>([]);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const [todayError, setTodayError] = useState('');
+  const [todayDetailEmployeeId, setTodayDetailEmployeeId] = useState('');
   const [month, setMonth] = useState(getCurrentMonth());
   const [regionId, setRegionId] = useState('');
   const [employeeStatusFilter, setEmployeeStatusFilter] = useState<EmployeeStatusFilter>('working-attendance');
@@ -99,6 +121,9 @@ export function AttendanceManagementPage() {
   const [error, setError] = useState('');
 
   const isSuperAdmin = profile?.role === 'super_admin';
+  const canRequestOtherAttendancePhotos = isSuperAdmin || (
+    permissions.canView('attendance-management') && permissions.canView('attendance-photos')
+  );
   const canSwitchRegion = regions.length > 1;
   const range = useMemo(() => getAttendancePeriodRange(month), [month]);
   const filteredSummaries = useMemo(() => {
@@ -128,10 +153,29 @@ export function AttendanceManagementPage() {
   const abnormalRecords = summaries.flatMap((summary) => summary.abnormalRecords);
   const pendingAbnormalRecords = abnormalRecords.filter((record) => record.reviewStatus === 'pending');
   const abnormalEmployeeCount = new Set(pendingAbnormalRecords.map((record) => record.employee.id)).size;
+  const todayRows = useMemo(
+    () => buildTodayAttendanceRows(todayEmployees, todayRecords, todayDate, malaysiaDateKey(new Date())),
+    [todayDate, todayEmployees, todayRecords],
+  );
+  const filteredTodayRows = useMemo(() => {
+    const search = todaySearch.trim().toLowerCase();
+    return todayRows.filter((row) => {
+      const matchesSearch = !search || [row.employee.full_name, row.employee.nickname, row.employee.employee_code, row.employee.region?.code]
+        .some((value) => value?.toLowerCase().includes(search));
+      const matchesStatus = !todayStatusFilter
+        || (todayStatusFilter === 'abnormal' ? row.notices.length > 0 : row.status === todayStatusFilter);
+      return matchesSearch && matchesStatus;
+    });
+  }, [todayRows, todaySearch, todayStatusFilter]);
+  const todayDetailRow = todayRows.find((row) => row.employee.id === todayDetailEmployeeId) ?? null;
 
   useEffect(() => {
     loadAttendanceData();
   }, [month, regionId]);
+
+  useEffect(() => {
+    void loadTodayAttendanceData();
+  }, [todayDate, regionId]);
 
   usePullToRefresh(loadAttendanceData, [month, regionId]);
 
@@ -172,21 +216,62 @@ export function AttendanceManagementPage() {
     }
   }
 
+  async function loadTodayAttendanceData() {
+    setTodayLoading(true);
+    setTodayError('');
+    try {
+      const data = await attendanceManagementService.getPeriodData(getAttendanceCycleMonthForDate(todayDate), regionId);
+      setRegions((current) => current.length ? current : data.regions);
+      setTodayEmployees(data.employees);
+      setTodayRecords(data.attendanceRecords);
+      setTodayDetailEmployeeId('');
+    } catch (loadError) {
+      setTodayError(loadError instanceof Error ? loadError.message : '读取今日考勤数据失败。');
+    } finally {
+      setTodayLoading(false);
+    }
+  }
+
   return (
     <section className="attendance-management-page">
       <div className="staff-toolbar">
         <div className="page-heading">
           <span>工作工具 / 人事部</span>
           <h2>考勤</h2>
-          <p>{range.startDate} 至 {range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。</p>
+          <p>{activeTab === 'today' ? '按员工当天真实打卡记录只读汇总。' : `${range.startDate} 至 ${range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。`}</p>
         </div>
 
-        <button className="secondary-action" type="button" onClick={() => loadAttendanceData()} disabled={loading}>
+        <button className="secondary-action" type="button" onClick={() => activeTab === 'today' ? loadTodayAttendanceData() : loadAttendanceData()} disabled={activeTab === 'today' ? todayLoading : loading}>
           <RefreshCw size={17} />
           <span>刷新</span>
         </button>
       </div>
 
+      <div className="attendance-page-tabs" role="tablist" aria-label="考勤页面">
+        <button className={activeTab === 'today' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'today'} onClick={() => setActiveTab('today')}>今日考勤</button>
+        <button className={activeTab === 'statistics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'statistics'} onClick={() => setActiveTab('statistics')}>考勤统计</button>
+      </div>
+
+      {activeTab === 'today' ? (
+        <TodayAttendancePanel
+          date={todayDate}
+          regionId={regionId}
+          regions={regions}
+          canSwitchRegion={canSwitchRegion}
+          search={todaySearch}
+          statusFilter={todayStatusFilter}
+          rows={filteredTodayRows}
+          allRows={todayRows}
+          loading={todayLoading}
+          error={todayError}
+          canRequestOtherPhotos={canRequestOtherAttendancePhotos}
+          onDateChange={setTodayDate}
+          onRegionChange={setRegionId}
+          onSearchChange={setTodaySearch}
+          onStatusFilterChange={setTodayStatusFilter}
+          onOpenDetail={(employeeId) => setTodayDetailEmployeeId(employeeId)}
+        />
+      ) : <>
       {canUseAttendance ? (
         <button className="abnormal-banner" type="button" onClick={() => setShowAbnormalCenter(true)}>
           <AlertTriangle size={20} />
@@ -309,13 +394,97 @@ export function AttendanceManagementPage() {
       {showAbnormalCenter && canUseAttendance ? (
         <AbnormalEmployeeCenterV2
           records={abnormalRecords}
+          canRequestOtherPhotos={canRequestOtherAttendancePhotos}
           onClose={() => setShowAbnormalCenter(false)}
           onReviewed={() => loadAttendanceData({ resetView: false })}
         />
       ) : null}
       {selectedSummary && canUseAttendance ? <EmployeeDetail summary={selectedSummary} onClose={() => setSelectedEmployeeId('')} /> : null}
+      </>}
+      {todayDetailRow ? <TodayAttendanceDetail row={todayDetailRow} canRequestOtherPhotos={canRequestOtherAttendancePhotos} onClose={() => setTodayDetailEmployeeId('')} /> : null}
     </section>
   );
+}
+
+function TodayAttendancePanel({
+  date, regionId, regions, canSwitchRegion, search, statusFilter, rows, allRows, loading, error,
+  canRequestOtherPhotos, onDateChange, onRegionChange, onSearchChange, onStatusFilterChange, onOpenDetail,
+}: {
+  date: string; regionId: string; regions: Region[]; canSwitchRegion: boolean; search: string;
+  statusFilter: TodayAttendanceStatus | 'abnormal' | ''; rows: TodayAttendanceRow[]; allRows: TodayAttendanceRow[];
+  loading: boolean; error: string; onDateChange: (value: string) => void; onRegionChange: (value: string) => void;
+  onSearchChange: (value: string) => void; onStatusFilterChange: (value: TodayAttendanceStatus | 'abnormal' | '') => void;
+  onOpenDetail: (employeeId: string) => void; canRequestOtherPhotos: boolean;
+}) {
+  const counts = {
+    total: rows.length,
+    working: rows.filter((row) => row.status === 'working').length,
+    onBreak: rows.filter((row) => row.status === 'on_break').length,
+    clockedOut: rows.filter((row) => row.status === 'clocked_out').length,
+    abnormal: rows.filter((row) => row.notices.length > 0).length,
+  };
+  const hasFilters = Boolean(search || statusFilter);
+
+  return <>
+    <div className="attendance-filters today-attendance-filters">
+      <label className="form-field"><span>日期</span><input type="date" value={date} max={malaysiaDateKey(new Date())} onChange={(event) => onDateChange(event.target.value)} /></label>
+      <label className="form-field"><span>区域</span><select value={regionId} disabled={!canSwitchRegion} onChange={(event) => onRegionChange(event.target.value)}>{canSwitchRegion ? <option value="">全部可查看区域</option> : null}{regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}</select></label>
+      <label className="form-field"><span>员工搜索</span><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="姓名、编号或区域" /></label>
+      <label className="form-field"><span>当前状态</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value as TodayAttendanceStatus | 'abnormal' | '')}><option value="">全部状态</option><option value="not_started">未上班</option><option value="working">工作中</option><option value="on_break">休息中</option><option value="clocked_out">已下班</option><option value="abnormal">考勤异常</option></select></label>
+    </div>
+    <div className="today-attendance-stats">
+      <TodayStat label="全部员工" value={counts.total} tone="neutral" /><TodayStat label="工作中" value={counts.working} tone="working" /><TodayStat label="休息中" value={counts.onBreak} tone="on_break" /><TodayStat label="已下班" value={counts.clockedOut} tone="clocked_out" /><TodayStat label="考勤异常" value={counts.abnormal} tone="abnormal" />
+    </div>
+    <div className="staff-list-panel">
+      <div className="list-header"><div><span>今日考勤</span><h3>{date} · {allRows.length} 位员工</h3></div></div>
+      {error ? <p className="form-alert table-alert">{error}</p> : null}
+      {loading ? <div className="table-state">正在读取今日考勤...</div> : rows.length === 0 ? <div className="table-state">{hasFilters ? '没有符合筛选条件的员工。' : '暂无可查看的员工。'}</div> : <div className="staff-table-wrap"><table className="staff-table today-attendance-table"><thead><tr><th>员工</th><th>区域</th><th>上班</th><th>休息</th><th>下班</th><th>当前状态</th><th>查看详情</th></tr></thead><tbody>{rows.map((row) => <tr key={row.employee.id}><td>{getEmployeeDisplayName(row.employee)}</td><td>{row.employee.region?.code ?? '-'}</td><td><PunchCell record={row.clockIn} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><BreakCell start={row.breakStart} end={row.breakEnd} isToday={date === malaysiaDateKey(new Date())} isOnBreak={row.status === 'on_break'} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><PunchCell record={row.clockOut} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><span className={`today-status today-status-${row.status}`}>{todayStatusLabel(row.status)}</span>{row.notices.length ? <span className="today-notice">考勤异常</span> : null}</td><td><button className="secondary-button compact-button" type="button" onClick={() => onOpenDetail(row.employee.id)}><Eye size={16} /><span>查看详情</span></button></td></tr>)}</tbody></table></div>}
+    </div>
+  </>;
+}
+
+function TodayStat({ label, value, tone }: { label: string; value: number; tone: 'neutral' | TodayAttendanceStatus | 'abnormal' }) {
+  return <div className={`today-attendance-stat today-attendance-stat-${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function PunchCell({ record, showDenied = true, canRequestOtherPhotos }: { record: AttendanceRecord | null; showDenied?: boolean; canRequestOtherPhotos: boolean }) {
+  return <span className="today-punch-cell">{record ? <><strong>{formatRecordTime(record)}</strong><AttendancePhotoThumbnail record={record} showDenied={showDenied} canRequestOtherPhotos={canRequestOtherPhotos} /></> : '—'}</span>;
+}
+
+function BreakCell({ start, end, isToday, isOnBreak, canRequestOtherPhotos }: { start: AttendanceRecord | null; end: AttendanceRecord | null; isToday: boolean; isOnBreak: boolean; canRequestOtherPhotos: boolean }) {
+  if (!start && !end) return <>—</>;
+  return <span className="today-break-cell"><PunchCell record={start} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /><span className="today-break-arrow">→</span>{end ? <PunchCell record={end} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /> : isToday && isOnBreak ? <span className="today-status today-status-on_break">休息中</span> : <span className="today-notice">未结束</span>}</span>;
+}
+
+function AttendancePhotoThumbnail({ record, showDenied = true, canRequestOtherPhotos }: { record: AttendanceRecord; showDenied?: boolean; canRequestOtherPhotos: boolean }) {
+  const { profile } = useAuth();
+  const [url, setUrl] = useState('');
+  const [state, setState] = useState<'loading' | 'ready' | 'denied'>('loading');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!canRequestOtherPhotos && record.profile_id !== profile?.id) {
+      setState('denied');
+      return () => { active = false; };
+    }
+    attendanceManagementService.getAttendancePhotoSignedUrl(record.photo_path)
+      .then((signedUrl) => { if (active) { setUrl(signedUrl); setState('ready'); } })
+      .catch(() => { if (active) setState('denied'); });
+    return () => { active = false; };
+  }, [canRequestOtherPhotos, profile?.id, record.photo_path, record.profile_id]);
+
+  if (state === 'denied') return showDenied ? <span className="today-photo-denied">无权限查看照片</span> : null;
+  if (state === 'loading') return <span className="today-photo-loading">照片...</span>;
+  return <><button className="today-photo-thumbnail" type="button" onClick={() => setOpen(true)} aria-label="查看打卡照片"><img src={url} alt="打卡照片" loading="lazy" /></button>{open ? <SystemModal title="打卡照片" subtitle={`${formatPunchType(record.punch_type)} · ${formatRecordTime(record)}`} ariaLabel="打卡照片" onClose={() => setOpen(false)} footer={<button className="secondary-button compact-button" type="button" onClick={() => setOpen(false)}>关闭</button>}><img className="today-photo-large" src={url} alt="打卡照片" /></SystemModal> : null}</>;
+}
+
+function TodayAttendanceDetail({ row, canRequestOtherPhotos, onClose }: { row: TodayAttendanceRow; canRequestOtherPhotos: boolean; onClose: () => void }) {
+  return <SystemModal title={getEmployeeDisplayName(row.employee)} subtitle="当天完整打卡时间线" ariaLabel="当天完整打卡时间线" onClose={onClose} footer={<button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>}>
+    <div className="today-detail-head"><span>区域：{row.employee.region?.code ?? '-'}</span><span>状态：{todayStatusLabel(row.status)}</span></div>
+    {row.notices.length ? <div className="today-detail-notices">{row.notices.map((notice) => <p key={notice}><AlertTriangle size={15} />{notice}</p>)}</div> : null}
+    {row.records.length === 0 ? <div className="table-state compact">当天没有打卡记录。</div> : <ol className="today-timeline">{row.records.map((record) => <li key={record.id}><div><strong>{formatPunchType(record.punch_type)}</strong><span>{formatRecordTime(record)}</span></div><AttendancePhotoThumbnail record={record} canRequestOtherPhotos={canRequestOtherPhotos} /></li>)}</ol>}
+  </SystemModal>;
 }
 
 function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSummary; onClose: () => void }) {
@@ -401,10 +570,12 @@ function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSumma
 
 function AbnormalEmployeeCenterV2({
   records,
+  canRequestOtherPhotos,
   onClose,
   onReviewed,
 }: {
   records: AbnormalRecord[];
+  canRequestOtherPhotos: boolean;
   onClose: () => void;
   onReviewed: () => Promise<void>;
 }) {
@@ -445,7 +616,7 @@ function AbnormalEmployeeCenterV2({
   }, [activeTab]);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected || !canRequestOtherPhotos) {
       return;
     }
 
@@ -463,10 +634,15 @@ function AbnormalEmployeeCenterV2({
           setPhotoError('读取打卡照片失败，请稍后重试或联系管理员。');
         });
     });
-  }, [photoUrls, selected]);
+  }, [canRequestOtherPhotos, photoUrls, selected]);
 
   async function handleOpenPhoto(record: AbnormalRecord) {
     if (!record.photoPath) return;
+
+    if (!canRequestOtherPhotos) {
+      setPhotoError('无权限查看照片。');
+      return;
+    }
 
     setPhotoError('');
     setOpeningPhotoId(record.id);
@@ -526,6 +702,10 @@ function AbnormalEmployeeCenterV2({
   function renderPhoto(record: AbnormalRecord) {
     if (!record.photoPath) {
       return '-';
+    }
+
+    if (!canRequestOtherPhotos) {
+      return <span className="today-photo-denied">无权限查看照片</span>;
     }
 
     const signedUrl = photoUrls[record.photoPath];
@@ -1289,6 +1469,72 @@ function getDateRange(startDate: string, endDate: string) {
 function isWeekend(date: string) {
   const day = new Date(`${date}T00:00:00`).getDay();
   return day === 0 || day === 6;
+}
+
+function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string): TodayAttendanceRow[] {
+  const recordsByEmployee = new Map<string, AttendanceRecord[]>();
+  attendanceRecords.forEach((record) => {
+    if (!record.employee_id || malaysiaDateKey(new Date(record.punched_at)) !== date) return;
+    recordsByEmployee.set(record.employee_id, [...(recordsByEmployee.get(record.employee_id) ?? []), record]);
+  });
+
+  return employees.map((employee) => {
+    const records = [...(recordsByEmployee.get(employee.id) ?? [])].sort((a, b) => +new Date(a.punched_at) - +new Date(b.punched_at) || a.id.localeCompare(b.id));
+    const clockIn = records.find((record) => record.punch_type === 'clock_in') ?? null;
+    const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out') ?? null;
+    const breakStart = records.find((record) => record.punch_type === 'break_start') ?? null;
+    const breakEnd = records.find((record) => record.punch_type === 'break_end') ?? null;
+    const notices = deriveTodayNotices(records, clockIn, clockOut, date < malaysiaToday);
+    const hasUnclosedBreak = hasUnclosedBreakAtEnd(records);
+    const status: TodayAttendanceStatus = clockOut ? 'clocked_out' : hasUnclosedBreak ? 'on_break' : clockIn ? 'working' : 'not_started';
+    return { employee, records, clockIn, breakStart, breakEnd, clockOut, status, notices };
+  });
+}
+
+function deriveTodayNotices(records: AttendanceRecord[], clockIn: AttendanceRecord | null, clockOut: AttendanceRecord | null, isHistoricalDate: boolean) {
+  const notices: string[] = [];
+  if (isHistoricalDate && clockIn && !clockOut) notices.push('缺少下班打卡记录');
+  let openBreak = false;
+  records.forEach((record) => {
+    if (record.punch_type === 'break_start') {
+      if (openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
+      openBreak = true;
+    }
+    if (record.punch_type === 'break_end') {
+      if (!openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
+      openBreak = false;
+    }
+    if (record.punch_type === 'clock_out' && openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
+  });
+  if (isHistoricalDate && openBreak && !notices.includes('休息记录未结束')) notices.push('休息记录未结束');
+  return notices;
+}
+
+function hasUnclosedBreakAtEnd(records: AttendanceRecord[]) {
+  let openBreak = false;
+  records.forEach((record) => {
+    if (record.punch_type === 'break_start') openBreak = true;
+    if (record.punch_type === 'break_end') openBreak = false;
+  });
+  return openBreak;
+}
+
+function getAttendanceCycleMonthForDate(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const cycle = day <= 25 ? new Date(year, month - 1, 1) : new Date(year, month, 1);
+  return `${cycle.getFullYear()}-${String(cycle.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function malaysiaDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+function todayStatusLabel(status: TodayAttendanceStatus) {
+  return ({ not_started: '未上班', working: '工作中', on_break: '休息中', clocked_out: '已下班' })[status];
 }
 
 function getCurrentMonth() {
