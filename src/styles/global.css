@@ -9292,6 +9292,10 @@ button.leave-chip:disabled {
   box-shadow: 0 0 0 3px var(--dy-purple-ring);
 }
 
+.creator-mobile-cards {
+  display: none;
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -9630,34 +9634,21 @@ button.leave-chip:disabled {
     overflow-x: hidden;
   }
 
-  .creator-profile-table {
-    min-width: 0;
-    width: 100%;
-    border-spacing: 0;
-  }
-
-  .creator-profile-table thead {
+  .creator-list-wrap {
     display: none;
   }
 
-  .creator-profile-table,
-  .creator-profile-table tbody,
-  .creator-profile-table td {
-    display: block;
-    width: 100%;
+  .creator-mobile-cards {
+    display: grid;
+    gap: 8px;
+    padding: 4px 12px 14px;
   }
 
-  .creator-profile-table tbody tr {
+  .creator-mobile-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "name status"
-      "platforms platforms"
-      "manager manager"
-      "action action";
-    gap: 10px;
-    margin-bottom: 10px;
-    padding: 12px;
+    gap: 9px;
+    min-width: 0;
+    padding: 11px;
     border: 1px solid transparent;
     border-radius: 8px;
     background:
@@ -9665,144 +9656,133 @@ button.leave-chip:disabled {
       linear-gradient(135deg, rgba(167, 139, 250, 0.42), rgba(244, 114, 182, 0.28)) border-box;
   }
 
-  .creator-profile-table--with-scout tbody tr {
-    grid-template-areas:
-      "name status"
-      "platforms platforms"
-      "manager manager"
-      "scout scout"
-      "action action";
-  }
-
-  .creator-profile-table tbody td {
-    width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .creator-profile-table th:nth-child(1),
-  .creator-profile-table td:nth-child(1),
-  .creator-profile-table th:nth-child(2),
-  .creator-profile-table td:nth-child(2),
-  .creator-profile-table th:nth-child(3),
-  .creator-profile-table td:nth-child(3),
-  .creator-profile-table th:nth-child(4),
-  .creator-profile-table td:nth-child(4),
-  .creator-profile-table th:nth-child(5),
-  .creator-profile-table td:nth-child(5) {
-    width: 100%;
-  }
-
-  .creator-profile-table tbody td:nth-child(1) {
-    grid-area: name;
-    align-self: center;
-  }
-
-  .creator-profile-table tbody td:nth-child(2) {
-    grid-area: platforms;
-  }
-
-  .creator-profile-table tbody td:nth-child(3) {
-    grid-area: manager;
-    display: grid;
-    gap: 3px;
-    padding-top: 2px;
-    color: var(--text);
-    font-weight: 800;
-  }
-
-  .creator-profile-table tbody td:nth-child(3)::before {
-    content: '经纪人';
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .creator-profile-table tbody td:nth-child(4) {
-    grid-area: status;
-    justify-self: end;
-    align-self: center;
-    width: auto;
-  }
-
-  .creator-profile-table tbody td:nth-child(5) {
-    grid-area: action;
+  .creator-mobile-card-header {
     display: flex;
-    justify-content: flex-end;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
   }
 
-  .creator-profile-table--with-scout tbody td:nth-child(4) {
-    grid-area: scout;
-    display: grid;
-    gap: 3px;
-    padding-top: 2px;
-    color: var(--text);
-    font-weight: 800;
+  .creator-mobile-card-identity,
+  .creator-mobile-card-badges,
+  .creator-mobile-platform,
+  .creator-mobile-platform-details > div,
+  .creator-mobile-card-meta > div {
+    min-width: 0;
   }
 
-  .creator-profile-table--with-scout tbody td:nth-child(4)::before {
-    content: '星探';
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(5) {
-    grid-area: status;
-    justify-self: end;
-    align-self: center;
-    width: auto;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(6) {
-    grid-area: action;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .creator-row-name {
+  .creator-mobile-card-identity .creator-row-name {
     min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  .creator-platform-lines {
-    gap: 8px;
-    padding: 8px 0;
-    border-top: 1px solid rgba(223, 230, 239, 0.72);
-    border-bottom: 1px solid rgba(223, 230, 239, 0.72);
+  .creator-mobile-card-identity .creator-row-registration {
+    margin-top: 2px;
   }
 
-  .creator-platform-line {
-    display: grid;
-    grid-template-columns: 20px 64px minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .creator-profile-table .creator-platform-name span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .creator-profile-table .creator-platform-uid {
-    display: block;
-    min-width: 0;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .creator-status-badge {
-    max-width: none;
+  .creator-mobile-card-header .creator-status-badge {
     flex: 0 0 auto;
   }
 
-  .creator-view-button {
-    min-width: 116px;
+  .creator-mobile-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .creator-mobile-card-badges .creator-management-badges {
+    margin-top: 0;
+  }
+
+  .creator-mobile-platforms {
+    display: grid;
+    min-width: 0;
+    border-top: 1px solid rgba(223, 230, 239, 0.78);
+    border-bottom: 1px solid rgba(223, 230, 239, 0.78);
+  }
+
+  .creator-mobile-platform {
+    display: grid;
+    gap: 7px;
+    padding: 8px 0;
+  }
+
+  .creator-mobile-platform + .creator-mobile-platform {
+    border-top: 1px solid rgba(223, 230, 239, 0.78);
+  }
+
+  .creator-mobile-platform-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .creator-mobile-platform-heading .creator-platform-logo {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+  }
+
+  .creator-mobile-platform-heading strong {
+    font-weight: 850;
+  }
+
+  .creator-mobile-platform-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 10px;
+  }
+
+  .creator-mobile-platform-details > div,
+  .creator-mobile-card-meta > div {
+    display: grid;
+    gap: 1px;
+  }
+
+  .creator-mobile-platform-details span,
+  .creator-mobile-card-meta span {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .creator-mobile-platform-details strong,
+  .creator-mobile-card-meta strong {
+    min-width: 0;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .creator-mobile-platform-details .creator-platform-details {
+    display: inline;
+  }
+
+  .creator-mobile-card-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 10px;
+  }
+
+  .creator-mobile-card-meta--with-scout {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .creator-mobile-view-button {
     justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 36px;
   }
 
   .creator-pagination {
@@ -9875,6 +9855,11 @@ button.leave-chip:disabled {
   .creator-stats-panel > .scout-filters {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .creator-mobile-platform-details,
+  .creator-mobile-card-meta--with-scout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -9887,94 +9872,6 @@ button.leave-chip:disabled {
     min-height: 36px;
   }
 
-  .creator-profile-table tbody tr {
-    grid-template-areas:
-      "name status"
-      "platforms platforms"
-      "region region"
-      "manager manager"
-      "action action";
-  }
-
-  .creator-profile-table--with-scout tbody tr {
-    grid-template-areas:
-      "name status"
-      "platforms platforms"
-      "region region"
-      "manager manager"
-      "scout scout"
-      "action action";
-  }
-
-  .creator-profile-table tbody td:nth-child(3) {
-    grid-area: region;
-  }
-
-  .creator-profile-table tbody td:nth-child(3)::before {
-    content: '区域';
-  }
-
-  .creator-profile-table tbody td:nth-child(4) {
-    grid-area: manager;
-    display: grid;
-    gap: 3px;
-    padding-top: 2px;
-    color: var(--text);
-    font-weight: 800;
-  }
-
-  .creator-profile-table tbody td:nth-child(4)::before {
-    content: '经纪人';
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .creator-profile-table tbody td:nth-child(5) {
-    grid-area: status;
-    justify-self: end;
-    align-self: center;
-    width: auto;
-  }
-
-  .creator-profile-table tbody td:nth-child(6) {
-    grid-area: action;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(5) {
-    grid-area: scout;
-    display: grid;
-    gap: 3px;
-    padding-top: 2px;
-    color: var(--text);
-    font-weight: 800;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(5)::before {
-    content: '星探';
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(6) {
-    grid-area: status;
-    justify-self: end;
-    align-self: center;
-    width: auto;
-  }
-
-  .creator-profile-table--with-scout tbody td:nth-child(7) {
-    grid-area: action;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .creator-platform-line {
-    grid-template-columns: 20px 64px minmax(0, 1fr);
-  }
 }
 
 .candidate-table {

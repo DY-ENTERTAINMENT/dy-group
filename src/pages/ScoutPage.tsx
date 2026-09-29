@@ -1979,8 +1979,14 @@ function CreatorMonthOptions({ selectedMonth }: { selectedMonth: string }) {
 
 function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: CreatorProfileGroup[]; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
   return (
-    <div className="creator-list-wrap">
-      <table className={`staff-table scout-table creator-profile-table${showScout ? ' creator-profile-table--with-scout' : ''}`}>
+    <>
+      <div className="creator-mobile-cards">
+        {creatorGroups.map((group) => (
+          <CreatorMobileCard key={group.id} group={group} showScout={showScout} onView={onView} />
+        ))}
+      </div>
+      <div className="creator-list-wrap">
+        <table className={`staff-table scout-table creator-profile-table${showScout ? ' creator-profile-table--with-scout' : ''}`}>
         <thead>
           <tr>
             <th>主播名字</th>
@@ -2033,8 +2039,57 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function CreatorMobileCard({ group, showScout, onView }: { group: CreatorProfileGroup; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
+  const primaryProfile = group.profiles[0];
+
+  return (
+    <article className="creator-mobile-card">
+      <header className="creator-mobile-card-header">
+        <div className="creator-mobile-card-identity">
+          <strong className="creator-row-name">{group.displayName}</strong>
+          <span className={`creator-row-registration creator-row-registration--${group.profiles.some((creator) => creator.registration_type === 'existing_creator') ? 'existing' : 'new'}`}>{getCreatorRegistrationTypeLabel(group.profiles)}</span>
+        </div>
+        <CreatorStatusBadge status={group.status} />
+      </header>
+
+      <div className="creator-mobile-card-badges">
+        <CreatorManagementBadges creator={primaryProfile} entityLevel />
+      </div>
+
+      <div className="creator-mobile-platforms">
+        {group.profiles.map((creator) => (
+          <section key={creator.id} className="creator-mobile-platform">
+            <div className="creator-mobile-platform-heading">
+              <PlatformLogo platform={creator.platform} />
+              <strong>{platformLabels[creator.platform]}</strong>
+            </div>
+            <div className="creator-mobile-platform-details">
+              <div><span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}</span><strong>{creator.platform_account || '-'}</strong></div>
+              <div><span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'}</span><strong>{creator.platform_user_id || '-'}</strong></div>
+              <div><span>直播形式</span><strong>{creatorTypeLabels[creator.creator_type]}</strong></div>
+              <div><span>流水填写</span><strong><CreatorRevenueSettingMeta creator={creator} /></strong></div>
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className={`creator-mobile-card-meta${showScout ? ' creator-mobile-card-meta--with-scout' : ''}`}>
+        <div><span>区域</span><strong>{getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '') || '-'}</strong></div>
+        <div><span>经纪人</span><strong>{group.managerName || '-'}</strong></div>
+        {showScout ? <div><span>星探</span><strong>{group.scoutName || '-'}</strong></div> : null}
+      </div>
+
+      <button className="creator-view-button creator-mobile-view-button" type="button" onClick={() => onView(group)}>
+        <span>查看资料</span>
+        <ChevronRight size={16} />
+      </button>
+    </article>
   );
 }
 
