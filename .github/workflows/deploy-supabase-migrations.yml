@@ -21,11 +21,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve-expected-migrations:
+    name: Resolve expected migration filenames
+    runs-on: ubuntu-latest
+    outputs:
+      expected_migrations: ${{ steps.resolve.outputs.expected_migrations }}
+
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve expected migration filenames
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_MIGRATIONS: ${{ inputs.expected_migrations }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            expected_migrations="$EXPECTED_MIGRATIONS"
+          else
+            expected_migrations="$(git diff --diff-filter=AM --name-only "$PUSH_BEFORE" "$PUSH_AFTER" -- supabase/migrations \
+              | sed -nE 's#^supabase/migrations/([0-9]{12}_[A-Za-z0-9_.-]+\.sql)$#\1#p')"
+          fi
+
+          {
+            echo 'expected_migrations<<EOF'
+            printf '%s\n' "$expected_migrations"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
   validate-release:
     name: Validate pending Supabase Production migrations
+    needs: resolve-expected-migrations
     uses: ./.github/workflows/repair-supabase-migration-history.yml
     with:
-      expected_migrations: ${{ inputs.expected_migrations }}
+      expected_migrations: ${{ needs.resolve-expected-migrations.outputs.expected_migrations }}
     secrets: inherit
 
   deploy:
