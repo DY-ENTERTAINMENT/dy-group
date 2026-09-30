@@ -77,6 +77,29 @@ export type StaffOptions = {
   jobTitles: JobTitle[];
 };
 
+// TEMPORARY / ONE-TIME MAINTENANCE. Remove after the supervised historical
+// staff-name normalization has completed successfully in Production.
+export type HistoricalStaffNameNormalizationAuditRow = {
+  employee_id: string;
+  employee_number: string | null;
+  before_employee_name: string;
+  after_employee_name: string;
+  before_profile_name: string | null;
+  after_profile_name: string | null;
+  employee_changed: boolean;
+  profile_changed: boolean;
+  employee_name_normalized: boolean;
+  employee_profile_name_match: boolean;
+};
+
+export type HistoricalStaffNameNormalizationPreflight = {
+  authenticated: true;
+  superAdmin: true;
+  targetCount: number;
+};
+
+const historicalStaffNameNormalizationExpectedCount = 15;
+
 type EmployeeRowWithRelations = Omit<EmployeeListItem, 'region' | 'employment_type' | 'job_title' | 'reviewer'> & {
   regions: Pick<Region, 'id' | 'code' | 'name'> | null;
   employment_types: Pick<EmploymentType, 'id' | 'name'> | null;
@@ -229,7 +252,103 @@ export const staffService = {
       throw error;
     }
   },
+
+  // TEMPORARY / ONE-TIME MAINTENANCE. This method intentionally has no retry.
+  async runHistoricalStaffNameNormalization(): Promise<HistoricalStaffNameNormalizationAuditRow[]> {
+    const preflight = await getHistoricalStaffNameNormalizationPreflight();
+
+    if (preflight.targetCount !== historicalStaffNameNormalizationExpectedCount) {
+      throw new Error(`历史工作人员姓名统一已阻止：预检目标为 ${preflight.targetCount}，预期为 ${historicalStaffNameNormalizationExpectedCount}。`);
+    }
+
+    const { data, error } = (await supabase.rpc('normalize_confirmed_historical_staff_names' as never)) as unknown as {
+      data: unknown;
+      error: { message: string } | null;
+    };
+
+    if (error) {
+      throw error;
+    }
+
+    if (!Array.isArray(data) || data.length !== historicalStaffNameNormalizationExpectedCount) {
+      throw new Error(`历史工作人员姓名统一失败：RPC 必须返回 ${historicalStaffNameNormalizationExpectedCount} 行审计结果。`);
+    }
+
+    const auditRows = data as HistoricalStaffNameNormalizationAuditRow[];
+    if (
+      auditRows.some(
+        (row) =>
+          row.employee_name_normalized !== true ||
+          row.employee_profile_name_match !== true,
+      )
+    ) {
+      throw new Error('历史工作人员姓名统一失败：RPC 返回的规范化或员工/Profile 一致性验证未全部通过。');
+    }
+
+    return auditRows;
+  },
+
+  // TEMPORARY / ONE-TIME MAINTENANCE. This is an advisory client preflight;
+  // the deployed RPC repeats the exact server-side 15-row guard before writing.
+  getHistoricalStaffNameNormalizationPreflight,
 };
+
+async function getHistoricalStaffNameNormalizationPreflight(): Promise<HistoricalStaffNameNormalizationPreflight> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+
+  const userId = userData.user?.id;
+  if (!userId) {
+    throw new Error('历史工作人员姓名统一已阻止：请先登录。');
+  }
+
+  const { data: currentProfile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, status')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  if (currentProfile?.role !== 'super_admin' || currentProfile.status !== 'approved') {
+    throw new Error('历史工作人员姓名统一已阻止：仅已批准的 Super Admin 可以执行。');
+  }
+
+  const { data: employeeData, error: employeeError } = await supabase
+    .from('employees')
+    .select('id, profile_id, full_name')
+    .is('deleted_at', null);
+
+  if (employeeError) throw employeeError;
+
+  const employees = employeeData ?? [];
+  const profileIds = Array.from(new Set(employees.map((employee) => employee.profile_id).filter(Boolean))) as string[];
+  const profileNameById = new Map<string, string | null>();
+
+  if (profileIds.length > 0) {
+    const { data: profileData, error: linkedProfilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', profileIds);
+
+    if (linkedProfilesError) throw linkedProfilesError;
+    for (const linkedProfile of profileData ?? []) {
+      profileNameById.set(linkedProfile.id, linkedProfile.full_name);
+    }
+
+    if (profileNameById.size !== profileIds.length) {
+      throw new Error('历史工作人员姓名统一已阻止：无法完整读取 linked profile，不能确认预检目标。');
+    }
+  }
+
+  const targetCount = employees.filter((employee) => {
+    const normalizedEmployeeName = normalizeEmployeeName(employee.full_name);
+    const linkedProfileName = employee.profile_id ? profileNameById.get(employee.profile_id) : undefined;
+
+    return employee.full_name !== normalizedEmployeeName || (linkedProfileName !== undefined && linkedProfileName !== normalizedEmployeeName);
+  }).length;
+
+  return { authenticated: true, superAdmin: true, targetCount };
+}
 
 async function ensureEmployeeCodeAvailable(value: string, currentEmployeeId?: string, signal?: AbortSignal) {
   const employeeCode = normalizeEmployeeCode(value);
