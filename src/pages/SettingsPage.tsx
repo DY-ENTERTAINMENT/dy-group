@@ -98,6 +98,8 @@ type PermissionItem = {
   parentKey: string | null;
   level: number;
   disabled?: boolean;
+  viewOnly?: boolean;
+  explicitOnly?: boolean;
 };
 
 type PermissionModalTarget =
@@ -148,6 +150,16 @@ const independentPermissionItems: PermissionItem[] = [
     name: '流水周期设置',
     parentKey: null,
     level: 0,
+  },
+];
+const explicitHrPermissionItems: PermissionItem[] = [
+  {
+    key: 'attendance-photos',
+    name: '查看员工考勤打卡照片',
+    parentKey: 'hr',
+    level: 1,
+    viewOnly: true,
+    explicitOnly: true,
   },
 ];
 const agentSensitivePermissionItems: PermissionItem[] = [
@@ -1270,7 +1282,7 @@ function PermissionMatrix({
             <IndeterminateCheckbox
               checked={access.use}
               indeterminate={useStateValue === 'mixed'}
-              disabled={item.disabled || !access.view}
+              disabled={item.disabled || item.viewOnly || !access.view}
               onChange={(checked) => onChange(item.key, 'use', checked)}
             />
           </div>
@@ -1360,6 +1372,14 @@ function buildPermissionItems(): PermissionItem[] {
     groups.set(groupKey, currentItems);
   });
 
+  explicitHrPermissionItems.forEach((item) => {
+    const currentItems = groups.get(item.parentKey ?? '') ?? [];
+    if (!currentItems.some((permissionItem) => permissionItem.key === item.key)) {
+      currentItems.push({ ...item });
+    }
+    groups.set(item.parentKey ?? '', currentItems);
+  });
+
   const groupedItems = Array.from(groups.entries()).flatMap(([groupKey, children]) => {
     if (children.length === 1 && children[0].key === groupKey) {
       return [{ ...children[0], parentKey: null, level: 0 }];
@@ -1405,6 +1425,7 @@ function createDefaultPermissionState(items: PermissionItem[], target: Permissio
 
   items
     .filter((item) => item.parentKey && defaultKeys.includes(item.parentKey) && !agentSensitivePermissionKeys.has(item.key))
+    .filter((item) => !item.explicitOnly)
     .forEach((item) => {
       permissions[item.key] = { view: true, use: true };
     });
@@ -1500,7 +1521,8 @@ function getDefaultPermissionKeys(name: string) {
 function updatePermissionTree(state: PermissionState, items: PermissionItem[], key: string, field: keyof PermissionAccess, checked: boolean): PermissionState {
   const next = { ...state };
   const targetItem = items.find((item) => item.key === key);
-  const childItems = items.filter((item) => item.parentKey === key && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
+  if (targetItem?.viewOnly && field === 'use') return next;
+  const childItems = items.filter((item) => item.parentKey === key && !item.explicitOnly && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
   const affectedItems = targetItem?.parentKey ? [targetItem] : [targetItem, ...childItems].filter(Boolean);
 
   affectedItems.forEach((item) => {
@@ -1522,14 +1544,14 @@ function updatePermissionTree(state: PermissionState, items: PermissionItem[], k
 function updateSpecialBatchTree(state: PermissionState, items: PermissionItem[], key: string, checked: boolean): PermissionState {
   const next = { ...state };
   const targetItem = items.find((item) => item.key === key);
-  const childItems = items.filter((item) => item.parentKey === key && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
+  const childItems = items.filter((item) => item.parentKey === key && !item.explicitOnly && !(key === 'agent' && agentSensitivePermissionKeys.has(item.key)));
   const affectedItems = targetItem?.parentKey ? [targetItem] : [targetItem, ...childItems].filter(Boolean);
 
   affectedItems.forEach((item) => {
     if (!item) return;
     next[item.key] = {
       view: checked,
-      use: checked,
+      use: item.viewOnly ? false : checked,
     };
   });
 
@@ -1582,7 +1604,7 @@ function applySpecialPermissionSync(
 }
 
 function syncParentPermission(state: PermissionState, items: PermissionItem[], parentKey: string, field: keyof PermissionAccess) {
-  const childItems = items.filter((item) => item.parentKey === parentKey);
+  const childItems = items.filter((item) => item.parentKey === parentKey && !item.explicitOnly);
   const hasAnyChecked = childItems.some((item) => state[item.key]?.[field]);
   const hasAllChecked = childItems.length > 0 && childItems.every((item) => state[item.key]?.[field]);
   const parent = state[parentKey] ?? { view: false, use: false };
@@ -1594,7 +1616,7 @@ function syncParentPermission(state: PermissionState, items: PermissionItem[], p
 }
 
 function getPermissionCheckState(item: PermissionItem, items: PermissionItem[], permissions: PermissionState, field: keyof PermissionAccess) {
-  const children = items.filter((child) => child.parentKey === item.key);
+  const children = items.filter((child) => child.parentKey === item.key && !child.explicitOnly);
   if (children.length === 0) return permissions[item.key]?.[field] ? 'checked' : 'unchecked';
 
   const checkedCount = children.filter((child) => permissions[child.key]?.[field]).length;
