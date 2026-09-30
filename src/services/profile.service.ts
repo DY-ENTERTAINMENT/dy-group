@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { normalizeEmployeeName } from './staff.service';
 import type { Employee, EmploymentType, JobTitle, Profile, Region } from '../types/database';
 
 const AVATAR_BUCKET = 'profile-avatars';
@@ -151,10 +152,27 @@ export const profileService = {
       throw new Error('请先登录后再保存个人资料。');
     }
 
+    const { data: linkedEmployee, error: linkedEmployeeError } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('profile_id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (linkedEmployeeError) {
+      throw linkedEmployeeError;
+    }
+
+    const fullName = linkedEmployee ? normalizeEmployeeName(values.full_name) : values.full_name.trim();
+
+    if (linkedEmployee && !fullName) {
+      throw new Error('工作人员姓名不能为空');
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({
-        full_name: values.full_name.trim(),
+        full_name: fullName,
         phone: values.phone.trim() || null,
         avatar_url: values.avatar_url ?? null,
       })
@@ -164,10 +182,14 @@ export const profileService = {
       throw error;
     }
 
+    if (!linkedEmployee) {
+      return;
+    }
+
     const { error: employeeError } = await supabase
       .from('employees')
       .update({
-        full_name: values.full_name.trim(),
+        full_name: fullName,
         nickname: values.nickname?.trim() || null,
         phone: values.phone.trim() || null,
         avatar_url: values.avatar_url ?? null,
@@ -175,7 +197,7 @@ export const profileService = {
         bank_name: values.bank_name?.trim() || null,
         bank_account: values.bank_account?.trim() || null,
       })
-      .eq('profile_id', userId)
+      .eq('id', linkedEmployee.id)
       .is('deleted_at', null);
 
     if (employeeError) {

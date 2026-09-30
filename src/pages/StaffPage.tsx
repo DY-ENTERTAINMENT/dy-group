@@ -4,7 +4,7 @@ import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { type EmployeeFormValues, type EmployeeListItem, type StaffOptions, staffService } from '../services/staff.service';
+import { normalizeEmployeeName, type EmployeeFormValues, type EmployeeListItem, type StaffOptions, staffService } from '../services/staff.service';
 import type { EmployeeStatus } from '../types/database';
 
 const emptyForm: EmployeeFormValues = {
@@ -77,6 +77,7 @@ export function StaffPage() {
   const [regionFilter, setRegionFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<EmployeeStatus | 'all'>('active');
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
+  const [jobTitleFilter, setJobTitleFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -93,8 +94,9 @@ export function StaffPage() {
       const matchesRegion = !regionFilter || employee.region_id === regionFilter;
       const matchesStatus = statusFilter === 'all' || getEmployeeStatus(employee.status) === statusFilter;
       const matchesEmploymentType = !employmentTypeFilter || employee.employment_type_id === employmentTypeFilter;
+      const matchesJobTitle = !jobTitleFilter || employee.job_title_id === jobTitleFilter;
 
-      return matchesKeyword && matchesRegion && matchesStatus && matchesEmploymentType;
+      return matchesKeyword && matchesRegion && matchesStatus && matchesEmploymentType && matchesJobTitle;
     });
 
     return [...visibleEmployees].sort((first, second) => {
@@ -103,7 +105,7 @@ export function StaffPage() {
       if (firstStatus !== secondStatus) return firstStatus - secondStatus;
       return first.full_name.localeCompare(second.full_name, 'zh-Hans');
     });
-  }, [employees, employmentTypeFilter, regionFilter, searchTerm, statusFilter]);
+  }, [employees, employmentTypeFilter, jobTitleFilter, regionFilter, searchTerm, statusFilter]);
 
   useEffect(() => {
     void loadStaffData();
@@ -139,6 +141,10 @@ export function StaffPage() {
         ...formValues,
         employee_code: formValues.employee_code.trim().toUpperCase(),
       };
+
+      if (!normalizeEmployeeName(nextValues.full_name)) {
+        throw new Error('工作人员姓名不能为空');
+      }
 
       if (nextValues.status === 'left' && !nextValues.employment_end_date) {
         throw new Error('离职日期为必填');
@@ -214,19 +220,6 @@ export function StaffPage() {
 
   return (
     <section className="staff-page">
-      <div className="toolbar-actions staff-actions-row">
-        {canManageStaff ? (
-          <button className="secondary-action" type="button" onClick={openCreate}>
-            <Plus size={17} />
-            <span>新增员工</span>
-          </button>
-        ) : null}
-        <button className="secondary-action" type="button" onClick={loadStaffData} disabled={loading}>
-          <RefreshCw size={17} />
-          <span>刷新</span>
-        </button>
-      </div>
-
       {error ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
 
@@ -271,6 +264,30 @@ export function StaffPage() {
               </option>
             ))}
           </select>
+          <select
+            className="staff-region-filter"
+            value={jobTitleFilter}
+            onChange={(event) => setJobTitleFilter(event.target.value)}
+          >
+            <option value="">全部职称</option>
+            {options.jobTitles.map((title) => (
+              <option key={title.id} value={title.id}>
+                {title.name}
+              </option>
+            ))}
+          </select>
+          <div className="toolbar-actions staff-filter-actions">
+            {canManageStaff ? (
+              <button className="secondary-action" type="button" onClick={openCreate}>
+                <Plus size={17} />
+                <span>新增员工</span>
+              </button>
+            ) : null}
+            <button className="secondary-action" type="button" onClick={loadStaffData} disabled={loading}>
+              <RefreshCw size={17} />
+              <span>刷新</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (

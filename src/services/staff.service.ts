@@ -343,9 +343,24 @@ function mapEmployeeRow(row: EmployeeRowWithRelations, reviewerMap: Map<string, 
   };
 }
 
+export function normalizeEmployeeName(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function normalizeEmployeePayload(values: EmployeeFormValues) {
+  const fullName = normalizeEmployeeName(values.full_name);
+
+  if (!fullName) {
+    throw new Error('工作人员姓名不能为空');
+  }
+
   return {
-    full_name: values.full_name.trim(),
+    full_name: fullName,
     nickname: values.nickname.trim() || null,
     avatar_url: values.avatar_url.trim() || null,
     phone: values.phone.trim() || null,
