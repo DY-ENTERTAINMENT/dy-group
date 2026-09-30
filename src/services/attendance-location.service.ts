@@ -114,6 +114,26 @@ export const attendanceLocationService = {
 };
 
 export function getBrowserGeoPosition(): Promise<BrowserGeoPosition> {
+  return getBrowserGeoPositionWithRetry();
+}
+
+async function getBrowserGeoPositionWithRetry(): Promise<BrowserGeoPosition> {
+  try {
+    return await getBrowserGeoPositionOnce();
+  } catch (firstError) {
+    if (!shouldRetryGeoError(firstError)) {
+      throw toGeoErrorMessage(firstError);
+    }
+
+    try {
+      return await getBrowserGeoPositionOnce();
+    } catch (secondError) {
+      throw toGeoErrorMessage(secondError);
+    }
+  }
+}
+
+function getBrowserGeoPositionOnce(): Promise<BrowserGeoPosition> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('无法取得当前位置，请检查浏览器定位权限或网络后重试。'));
@@ -128,21 +148,42 @@ export function getBrowserGeoPosition(): Promise<BrowserGeoPosition> {
           accuracy: position.coords.accuracy,
         });
       },
-      (geoError) => {
-        if (geoError.code === geoError.PERMISSION_DENIED) {
-          reject(new Error('请允许浏览器定位权限，否则无法打卡。'));
-          return;
-        }
-
-        reject(new Error('无法取得当前位置，请检查浏览器定位权限或网络后重试。'));
-      },
+      reject,
       {
         enableHighAccuracy: true,
-        timeout: 12000,
+        timeout: 20000,
         maximumAge: 0,
       },
     );
   });
+}
+
+function shouldRetryGeoError(error: unknown) {
+  return isGeolocationPositionError(error) && (error.code === 2 || error.code === 3);
+}
+
+function toGeoErrorMessage(error: unknown): Error {
+  if (!isGeolocationPositionError(error)) {
+    return error instanceof Error ? error : new Error('无法取得当前位置，请检查浏览器定位权限或网络后重试。');
+  }
+
+  if (error.code === 1) {
+    return new Error('请允许定位权限后再打卡。iPhone 请确认“定位服务”已开启，并允许 Safari / DY Group 使用定位。');
+  }
+
+  if (error.code === 2) {
+    return new Error('暂时无法取得当前位置。请移到网络或 GPS 信号较好的位置后重新定位。');
+  }
+
+  if (error.code === 3) {
+    return new Error('定位时间过长，请保持页面开启并重新定位。');
+  }
+
+  return new Error('无法取得当前位置，请检查浏览器定位权限或网络后重试。');
+}
+
+function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
+  return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'number';
 }
 
 export function calculateDistanceMeters(

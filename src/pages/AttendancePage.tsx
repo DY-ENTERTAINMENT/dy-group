@@ -25,10 +25,12 @@ export function AttendancePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const punchInFlightRef = useRef(false);
   const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
   const [geoState, setGeoState] = useState<GeoState | null>(null);
   const [ipAddress, setIpAddress] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<AttendancePunchType | null>(null);
@@ -85,12 +87,18 @@ export function AttendancePage() {
   }
 
   function loadLocation() {
+    setLocating(true);
+    setError('');
+
     void getBrowserGeoPosition()
       .then((position) => {
         setGeoState(position);
       })
       .catch((locationError) => {
         setError(locationError instanceof Error ? locationError.message : '无法取得当前位置，请检查浏览器定位权限或网络后重试。');
+      })
+      .finally(() => {
+        setLocating(false);
       });
   }
 
@@ -118,6 +126,10 @@ export function AttendancePage() {
   }
 
   async function handlePunch(punchType: AttendancePunchType) {
+    if (punchInFlightRef.current) {
+      return;
+    }
+
     if (!profile?.id) {
       setError('无法确认当前用户。');
       return;
@@ -128,24 +140,24 @@ export function AttendancePage() {
       return;
     }
 
-    if (!geoState) {
-      setError('请允许浏览器定位权限，否则无法打卡。');
-      return;
-    }
-
+    punchInFlightRef.current = true;
     setSubmitting(punchType);
+    setLocating(true);
     setError('');
     setMessage('');
 
     try {
+      const position = await getBrowserGeoPosition();
+      setGeoState(position);
+      setLocating(false);
       const photoBlob = await capturePhotoBlob();
       await attendanceService.createAttendanceRecord({
         profileId: profile.id,
         punchType,
         photoBlob,
-        latitude: geoState.latitude,
-        longitude: geoState.longitude,
-        accuracy: geoState.accuracy,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
         ipAddress,
         deviceInfo,
       });
@@ -155,7 +167,9 @@ export function AttendancePage() {
     } catch (punchError) {
       setError(punchError instanceof Error ? punchError.message : '打卡失败。');
     } finally {
+      setLocating(false);
       setSubmitting(null);
+      punchInFlightRef.current = false;
     }
   }
 
@@ -217,23 +231,29 @@ export function AttendancePage() {
 
           {error ? <p className="form-alert">{error}</p> : null}
           {message ? <p className="form-success">{message}</p> : null}
+          {locating ? <p className="muted-text">正在获取当前位置，请稍候…</p> : null}
+          {!locating && geoState && !error ? <p className="muted-text">定位成功 · 精度 ±{Math.round(geoState.accuracy ?? 0)} 米</p> : null}
+
+          <button className="secondary-button compact-button" type="button" onClick={loadLocation} disabled={locating || Boolean(submitting)}>
+            {locating && !submitting ? '定位中...' : '重新定位'}
+          </button>
 
           <div className="punch-actions">
-            <button className="primary-button" type="button" onClick={() => handlePunch('clock_in')} disabled={Boolean(submitting)}>
+            <button className="primary-button" type="button" onClick={() => handlePunch('clock_in')} disabled={Boolean(submitting) || locating}>
               <LogIn size={18} />
-              <span>{submitting === 'clock_in' ? '打卡中...' : '上班打卡'}</span>
+              <span>{submitting === 'clock_in' ? (locating ? '正在定位...' : '打卡中...') : '上班打卡'}</span>
             </button>
-            <button className="secondary-button" type="button" onClick={() => handlePunch('break_start')} disabled={Boolean(submitting)}>
+            <button className="secondary-button" type="button" onClick={() => handlePunch('break_start')} disabled={Boolean(submitting) || locating}>
               <Coffee size={18} />
-              <span>{submitting === 'break_start' ? '记录中...' : '开始休息'}</span>
+              <span>{submitting === 'break_start' ? (locating ? '正在定位...' : '记录中...') : '开始休息'}</span>
             </button>
-            <button className="secondary-button" type="button" onClick={() => handlePunch('clock_out')} disabled={Boolean(submitting)}>
+            <button className="secondary-button" type="button" onClick={() => handlePunch('clock_out')} disabled={Boolean(submitting) || locating}>
               <LogOut size={18} />
-              <span>{submitting === 'clock_out' ? '打卡中...' : '下班打卡'}</span>
+              <span>{submitting === 'clock_out' ? (locating ? '正在定位...' : '打卡中...') : '下班打卡'}</span>
             </button>
-            <button className="secondary-button" type="button" onClick={() => handlePunch('break_end')} disabled={Boolean(submitting)}>
+            <button className="secondary-button" type="button" onClick={() => handlePunch('break_end')} disabled={Boolean(submitting) || locating}>
               <Coffee size={18} />
-              <span>{submitting === 'break_end' ? '记录中...' : '结束休息'}</span>
+              <span>{submitting === 'break_end' ? (locating ? '正在定位...' : '记录中...') : '结束休息'}</span>
             </button>
           </div>
 
