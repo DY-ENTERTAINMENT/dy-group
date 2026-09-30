@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Edit3, Plus, RefreshCw, Search } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -8,8 +8,6 @@ import {
   normalizeEmployeeName,
   type EmployeeFormValues,
   type EmployeeListItem,
-  type HistoricalStaffNameNormalizationAuditRow,
-  type HistoricalStaffNameNormalizationPreflight,
   type StaffOptions,
   staffService,
 } from '../services/staff.service';
@@ -74,7 +72,6 @@ export function StaffPage() {
   const permissions = usePermissions();
   const canManageStaff = permissions.canUse('staff');
   const canEditEmployeeCode = profile?.role === 'super_admin';
-  const isSuperAdmin = profile?.role === 'super_admin' && profile.status === 'approved';
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
   const [options, setOptions] = useState<StaffOptions>({ regions: [], employmentTypes: [], jobTitles: [] });
   const [formValues, setFormValues] = useState<EmployeeFormValues>(emptyForm);
@@ -91,14 +88,6 @@ export function StaffPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [normalizationPreflight, setNormalizationPreflight] = useState<HistoricalStaffNameNormalizationPreflight | null>(null);
-  const [normalizationPreflightError, setNormalizationPreflightError] = useState('');
-  const [normalizationPreflightLoading, setNormalizationPreflightLoading] = useState(false);
-  const [normalizationRunning, setNormalizationRunning] = useState(false);
-  const [normalizationAttempted, setNormalizationAttempted] = useState(false);
-  const [normalizationRows, setNormalizationRows] = useState<HistoricalStaffNameNormalizationAuditRow[]>([]);
-  const [normalizationError, setNormalizationError] = useState('');
-  const normalizationInvocationStartedRef = useRef(false);
 
   const filteredEmployees = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -128,11 +117,6 @@ export function StaffPage() {
     void loadStaffData();
   }, []);
 
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    void loadHistoricalStaffNameNormalizationPreflight();
-  }, [isSuperAdmin]);
-
   usePullToRefresh(loadStaffData);
 
   async function loadStaffData() {
@@ -147,50 +131,6 @@ export function StaffPage() {
       setError(`读取工作人员资料失败：${getErrorMessage(loadError)}`);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadHistoricalStaffNameNormalizationPreflight() {
-    setNormalizationPreflightLoading(true);
-    setNormalizationPreflightError('');
-
-    try {
-      setNormalizationPreflight(await staffService.getHistoricalStaffNameNormalizationPreflight());
-    } catch (preflightError) {
-      setNormalizationPreflight(null);
-      setNormalizationPreflightError(getErrorMessage(preflightError));
-    } finally {
-      setNormalizationPreflightLoading(false);
-    }
-  }
-
-  async function handleHistoricalStaffNameNormalization() {
-    if (
-      normalizationInvocationStartedRef.current ||
-      normalizationRunning ||
-      normalizationAttempted ||
-      normalizationPreflight?.targetCount !== 15
-    ) {
-      return;
-    }
-
-    const confirmed = window.confirm('即将统一 15 名历史工作人员姓名。\n此操作会正式写入 Production。\n确认继续？');
-    if (!confirmed) return;
-
-    normalizationInvocationStartedRef.current = true;
-    setNormalizationAttempted(true);
-    setNormalizationRunning(true);
-    setNormalizationError('');
-
-    try {
-      const auditRows = await staffService.runHistoricalStaffNameNormalization();
-      setNormalizationRows(auditRows);
-      setMessage('历史工作人员姓名已统一完成。');
-      await loadStaffData();
-    } catch (runError) {
-      setNormalizationError(getErrorMessage(runError));
-    } finally {
-      setNormalizationRunning(false);
     }
   }
 
@@ -355,45 +295,6 @@ export function StaffPage() {
             </button>
           </div>
         </div>
-
-        {isSuperAdmin ? (
-          <section className="staff-name-normalization-control" aria-label="历史员工姓名统一一次性维护">
-            <div>
-              <strong>历史员工姓名统一（一次性）</strong>
-              <p>
-                Preflight：{normalizationPreflightLoading ? '正在验证...' : normalizationPreflight ? 'Current user authenticated · Super Admin = YES' : 'BLOCKED'}
-                {normalizationPreflight ? ` · Historical targets = ${normalizationPreflight.targetCount} / 15` : ''}
-              </p>
-              {normalizationPreflightError ? <p className="form-alert">{normalizationPreflightError}</p> : null}
-              {normalizationError ? <p className="form-alert">{normalizationError}</p> : null}
-            </div>
-            <button
-              className="primary-button compact-button"
-              type="button"
-              onClick={() => void handleHistoricalStaffNameNormalization()}
-              disabled={
-                normalizationPreflightLoading ||
-                normalizationPreflight?.targetCount !== 15 ||
-                normalizationRunning ||
-                normalizationAttempted
-              }
-            >
-              {normalizationRunning ? '正在统一...' : normalizationRows.length === 15 ? '已完成（本次会话不可再次执行）' : '执行历史员工姓名统一'}
-            </button>
-            {normalizationRows.length === 15 ? (
-              <div className="staff-name-normalization-results">
-                <p className="form-success">SUCCESS · returned row count = 15</p>
-                <ul>
-                  {normalizationRows.map((row) => (
-                    <li key={row.employee_id}>
-                      {row.employee_number || '未编号'}：{row.before_employee_name} → {row.after_employee_name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
 
         {loading ? (
           <div className="table-state">正在读取工作人员...</div>
