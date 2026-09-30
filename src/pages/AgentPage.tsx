@@ -39,6 +39,7 @@ import {
 } from '../services/agent.service';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
 import { creatorCalendarMilestoneLabels, getCreatorMilestones, type CreatorCalendarMilestoneType } from '../utils/creator-calendar';
+import { createUuidV4 } from '../utils/uuid';
 import { creatorActivityService, creatorActivityTypeLabels, type CreatorActivityForm } from '../services/creator-activity.service';
 import type { CreatorActivity, CreatorActivityType } from '../types/database';
 
@@ -3132,7 +3133,7 @@ function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: Operatio
 
     setSaving(true);
     setError('');
-    const requestIdempotencyKey = idempotencyKey ?? crypto.randomUUID();
+    const requestIdempotencyKey = idempotencyKey ?? createUuidV4();
     if (!idempotencyKey) setIdempotencyKey(requestIdempotencyKey);
     try {
       const record = await agentService.submitWeeklyRevenue({

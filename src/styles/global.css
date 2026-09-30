@@ -14036,14 +14036,22 @@ button.leave-chip:disabled {
 
 /* Creator monthly KPI Phase 1 */
 .creator-monthly-kpi-page { display: grid; gap: 18px; }
-.page-heading-actions { display: flex; gap: 10px; align-items: center; }
-.creator-monthly-kpi-heading { max-width: none; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.creator-monthly-kpi-toolbar { display: grid; grid-template-columns: 150px minmax(280px, 1fr) 150px 180px auto; gap: 12px; align-items: center; padding: 14px 16px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 14px; background: var(--surface-color, #fff); }
+.creator-monthly-kpi-intro { margin: -4px 0 0; color: var(--muted-text, #64748b); font-size: 14px; }
+.creator-monthly-kpi-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 14px; background: var(--surface-color, #fff); }
+.creator-monthly-kpi-toolbar > select { flex: 0 0 150px; }
+.creator-monthly-kpi-toolbar > select[aria-label="经纪人"] { flex-basis: 180px; }
 .creator-monthly-kpi-toolbar select, .creator-monthly-kpi-toolbar input { width: 100%; }
-.creator-monthly-kpi-search { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border-color, #dbe1ea); border-radius: 8px; padding-inline: 10px; background: #fff; }
+.creator-monthly-kpi-search { display: flex; flex: 0 1 360px; align-items: center; gap: 7px; height: 38px; border: 1px solid var(--border-color, #dbe1ea); border-radius: 8px; padding-inline: 10px; background: #fff; }
 .creator-monthly-kpi-search input { border: 0; outline: 0; min-width: 0; }
+.creator-monthly-kpi-toolbar .icon-button, .creator-monthly-kpi-target-button { height: 38px; }
+.creator-monthly-kpi-toolbar .icon-button { flex: 0 0 38px; }
+.creator-monthly-kpi-target-button { flex: 0 0 auto; width: auto; white-space: nowrap; }
 .creator-monthly-kpi-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .creator-monthly-kpi-summary article { display: grid; gap: 5px; padding: 16px; border-radius: 14px; background: var(--surface-color, #fff); border: 1px solid var(--border-color, #e5e7eb); }
+.creator-monthly-kpi-summary article:nth-child(1) { background: #f5f3ff; border-color: #e9e4ff; }
+.creator-monthly-kpi-summary article:nth-child(2) { background: #fff7ed; border-color: #ffead5; }
+.creator-monthly-kpi-summary article:nth-child(3) { background: #eff6ff; border-color: #dbeafe; }
+.creator-monthly-kpi-summary article:nth-child(4) { background: #f0fdf4; border-color: #dcfce7; }
 .creator-monthly-kpi-summary span, .creator-monthly-kpi-updated, .creator-monthly-kpi-source { color: var(--muted-text, #64748b); font-size: 12px; }
 .creator-monthly-kpi-summary strong { font-size: 26px; }
 .creator-monthly-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -14054,5 +14062,5 @@ button.leave-chip:disabled {
 .creator-monthly-kpi-status { padding: 4px 7px; border-radius: 999px; font-size: 12px; white-space: nowrap; }.creator-monthly-kpi-status.is-updated { background: #dcfce7; color: #166534; }.creator-monthly-kpi-status.is-pending { background: #fef3c7; color: #92400e; }
 .creator-monthly-kpi-table { display: grid; border-top: 1px solid var(--border-color, #e5e7eb); }.creator-monthly-kpi-row { display: grid; grid-template-columns: 1.15fr repeat(3, minmax(0, 1fr)); gap: 6px; padding: 9px 0; border-bottom: 1px solid var(--border-color, #e5e7eb); font-size: 12px; align-items: center; }.creator-monthly-kpi-row span:not(:first-child), .creator-monthly-kpi-row strong { text-align: right; }.creator-monthly-kpi-head { color: var(--muted-text, #64748b); font-size: 11px; }.creator-monthly-kpi-row .is-achieved { color: #15803d; }
 .creator-monthly-kpi-target-list { display: grid; gap: 12px; margin-top: 14px; }.creator-monthly-kpi-target-item { display: grid; grid-template-columns: 1.2fr repeat(4, minmax(100px, 1fr)); gap: 10px; align-items: end; padding: 12px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; }.creator-monthly-kpi-target-item label { display: grid; gap: 5px; font-size: 12px; }.creator-monthly-kpi-history { display: grid; gap: 10px; }.creator-monthly-kpi-history article { display: grid; grid-template-columns: 110px 1fr 1.5fr auto; gap: 10px; padding: 12px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 10px; font-size: 13px; }.creator-monthly-kpi-history small { color: var(--muted-text, #64748b); }
-@media (max-width: 1100px) { .creator-monthly-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.creator-monthly-kpi-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }.creator-monthly-kpi-target-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .creator-monthly-kpi-heading { align-items: flex-start; flex-direction: column; }.creator-monthly-kpi-grid, .creator-monthly-kpi-summary, .creator-monthly-kpi-toolbar { grid-template-columns: 1fr; }.creator-monthly-kpi-card { padding: 14px; }.creator-monthly-kpi-history article { grid-template-columns: 1fr; }.creator-monthly-kpi-row { grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr)); font-size: 11px; } }
+@media (max-width: 1100px) { .creator-monthly-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.creator-monthly-kpi-target-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .creator-monthly-kpi-grid, .creator-monthly-kpi-summary { grid-template-columns: 1fr; }.creator-monthly-kpi-toolbar > select, .creator-monthly-kpi-toolbar > select[aria-label="经纪人"], .creator-monthly-kpi-search { flex-basis: 100%; }.creator-monthly-kpi-toolbar .icon-button { margin-left: auto; }.creator-monthly-kpi-card { padding: 14px; }.creator-monthly-kpi-history article { grid-template-columns: 1fr; }.creator-monthly-kpi-row { grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr)); font-size: 11px; } }

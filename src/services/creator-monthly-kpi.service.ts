@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { CreatorPlatform } from './scout.service';
 
 export type CreatorMonthlyKpiStatus = 'all' | 'pending' | 'updated' | 'achieved';
+export type CreatorMonthlyKpiEnrollmentStatus = 'required' | 'not_required' | null;
 export type CreatorMonthlyKpiPlatform = {
   platform: CreatorPlatform;
   platform_account: string | null;
@@ -20,6 +21,7 @@ export type CreatorMonthlyKpiCard = {
   live_hours_current: number;
   live_days_current: number;
   week_updated: boolean;
+  kpi_enrollment_status: CreatorMonthlyKpiEnrollmentStatus;
   last_updated_at: string | null;
   platforms: CreatorMonthlyKpiPlatform[];
 };
@@ -71,6 +73,15 @@ export const creatorMonthlyKpiService = {
     const { error } = await db.rpc('save_creator_monthly_kpi_targets', {
       p_month: `${month}-01`,
       p_targets: targets.map((target) => ({ creator_entity_id: target.creatorEntityId, live_hours_target: target.liveHoursTarget, live_days_target: target.liveDaysTarget, platform_targets: target.platformTargets.map((platform) => ({ platform: platform.platform, revenue_target: platform.revenueTarget })) })),
+    });
+    if (error) throw error;
+  },
+
+  async saveEnrollments(month: string, enrollments: Array<{ creatorEntityId: string; status: Exclude<CreatorMonthlyKpiEnrollmentStatus, null> }>) {
+    if (!enrollments.length) return;
+    const { error } = await db.rpc('save_creator_monthly_kpi_enrollments', {
+      p_month: `${month}-01`,
+      p_enrollments: enrollments.map((item) => ({ creator_entity_id: item.creatorEntityId, status: item.status })),
     });
     if (error) throw error;
   },
