@@ -2882,7 +2882,7 @@ function CurrentOperationTable(props: {
 function OperationTableRow({ row, selectedPeriodStart, onOpen }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
   return (
     <tr>
-      <td><strong className="agent-period-creator-name">{row.displayName}</strong><small>{row.regionLabel}</small></td>
+      <td><OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} /></td>
       <td><OperationPlatformList profiles={row.profiles} /></td>
       <td><OperationTypeList profiles={row.profiles} /></td>
       {row.periods.map((cell) => <PeriodRevenueCell key={cell.period.startIso} cell={cell} selected={cell.period.startIso === selectedPeriodStart} onOpen={onOpen} />)}
@@ -2897,7 +2897,7 @@ function OperationMobileCard({ row, selectedPeriodStart, onOpen }: { row: Operat
   return (
     <article className="agent-operation-mobile-card agent-period-mobile-card">
       <div className="agent-operation-mobile-head">
-        <div><strong>{row.displayName}</strong><span>{row.regionLabel}</span></div>
+        <OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} />
         <OperationStatusBadge status={row.status} />
       </div>
       <div className="agent-period-mobile-meta">
@@ -3104,6 +3104,28 @@ function RevenuePeriodSettingsModal({ month, periods, saving, onClose, onSaved }
 
 function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {
   return <DirectWeeklyRevenueModal row={row} onClose={onClose} onSubmitted={onSubmitted} />;
+}
+
+function OperationCreatorIdentity({ profiles, regionLabel }: { profiles: CreatorProfile[]; regionLabel: string }) {
+  return (
+    <div className="agent-period-creator-identity">
+      {profiles.map((profile) => {
+        const isTikTok = profile.platform === 'tiktok';
+        const username = profile.platform_account?.trim() || '未填写';
+        const platformId = profile.platform_user_id?.trim() || '未填写';
+        return (
+          <div key={profile.id} className={`agent-period-creator-platform agent-period-creator-platform--${profile.platform}`}>
+            <img src={isTikTok ? tiktokLogoUrl : douyinLogoUrl} alt={platformLabels[profile.platform]} />
+            <div>
+              <strong title={username}>{username}</strong>
+              <small title={platformId}>{platformId}</small>
+            </div>
+          </div>
+        );
+      })}
+      <small className="agent-period-creator-region">{regionLabel}</small>
+    </div>
+  );
 }
 
 function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {

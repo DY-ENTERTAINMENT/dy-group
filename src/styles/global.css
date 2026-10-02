@@ -6988,7 +6988,7 @@ button.leave-chip:disabled {
 }
 
 .agent-period-col-creator {
-  width: 8%;
+  width: 16%;
 }
 
 .agent-period-col-platform {
@@ -7036,11 +7036,65 @@ button.leave-chip:disabled {
   white-space: nowrap;
 }
 
-.agent-period-creator-name {
+.agent-period-creator-identity {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  text-align: left;
+}
+
+.agent-period-creator-platform {
+  align-items: center;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.agent-period-creator-platform + .agent-period-creator-platform {
+  border-top: 1px solid #eef0f5;
+  padding-top: 4px;
+}
+
+.agent-period-creator-platform img {
+  height: 18px;
+  object-fit: contain;
+  width: 18px;
+}
+
+.agent-period-creator-platform > div {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.agent-period-creator-platform strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-period-creator-platform strong {
   color: var(--text);
-  display: block;
-  font-size: 14px;
-  font-weight: 950;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-period-creator-platform small,
+.agent-period-creator-region {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.agent-period-creator-region {
+  padding-left: 24px;
+}
+
+.agent-period-creator-platform small {
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .agent-period-platform-list,
@@ -7320,6 +7374,10 @@ button.leave-chip:disabled {
   display: flex;
   gap: 10px;
   justify-content: space-between;
+}
+
+.agent-operation-mobile-head .agent-period-creator-identity {
+  flex: 1 1 auto;
 }
 
 .agent-operation-mobile-head div {
