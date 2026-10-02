@@ -50,7 +50,7 @@ jobs:
             exit 1
           }
 
-          printf '%s\n' "$EXPECTED_MIGRATIONS" | sed -E 's/\r$//' | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/expected_migrations"
+          printf '%s\n' "$EXPECTED_MIGRATIONS" | sed -E 's/\r$//; s/^[[:space:]]+//; s/[[:space:]]+$//' | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/expected_migrations"
           test -s "$RUNNER_TEMP/expected_migrations" || {
             echo "expected_migrations must contain at least one filename"
             exit 1
