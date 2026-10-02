@@ -152,13 +152,28 @@ const independentPermissionItems: PermissionItem[] = [
     level: 0,
   },
 ];
-const explicitHrPermissionItems: PermissionItem[] = [
+const explicitSensitivePermissionItems: PermissionItem[] = [
   {
     key: 'attendance-photos',
     name: '查看员工考勤打卡照片',
     parentKey: 'hr',
     level: 1,
     viewOnly: true,
+    explicitOnly: true,
+  },
+  {
+    key: 'management-offline-live-room-revenue',
+    name: '线下直播间流水',
+    parentKey: 'management',
+    level: 1,
+    viewOnly: true,
+    explicitOnly: true,
+  },
+  {
+    key: 'management-offline-live-room-live-duration',
+    name: '线下直播时长',
+    parentKey: 'management',
+    level: 1,
     explicitOnly: true,
   },
 ];
@@ -1229,7 +1244,18 @@ function PermissionManagementPanel() {
 
           <PermissionBlock title={modalTarget.type === 'employee' ? '个人权限调整' : '权限项目'}>
             {modalTarget.type === 'special' ? (
-              <PermissionBatchMatrix items={permissionItems} permissions={modalPermissions} onChange={handleSpecialBatchChange} />
+              <>
+                <PermissionBatchMatrix
+                  items={permissionItems.filter((item) => !item.explicitOnly)}
+                  permissions={modalPermissions}
+                  onChange={handleSpecialBatchChange}
+                />
+                <PermissionMatrix
+                  items={permissionItems.filter((item) => item.explicitOnly)}
+                  permissions={modalPermissions}
+                  onChange={handlePermissionChange}
+                />
+              </>
             ) : (
               <PermissionMatrix items={permissionItems} permissions={modalPermissions} onChange={handlePermissionChange} />
             )}
@@ -1372,7 +1398,7 @@ function buildPermissionItems(): PermissionItem[] {
     groups.set(groupKey, currentItems);
   });
 
-  explicitHrPermissionItems.forEach((item) => {
+  explicitSensitivePermissionItems.forEach((item) => {
     const currentItems = groups.get(item.parentKey ?? '') ?? [];
     if (!currentItems.some((permissionItem) => permissionItem.key === item.key)) {
       currentItems.push({ ...item });
