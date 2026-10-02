@@ -114,8 +114,7 @@ export function SchedulePage() {
     const map = new Map<string, LeaveCalendarItem[]>();
 
     filteredLeaves.forEach((leave) => {
-      const displayDates = leave.leave_type === 'replacement' ? [leave.start_date, leave.end_date] : [leave.leave_date];
-      [...new Set(displayDates)].forEach((date) => addLeaveToDate(map, date, leave));
+      addLeaveToDate(map, leave.leave_date, leave);
     });
 
     return map;
@@ -607,7 +606,7 @@ function addLeaveToDate(map: Map<string, LeaveCalendarItem[]>, date: string, lea
 
 function leaveDisplayLabel(leave: LeaveCalendarItem, date: string) {
   if (leave.leave_type === 'replacement') {
-    return date === leave.start_date ? '补休' : '调休';
+    return date === leave.start_date ? '补班' : '调休';
   }
 
   return leaveTypeLabels[leave.leave_type];
