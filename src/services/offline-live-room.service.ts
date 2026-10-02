@@ -79,6 +79,7 @@ export type OfflineLiveRoomDashboard = {
   updatedRoomCount: number;
   pendingRoomCount: number;
   creatorCount: number;
+  revenueError?: string | null;
 };
 
 export type OfflineLiveRoomPeriodRange = {
@@ -87,6 +88,59 @@ export type OfflineLiveRoomPeriodRange = {
   label: string;
   shortLabel: string;
   periodNo: number;
+};
+
+export type OfflineLiveSessionStatus = 'active' | 'void' | 'cancelled';
+export type OfflineLiveRoomCreatorPlatformSummary = {
+  platform: CreatorPlatform;
+  creator_name: string | null;
+  platform_user_id: string | null;
+  platform_account: string | null;
+};
+
+export type OfflineLiveRoomCreatorSearchResult = {
+  creator_entity_id: string;
+  display_name: string;
+  region_id: string;
+  platforms: OfflineLiveRoomCreatorPlatformSummary[];
+};
+
+export type OfflineLiveSession = {
+  id: string;
+  creator_entity_id: string;
+  room_id: string | null;
+  room_context_type: 'assigned' | 'temporary';
+  broadcast_date: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  note: string | null;
+  status: OfflineLiveSessionStatus;
+  void_reason: string | null;
+  voided_at: string | null;
+  created_by_employee_id: string | null;
+  updated_by_employee_id: string | null;
+  created_at: string;
+  updated_at: string;
+  creator_display_name: string;
+  creator_platforms: OfflineLiveRoomCreatorPlatformSummary[];
+};
+
+export type OfflineLiveCreatorScheduleSlot = {
+  id: string;
+  iso_weekday: number;
+  started_at_time: string;
+  ended_at_time: string;
+  status: 'active' | 'inactive';
+  sort_order: number;
+};
+
+export type OfflineLiveCreatorSchedule = {
+  id: string;
+  creator_entity_id: string;
+  name: string;
+  status: 'active' | 'inactive';
+  slots: OfflineLiveCreatorScheduleSlot[];
 };
 
 // Supabase generated types lag new migrations in this repo, so this service follows the existing runtime-client pattern.
@@ -244,18 +298,25 @@ export const offlineLiveRoomService = {
     return agentService.listRevenuePeriodSettings(month);
   },
 
-  async listRoomDashboard(input: { periods: OfflineLiveRoomPeriodRange[]; statusPeriods?: OfflineLiveRoomPeriodRange[]; regionId?: string }): Promise<OfflineLiveRoomDashboard> {
+  async listRoomDashboard(input: { periods: OfflineLiveRoomPeriodRange[]; statusPeriods?: OfflineLiveRoomPeriodRange[]; regionId?: string; includeRevenue?: boolean }): Promise<OfflineLiveRoomDashboard> {
     const rooms = await this.listRooms({ regionId: input.regionId });
     if (rooms.length === 0) {
-      return { rooms: [], tiktokTotal: 0, douyinTotal: 0, updatedRoomCount: 0, pendingRoomCount: 0, creatorCount: 0 };
+      return { rooms: [], tiktokTotal: 0, douyinTotal: 0, updatedRoomCount: 0, pendingRoomCount: 0, creatorCount: 0, revenueError: null };
     }
 
     const roomIds = rooms.map((room) => room.id);
     const assignments = await this.listRoomCreatorAssignments({ roomIds });
     const entityIds = uniqueValues(assignments.map((assignment) => assignment.creator_entity_id));
     const profiles = entityIds.length > 0 ? await listActiveCreatorProfiles({ entityIds }) : [];
-    const profileIds = profiles.map((profile) => profile.id);
-    const records = profileIds.length > 0 && input.periods.length > 0 ? await listEffectiveWeeklyRevenueRecords(profileIds, input.periods.map((period) => period.startIso)) : [];
+    let records: WeeklyRevenueRecord[] = [];
+    let revenueError: string | null = null;
+    if (input.includeRevenue && input.regionId && input.periods.length > 0) {
+      try {
+        records = await this.listSecureRevenue(input.regionId, input.periods.map((period) => period.startIso));
+      } catch (error) {
+        revenueError = getServiceErrorMessage(error);
+      }
+    }
     const profileGroups = groupProfilesIntoEntities(profiles);
     const recordsByProfileAndPeriod = mapLatestRecordsByProfileAndPeriod(records);
 
@@ -288,7 +349,92 @@ export const offlineLiveRoomService = {
       updatedRoomCount: summary.updatedRoomCount,
       pendingRoomCount: summary.pendingRoomCount,
       creatorCount: summary.creatorCountSet.size,
+      revenueError,
     };
+  },
+
+  async listSecureRevenue(regionId: string, periodStartDates: string[]): Promise<WeeklyRevenueRecord[]> {
+    if (!periodStartDates.length) return [];
+    const { data, error } = await db.rpc('list_offline_live_room_revenue', { p_region_id: regionId, p_period_start_dates: periodStartDates });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({
+      id: `${row.room_id}:${row.creator_profile_id}:${row.platform}`,
+      creator_entity_id: row.creator_entity_id,
+      creator_profile_id: row.creator_profile_id,
+      platform: row.platform,
+      week_start_date: periodStartDates[0],
+      week_end_date: periodStartDates[periodStartDates.length - 1],
+      revenue_amount: Number(row.revenue_amount) || 0,
+      revenue_unit: row.platform === 'tiktok' ? 'diamond' : 'soundwave',
+      is_cumulative_generated: false,
+      source: 'secure_offline_room_rpc',
+      source_reference: null,
+      agent_note: null,
+      manager_note: null,
+      status: 'submitted',
+      submitted_by_employee_id: null,
+      submitted_at: null,
+      confirmed_by_employee_id: null,
+      confirmed_at: null,
+      created_at: null,
+      updated_at: null,
+    }));
+  },
+
+  async listLiveSessions(input: { regionId: string; startDate: string; endDate: string; includeVoided?: boolean }): Promise<OfflineLiveSession[]> {
+    const { data, error } = await db.rpc('list_offline_live_sessions', {
+      p_region_id: input.regionId,
+      p_start_date: input.startDate,
+      p_end_date: input.endDate,
+      p_include_voided: Boolean(input.includeVoided),
+    });
+    if (error) throw error;
+    return (data ?? []).map(mapLiveSessionRow);
+  },
+
+  async searchLiveRoomCreatorEntities(input: { regionId: string; query?: string; creatorEntityIds?: string[]; limit?: number }): Promise<OfflineLiveRoomCreatorSearchResult[]> {
+    const { data, error } = await db.rpc('search_offline_live_room_creator_entities', {
+      p_region_id: input.regionId,
+      p_query: input.query?.trim() || null,
+      p_creator_entity_ids: input.creatorEntityIds?.filter(Boolean) ?? null,
+      p_limit: input.limit ?? 20,
+    });
+    if (error) throw error;
+    return (data ?? []).map(mapLiveRoomCreatorSearchRow);
+  },
+
+  async createLiveSession(input: { creatorEntityId: string; roomId: string; roomContextType: 'assigned' | 'temporary'; startedAt: string; endedAt: string; note?: string }) {
+    const { data, error } = await db.rpc('create_offline_live_session', { p_creator_entity_id: input.creatorEntityId, p_room_id: input.roomId, p_room_context_type: input.roomContextType, p_started_at: input.startedAt, p_ended_at: input.endedAt, p_note: input.note?.trim() || null });
+    if (error) throw error;
+    return data as string;
+  },
+
+  async updateLiveSession(input: { sessionId: string; startedAt: string; endedAt: string; note?: string }) {
+    const { error } = await db.rpc('update_offline_live_session', { p_session_id: input.sessionId, p_started_at: input.startedAt, p_ended_at: input.endedAt, p_note: input.note?.trim() || null });
+    if (error) throw error;
+  },
+
+  async voidLiveSession(input: { sessionId: string; status: 'void' | 'cancelled'; reason: string }) {
+    const { error } = await db.rpc('void_offline_live_session', { p_session_id: input.sessionId, p_status: input.status, p_reason: input.reason.trim() });
+    if (error) throw error;
+  },
+
+  async listCreatorSchedules(regionId: string): Promise<OfflineLiveCreatorSchedule[]> {
+    const { data, error } = await db.rpc('list_offline_live_creator_schedules', { p_region_id: regionId });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({ ...row, slots: (row.slots ?? []).map((slot: any) => ({ ...slot, iso_weekday: Number(slot.iso_weekday), sort_order: Number(slot.sort_order) || 0 })) }));
+  },
+
+  async saveCreatorSchedule(input: { scheduleId?: string | null; creatorEntityId: string; name: string; status: 'active' | 'inactive'; slots: Array<Partial<OfflineLiveCreatorScheduleSlot> & Pick<OfflineLiveCreatorScheduleSlot, 'iso_weekday' | 'started_at_time' | 'ended_at_time'>> }) {
+    const { data, error } = await db.rpc('save_offline_live_creator_schedule', {
+      p_schedule_id: input.scheduleId ?? null,
+      p_creator_entity_id: input.creatorEntityId,
+      p_name: input.name.trim() || '常规直播计划',
+      p_status: input.status,
+      p_slots: input.slots.map((slot, index) => ({ id: slot.id ?? null, iso_weekday: slot.iso_weekday, started_at_time: slot.started_at_time, ended_at_time: slot.ended_at_time, status: slot.status ?? 'active', sort_order: slot.sort_order ?? index })),
+    });
+    if (error) throw error;
+    return data as string;
   },
 };
 
@@ -535,8 +681,50 @@ function mapWeeklyRevenueRow(row: any): WeeklyRevenueRecord {
   };
 }
 
+function mapLiveSessionRow(row: any): OfflineLiveSession {
+  return {
+    ...row,
+    room_id: row.room_id ?? null,
+    room_context_type: row.room_context_type === 'temporary' ? 'temporary' : 'assigned',
+    duration_seconds: Number(row.duration_seconds) || 0,
+    note: row.note ?? null,
+    void_reason: row.void_reason ?? null,
+    voided_at: row.voided_at ?? null,
+    created_by_employee_id: row.created_by_employee_id ?? null,
+    updated_by_employee_id: row.updated_by_employee_id ?? null,
+    creator_display_name: row.creator_display_name ?? '临时主播',
+    creator_platforms: mapCreatorPlatformSummaries(row.creator_platforms),
+  } as OfflineLiveSession;
+}
+
+function mapLiveRoomCreatorSearchRow(row: any): OfflineLiveRoomCreatorSearchResult {
+  return {
+    creator_entity_id: row.creator_entity_id,
+    display_name: row.display_name ?? '主播',
+    region_id: row.region_id,
+    platforms: mapCreatorPlatformSummaries(row.platforms),
+  };
+}
+
+function mapCreatorPlatformSummaries(value: any): OfflineLiveRoomCreatorPlatformSummary[] {
+  return Array.isArray(value) ? value
+    .filter((item) => item && (item.platform === 'tiktok' || item.platform === 'douyin'))
+    .map((item) => ({
+      platform: item.platform as CreatorPlatform,
+      creator_name: item.creator_name ?? null,
+      platform_user_id: item.platform_user_id ?? null,
+      platform_account: item.platform_account ?? null,
+    })) : [];
+}
+
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function getServiceErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') return error.message;
+  return '安全流水服务暂不可用。';
 }
 
 function isActiveCreatorAssignmentConflict(error: unknown) {

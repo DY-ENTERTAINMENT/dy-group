@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Edit3, Plus, Power, RefreshCw, Search, UserPlus, X } from 'lucide-react';
+import { Ban, CalendarDays, Clock3, Edit3, Plus, Power, RefreshCw, Search, UserPlus, X } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
 import tiktokLogoUrl from '../assets/icons/tiktok-logo.png';
@@ -11,9 +11,14 @@ import {
   platformLabels,
   type OfflineLiveRoom,
   type OfflineLiveRoomCreatorEntity,
+  type OfflineLiveRoomCreatorSearchResult,
+  type OfflineLiveRoomCreatorSummary,
   type OfflineLiveRoomDashboard,
   type OfflineLiveRoomDashboardRoom,
   type OfflineLiveRoomFormInput,
+  type OfflineLiveSession,
+  type OfflineLiveCreatorSchedule,
+  type OfflineLiveCreatorScheduleSlot,
   type OfflineLiveRoomPeriodRange,
   type OfflineLiveRoomUpdateStatus,
 } from '../services/offline-live-room.service';
@@ -41,6 +46,7 @@ const emptyDashboard: OfflineLiveRoomDashboard = {
   updatedRoomCount: 0,
   pendingRoomCount: 0,
   creatorCount: 0,
+  revenueError: null,
 };
 
 const statusLabels: Record<OfflineLiveRoomUpdateStatus, string> = {
@@ -59,6 +65,9 @@ const quickRangeOptions: { value: QuickRange; label: string }[] = [
 export function OfflineLiveRoomManagementPage() {
   const permissions = usePermissions();
   const canUse = permissions.canUse('management-offline-live-rooms');
+  const canViewRevenue = permissions.canView('management-offline-live-room-revenue');
+  const canViewDuration = permissions.canView('management-offline-live-room-live-duration');
+  const canUseDuration = permissions.canUse('management-offline-live-room-live-duration');
   const todayIso = useMemo(() => formatMalaysiaDate(new Date()), []);
   const currentMonth = todayIso.slice(0, 7);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -82,6 +91,14 @@ export function OfflineLiveRoomManagementPage() {
   const [restoreConfirmation, setRestoreConfirmation] = useState<{ room: OfflineLiveRoom; closeRoomModal: boolean } | null>(null);
   const inactiveRoomsRequestIdRef = useRef(0);
   const [assignmentRoom, setAssignmentRoom] = useState<OfflineLiveRoomDashboardRoom | null>(null);
+  const [showRevenue, setShowRevenue] = useState(true);
+  const [showDuration, setShowDuration] = useState(true);
+  const [sessions, setSessions] = useState<OfflineLiveSession[]>([]);
+  const [schedules, setSchedules] = useState<OfflineLiveCreatorSchedule[]>([]);
+  const [durationError, setDurationError] = useState('');
+  const [sessionModal, setSessionModal] = useState<{ room: OfflineLiveRoom; creator: OfflineLiveRoomCreatorSummary; session?: OfflineLiveSession } | null>(null);
+  const [voidSession, setVoidSession] = useState<OfflineLiveSession | null>(null);
+  const [scheduleCreator, setScheduleCreator] = useState<OfflineLiveRoomCreatorSummary | null>(null);
 
   const selectedRange = useMemo(() => getSelectedDateRange(quickRange, todayIso, customStart, customEnd), [customEnd, customStart, quickRange, todayIso]);
   const monthsToLoad = useMemo(() => getMonthsForDateRange(selectedRange), [selectedRange]);
@@ -92,20 +109,39 @@ export function OfflineLiveRoomManagementPage() {
     [currentPeriod, quickRange, selectedPeriods],
   );
   const statusPeriods = useMemo(() => visiblePeriods.filter((period) => period.startIso <= todayIso), [todayIso, visiblePeriods]);
+  const sessionRange = useMemo(() => getSessionDateRange(quickRange, todayIso, customStart, customEnd), [customEnd, customStart, quickRange, todayIso]);
 
   const loadDashboard = useCallback(async () => {
-    if (!regionId || visiblePeriods.length === 0) return;
+    if (!regionId || (canViewRevenue && visiblePeriods.length === 0)) return;
     setLoading(true);
     setError('');
     try {
-      const nextDashboard = await offlineLiveRoomService.listRoomDashboard({ regionId, periods: visiblePeriods, statusPeriods });
+      const nextDashboard = await offlineLiveRoomService.listRoomDashboard({ regionId, periods: visiblePeriods, statusPeriods, includeRevenue: canViewRevenue });
       setDashboard(nextDashboard);
+      setDurationError('');
+      if (canViewDuration) {
+        const [nextSessions, nextSchedules] = await Promise.all([
+          offlineLiveRoomService.listLiveSessions({ regionId, startDate: sessionRange.startIso, endDate: sessionRange.endIso }),
+          offlineLiveRoomService.listCreatorSchedules(regionId),
+        ]);
+        setSessions(nextSessions);
+        setSchedules(nextSchedules);
+      } else {
+        setSessions([]);
+        setSchedules([]);
+      }
     } catch (loadError) {
-      setError(`读取线下直播间失败：${getErrorMessage(loadError)}`);
+      if (canViewDuration && isRpcUnavailable(loadError)) {
+        setSessions([]);
+        setSchedules([]);
+        setDurationError('直播时长服务尚未部署或暂不可用；现有直播间功能不受影响。');
+      } else {
+        setError(`读取线下直播间失败：${getErrorMessage(loadError)}`);
+      }
     } finally {
       setLoading(false);
     }
-  }, [regionId, statusPeriods, visiblePeriods]);
+  }, [canViewDuration, canViewRevenue, regionId, sessionRange.endIso, sessionRange.startIso, statusPeriods, visiblePeriods]);
 
   useEffect(() => {
     let active = true;
@@ -147,9 +183,9 @@ export function OfflineLiveRoomManagementPage() {
   }, [monthsToLoad, periodsByMonth]);
 
   useEffect(() => {
-    if (!regionId || visiblePeriods.length === 0) return;
+    if (!regionId || (canViewRevenue && visiblePeriods.length === 0)) return;
     void loadDashboard();
-  }, [loadDashboard, regionId, visiblePeriods.length]);
+  }, [canViewRevenue, loadDashboard, regionId, visiblePeriods.length]);
 
   async function saveRoom(values: RoomFormValues) {
     const payload = normalizeRoomForm(values);
@@ -271,6 +307,7 @@ export function OfflineLiveRoomManagementPage() {
     <div className="offline-live-room-page">
       {message ? <p className="form-success offline-live-room-alert">{message}</p> : null}
       {error ? <p className="form-alert offline-live-room-alert">{error}</p> : null}
+      {durationError ? <p className="form-alert offline-live-room-alert">{durationError}</p> : null}
 
       <section className="offline-live-room-filterbar">
         <div className="offline-live-room-segmented" role="group" aria-label="时间范围">
@@ -313,14 +350,21 @@ export function OfflineLiveRoomManagementPage() {
             <Plus size={16} /> 添加直播间
           </button>
         </div>
+        {(canViewRevenue || canViewDuration) ? <div className="offline-live-room-content-toggle" role="group" aria-label="显示内容">
+          <span>显示内容</span>
+          {canViewRevenue ? <label><input type="checkbox" checked={showRevenue} onChange={(event) => setShowRevenue(event.target.checked)} /> 流水</label> : null}
+          {canViewDuration ? <label><input type="checkbox" checked={showDuration} onChange={(event) => setShowDuration(event.target.checked)} /> 直播时长</label> : null}
+        </div> : null}
       </section>
 
-      <section className="offline-live-room-kpis">
+      {canViewRevenue && showRevenue ? <section className="offline-live-room-kpis">
         <KpiCard label="当前周期流水" value={<RevenuePair tiktok={dashboard.tiktokTotal} douyin={dashboard.douyinTotal} />} />
         <KpiCard label="已更新直播间" value={dashboard.updatedRoomCount} detail="全部主播平台已填写" tone="updated" />
         <KpiCard label="待更新直播间" value={dashboard.pendingRoomCount} detail="含未配置主播房间" tone="pending" />
         <KpiCard label="当前周期主播人数" value={dashboard.creatorCount} detail="按主播本人去重" />
       </section>
+      : null}
+      {canViewRevenue && showRevenue && dashboard.revenueError ? <p className="form-alert offline-live-room-alert">安全流水服务暂不可用：{dashboard.revenueError}</p> : null}
 
       <section className="offline-live-room-grid" aria-busy={busy}>
         {busy ? <div className="offline-live-room-state">正在读取直播间...</div> : null}
@@ -330,9 +374,19 @@ export function OfflineLiveRoomManagementPage() {
             key={room.room.id}
             item={room}
             canUse={canUse}
+            showRevenue={canViewRevenue && showRevenue && !dashboard.revenueError}
+            showDuration={canViewDuration && showDuration}
+            canUseDuration={canUseDuration}
+            sessions={sessions.filter((session) => session.room_id === room.room.id)}
+            schedules={schedules}
+            todayIso={todayIso}
+            periodRange={sessionRange}
             onEdit={() => { setRoomSubmitError(''); setRoomModal({ mode: 'edit', room: room.room }); }}
             onDeactivate={() => void deactivateRoom(room.room)}
             onManageCreators={() => setAssignmentRoom(room)}
+            onSession={(targetRoom, creator, session) => setSessionModal({ room: targetRoom, creator, session })}
+            onVoid={(session) => setVoidSession(session)}
+            onSchedule={(creator) => setScheduleCreator(creator)}
           />
         )) : null}
       </section>
@@ -383,6 +437,9 @@ export function OfflineLiveRoomManagementPage() {
           onRemove={(assignmentId) => void removeAssignment(assignmentId)}
         />
       ) : null}
+      {sessionModal ? <SessionModal room={sessionModal.room} creator={sessionModal.creator} session={sessionModal.session} defaultDate={todayIso} existingSessions={sessions.filter((session) => session.status === 'active')} onClose={() => setSessionModal(null)} onSaved={async (input) => { try { if (sessionModal.session) await offlineLiveRoomService.updateLiveSession({ sessionId: sessionModal.session.id, startedAt: input.startedAt, endedAt: input.endedAt, note: input.note }); else await offlineLiveRoomService.createLiveSession(input); setSessionModal(null); setMessage('直播时间已保存。'); await loadDashboard(); } catch (saveError) { throw saveError; } }} /> : null}
+      {voidSession ? <VoidSessionModal session={voidSession} onClose={() => setVoidSession(null)} onSaved={async (status, reason) => { await offlineLiveRoomService.voidLiveSession({ sessionId: voidSession.id, status, reason }); setVoidSession(null); setMessage('直播记录已作废。'); await loadDashboard(); }} /> : null}
+      {scheduleCreator ? <ScheduleModal creator={scheduleCreator} schedule={schedules.find((schedule) => schedule.creator_entity_id === scheduleCreator.entityId) ?? null} onClose={() => setScheduleCreator(null)} onSaved={async (input) => { await offlineLiveRoomService.saveCreatorSchedule({ creatorEntityId: scheduleCreator.entityId, ...input }); setScheduleCreator(null); setMessage('直播计划已保存。'); await loadDashboard(); }} /> : null}
     </div>
   );
 }
@@ -421,13 +478,28 @@ function PlatformMetric({ platform, value, unit, total = false }: { platform: 't
   );
 }
 
-function RoomCard({ item, canUse, onEdit, onDeactivate, onManageCreators }: {
+function RoomCard({ item, canUse, showRevenue, showDuration, canUseDuration, sessions, schedules, todayIso, periodRange, onEdit, onDeactivate, onManageCreators, onSession, onVoid, onSchedule }: {
   item: OfflineLiveRoomDashboardRoom;
   canUse: boolean;
+  showRevenue: boolean;
+  showDuration: boolean;
+  canUseDuration: boolean;
+  sessions: OfflineLiveSession[];
+  schedules: OfflineLiveCreatorSchedule[];
+  todayIso: string;
+  periodRange: DateRange;
   onEdit: () => void;
   onDeactivate: () => void;
   onManageCreators: () => void;
+  onSession: (room: OfflineLiveRoom, creator: OfflineLiveRoomCreatorSummary, session?: OfflineLiveSession) => void;
+  onVoid: (session: OfflineLiveSession) => void;
+  onSchedule: (creator: OfflineLiveRoomCreatorSummary) => void;
 }) {
+  const temporaryCreatorCards = showDuration ? Array.from(new Map(
+    sessions.filter((session) => session.room_context_type === 'temporary' && !item.creators.some((creator) => creator.entityId === session.creator_entity_id))
+      .map((session) => [session.creator_entity_id, sessionToTemporaryCreatorSummary(session)]),
+  ).values()) : [];
+  const displayedCreators = [...item.creators, ...temporaryCreatorCards];
   return (
     <article className={`offline-live-room-card offline-live-room-card--${item.status}`}>
       <div className="offline-live-room-card-head">
@@ -436,15 +508,16 @@ function RoomCard({ item, canUse, onEdit, onDeactivate, onManageCreators }: {
           <h3>{item.room.room_number}号直播间</h3>
           <p>{item.room.name}</p>
         </div>
-        <StatusBadge status={item.status} />
+        {showRevenue ? <StatusBadge status={item.status} /> : null}
       </div>
 
       <div className="offline-live-room-creator-list">
-        {item.creators.length === 0 ? <p className="offline-live-room-empty-line">未配置主播</p> : null}
-        {item.creators.map((creator) => (
+        {displayedCreators.length === 0 ? <p className="offline-live-room-empty-line">未配置主播</p> : null}
+        {displayedCreators.map((creator) => (
           <div className="offline-live-room-creator" key={creator.entityId}>
-            <strong>{creator.displayName}</strong>
-            <div>
+            <strong>{creator.displayName}{temporaryCreatorCards.some((temporary) => temporary.entityId === creator.entityId) ? <small className="offline-live-room-temporary-tag">临时</small> : null}</strong>
+            {showDuration ? <p className="offline-live-room-creator-platforms">{creator.profiles.map(({ profile }) => platformLabels[profile.platform]).join(' · ')}</p> : null}
+            {showRevenue ? <div>
               {creator.profiles.map(({ profile, record, total }) => (
                 <span key={profile.id} className={`offline-live-room-platform-line offline-live-room-platform-line--${profile.platform}`}>
                   <em>{platformLabels[profile.platform]}</em>
@@ -452,18 +525,19 @@ function RoomCard({ item, canUse, onEdit, onDeactivate, onManageCreators }: {
                   <small>{getOfflineLiveRoomRevenueUnit(profile.platform)}</small>
                 </span>
               ))}
-            </div>
+            </div> : null}
+            {showDuration ? <CreatorDuration room={item.room} creator={creator} sessions={sessions.filter((session) => session.creator_entity_id === creator.entityId && session.status === 'active')} schedule={schedules.find((schedule) => schedule.creator_entity_id === creator.entityId) ?? null} todayIso={todayIso} periodRange={periodRange} canUse={canUseDuration} onSession={onSession} onVoid={onVoid} onSchedule={onSchedule} /> : null}
           </div>
         ))}
       </div>
 
-      <div className="offline-live-room-card-total">
+      {showRevenue ? <div className="offline-live-room-card-total">
         <PlatformMetric platform="tiktok" value={item.tiktokTotal} unit="钻石" total />
         <PlatformMetric platform="douyin" value={item.douyinTotal} unit="音浪" total />
-      </div>
+      </div> : null}
 
       <footer className="offline-live-room-card-footer">
-        <span>最后更新：{item.latestUpdatedAt ? formatDateTime(item.latestUpdatedAt) : '--'}</span>
+        <span>{showRevenue ? `最后更新：${item.latestUpdatedAt ? formatDateTime(item.latestUpdatedAt) : '--'}` : '直播时长按 MYT 统计'}</span>
         <div>
           <button className="icon-button" type="button" onClick={onManageCreators} disabled={!canUse} aria-label="设置常驻主播">
             <UserPlus size={16} />
@@ -478,6 +552,28 @@ function RoomCard({ item, canUse, onEdit, onDeactivate, onManageCreators }: {
       </footer>
     </article>
   );
+}
+
+function CreatorDuration({ room, creator, sessions, schedule, todayIso, periodRange, canUse, onSession, onVoid, onSchedule }: {
+  room: OfflineLiveRoom;
+  creator: OfflineLiveRoomCreatorSummary;
+  sessions: OfflineLiveSession[];
+  schedule: OfflineLiveCreatorSchedule | null;
+  todayIso: string;
+  periodRange: DateRange;
+  canUse: boolean;
+  onSession: (room: OfflineLiveRoom, creator: OfflineLiveRoomCreatorSummary, session?: OfflineLiveSession) => void;
+  onVoid: (session: OfflineLiveSession) => void;
+  onSchedule: (creator: OfflineLiveRoomCreatorSummary) => void;
+}) {
+  const sorted = [...sessions].sort((first, second) => first.started_at.localeCompare(second.started_at));
+  const todayTotal = sorted.filter((session) => session.broadcast_date === todayIso).reduce((sum, session) => sum + session.duration_seconds, 0);
+  const periodTotal = sorted.reduce((sum, session) => sum + session.duration_seconds, 0);
+  return <section className="offline-live-room-duration">
+    {sorted.length ? <><div className="offline-live-room-session-list">{sorted.map((session) => <div className="offline-live-room-session" key={session.id}><span>{formatMalaysiaTime(session.started_at)} - {session.broadcast_date !== malaysiaDateOf(session.ended_at) ? `次日 ${formatMalaysiaTime(session.ended_at)}` : formatMalaysiaTime(session.ended_at)}{session.room_context_type === 'temporary' ? <small className="offline-live-room-temporary-tag">临时</small> : null}</span><strong>{formatDuration(session.duration_seconds)}</strong>{canUse ? <span className="offline-live-room-session-actions"><button type="button" onClick={() => onSession(room, creator, session)}>编辑</button><button type="button" onClick={() => onVoid(session)}>作废</button></span> : null}</div>)}</div><div className="offline-live-room-duration-total"><span>今日合计：{formatDuration(todayTotal)}</span><span>{periodRange.startIso === periodRange.endIso ? '当日累计' : '当前周期累计'}：{formatDuration(periodTotal)}</span></div></> : <p className="offline-live-room-duration-empty">暂无直播记录</p>}
+    {schedule ? <p className="offline-live-room-schedule-summary">计划：{formatScheduleSummary(schedule)}</p> : null}
+    {canUse ? <div className="offline-live-room-duration-actions"><button className="secondary-button compact-button" type="button" onClick={() => onSession(room, creator)}><Clock3 size={14} />填写时间</button><button className="secondary-button compact-button" type="button" onClick={() => onSchedule(creator)}><CalendarDays size={14} />直播计划</button></div> : null}
+  </section>;
 }
 
 function StatusBadge({ status }: { status: OfflineLiveRoomUpdateStatus }) {
@@ -666,6 +762,71 @@ function AssignmentModal({ room, regionId, canUse, onClose, onAssign, onRemove }
   );
 }
 
+function SessionModal({ room, creator, session, defaultDate, existingSessions, onClose, onSaved }: {
+  room: OfflineLiveRoom;
+  creator: OfflineLiveRoomCreatorSummary;
+  session?: OfflineLiveSession;
+  defaultDate: string;
+  existingSessions: OfflineLiveSession[];
+  onClose: () => void;
+  onSaved: (input: { creatorEntityId: string; roomId: string; roomContextType: 'assigned' | 'temporary'; startedAt: string; endedAt: string; note?: string }) => Promise<void>;
+}) {
+  const [roomContextType, setRoomContextType] = useState<'assigned' | 'temporary'>(session?.room_context_type ?? 'assigned');
+  const [search, setSearch] = useState('');
+  const [temporaryCreatorId, setTemporaryCreatorId] = useState(creator.entityId);
+  const [candidates, setCandidates] = useState<OfflineLiveRoomCreatorSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [date, setDate] = useState(session?.broadcast_date ?? defaultDate);
+  const [start, setStart] = useState(session ? formatMalaysiaTime(session.started_at) : '');
+  const [end, setEnd] = useState(session ? formatMalaysiaTime(session.ended_at) : '');
+  const [note, setNote] = useState(session?.note ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const selectedCreator = roomContextType === 'temporary' ? candidates.find((item) => item.creator_entity_id === temporaryCreatorId) ?? null : null;
+  const effectiveCreatorId = selectedCreator?.creator_entity_id ?? creator.entityId;
+  const candidateOptions = candidates;
+  const preview = sessionTimes(date, start, end);
+  const overlaps = preview ? existingSessions.some((item) => item.creator_entity_id === effectiveCreatorId && item.id !== session?.id && new Date(item.started_at).getTime() < preview.endedAt.getTime() && new Date(item.ended_at).getTime() > preview.startedAt.getTime()) : false;
+  useEffect(() => {
+    if (roomContextType !== 'temporary' || session || !search.trim()) { setCandidates([]); setSearchError(''); return; }
+    let active = true;
+    setSearching(true); setSearchError('');
+    const timer = window.setTimeout(() => {
+      offlineLiveRoomService.searchLiveRoomCreatorEntities({ regionId: room.region_id, query: search })
+        .then((items) => { if (active) setCandidates(items); })
+        .catch((searchFailure) => { if (active) { setCandidates([]); setSearchError(getErrorMessage(searchFailure)); } })
+        .finally(() => { if (active) setSearching(false); });
+    }, 200);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [room.region_id, roomContextType, search, session]);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (roomContextType === 'temporary' && !selectedCreator) { setError('请选择现有临时主播。'); return; }
+    if (!preview) { setError('请填写有效的直播日期、开播时间和下播时间。'); return; }
+    if (overlaps) { setError('该主播的直播时间与已有记录重叠，请检查时间。'); return; }
+    setSaving(true); setError('');
+    try { await onSaved({ creatorEntityId: effectiveCreatorId, roomId: room.id, roomContextType, startedAt: preview.startedAt.toISOString(), endedAt: preview.endedAt.toISOString(), note }); } catch (saveError) { setError(friendlyLiveError(saveError)); } finally { setSaving(false); }
+  }
+  return <SystemModal title={session ? '编辑直播时间' : '填写直播时间'} subtitle={`${room.room_number}号直播间 · ${room.name}`} onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>取消</button><button className="primary-button compact-button" form="offline-live-session-form" type="submit" disabled={saving || overlaps}>{saving ? '保存中...' : '保存'}</button></>}><form id="offline-live-session-form" className="form-grid offline-live-session-form" onSubmit={submit}>{!session ? <fieldset className="form-field-wide offline-live-room-context-choice"><legend>主播类型</legend><label><input type="radio" checked={roomContextType === 'assigned'} onChange={() => setRoomContextType('assigned')} /> 固定主播</label><label><input type="radio" checked={roomContextType === 'temporary'} onChange={() => setRoomContextType('temporary')} /> 临时主播</label></fieldset> : null}{roomContextType === 'temporary' && !session ? <><label className="form-field"><span>搜索主播</span><input value={search} onChange={(event) => { setSearch(event.target.value); setTemporaryCreatorId(''); }} placeholder="名字 / TikTok ID / 平台账号" /></label><label className="form-field"><span>临时主播</span><select value={temporaryCreatorId} onChange={(event) => setTemporaryCreatorId(event.target.value)} disabled={!search.trim() || searching}><option value="">{searching ? '搜索中...' : '请选择现有主播'}</option>{candidateOptions.map((item) => <option key={item.creator_entity_id} value={item.creator_entity_id}>{item.display_name} / {item.platforms.map((profile) => `${platformLabels[profile.platform]} ${profile.platform_account || profile.platform_user_id || profile.creator_name || ''}`.trim()).join(' / ')}</option>)}</select></label>{searchError ? <p className="form-alert form-field-wide">搜索主播失败：{searchError}</p> : null}</> : <p className="form-field-wide offline-live-session-creator">主播：<strong>{creator.displayName}</strong></p>}<div className="offline-live-session-time-fields form-field-wide"><label className="form-field"><span>直播日期</span><input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><label className="form-field"><span>开播时间</span><input required type="time" value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="form-field"><span>下播时间</span><input required type="time" value={end} onChange={(event) => setEnd(event.target.value)} /></label></div><div className="offline-live-session-preview form-field-wide"><span>{preview?.nextDay ? `${start || '--:--'} → 次日 ${end || '--:--'}` : `${start || '--:--'} → ${end || '--:--'}`}</span><strong>预计时长：{preview ? formatDuration(Math.round((preview.endedAt.getTime() - preview.startedAt.getTime()) / 1000)) : '--'}</strong></div><label className="form-field form-field-wide"><span>备注（可选）</span><input value={note} onChange={(event) => setNote(event.target.value)} /></label>{overlaps ? <p className="form-alert form-field-wide">该主播的直播时间与已有记录重叠，请检查时间。</p> : null}{error ? <p className="form-alert form-field-wide">{error}</p> : null}</form></SystemModal>;
+}
+
+function VoidSessionModal({ session, onClose, onSaved }: { session: OfflineLiveSession; onClose: () => void; onSaved: (status: 'void' | 'cancelled', reason: string) => Promise<void> }) {
+  const [reason, setReason] = useState('填写错误'); const [detail, setDetail] = useState(''); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
+  async function submit(event: FormEvent) { event.preventDefault(); const fullReason = [reason, detail.trim()].filter(Boolean).join('：'); if (!fullReason) { setError('请填写作废原因。'); return; } setSaving(true); setError(''); try { await onSaved('void', fullReason); } catch (saveError) { setError(friendlyLiveError(saveError)); } finally { setSaving(false); } }
+  return <SystemModal title="作废直播记录" subtitle={`${formatMalaysiaTime(session.started_at)} - ${formatMalaysiaTime(session.ended_at)}`} onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>取消</button><button className="primary-button compact-button" type="submit" form="void-live-session-form" disabled={saving}>{saving ? '处理中...' : '确认作废'}</button></>}><form id="void-live-session-form" className="form-grid" onSubmit={submit}><label className="form-field"><span>原因</span><select value={reason} onChange={(event) => setReason(event.target.value)}><option>设备问题</option><option>填写错误</option><option>重复记录</option><option>其他</option></select></label><label className="form-field form-field-wide"><span>补充说明（可选）</span><input value={detail} onChange={(event) => setDetail(event.target.value)} /></label>{error ? <p className="form-alert form-field-wide">{error}</p> : null}</form></SystemModal>;
+}
+
+function ScheduleModal({ creator, schedule, onClose, onSaved }: { creator: OfflineLiveRoomCreatorSummary; schedule: OfflineLiveCreatorSchedule | null; onClose: () => void; onSaved: (input: { scheduleId?: string; name: string; status: 'active' | 'inactive'; slots: Array<Partial<OfflineLiveCreatorScheduleSlot> & Pick<OfflineLiveCreatorScheduleSlot, 'iso_weekday' | 'started_at_time' | 'ended_at_time'>> }) => Promise<void> }) {
+  const [mode, setMode] = useState<'weekdays' | 'daily' | 'custom'>(() => scheduleMode(schedule));
+  const [days, setDays] = useState<number[]>(() => scheduleDays(schedule));
+  const [slots, setSlots] = useState<Array<Partial<OfflineLiveCreatorScheduleSlot> & Pick<OfflineLiveCreatorScheduleSlot, 'iso_weekday' | 'started_at_time' | 'ended_at_time'>>>(() => uniqueScheduleTimes(schedule));
+  const [saving, setSaving] = useState(false); const [error, setError] = useState('');
+  function setPreset(next: 'weekdays' | 'daily' | 'custom') { setMode(next); if (next === 'weekdays') setDays([1, 2, 3, 4, 5]); if (next === 'daily') setDays([1, 2, 3, 4, 5, 6, 7]); }
+  async function submit(event: FormEvent) { event.preventDefault(); if (!days.length || !slots.length) { setError('请选择至少一天并填写一个时段。'); return; } const desired = days.flatMap((day) => slots.map((slot, index) => ({ ...slot, iso_weekday: day, sort_order: index, status: 'active' as const }))); if (desired.some((slot) => !slot.started_at_time || !slot.ended_at_time || slot.started_at_time === slot.ended_at_time)) { setError('请填写有效且不相同的开始/结束时间。'); return; } const existing = schedule?.slots.filter((slot) => slot.status === 'active').sort((first, second) => first.iso_weekday - second.iso_weekday || first.sort_order - second.sort_order) ?? []; const normalized = [...desired.map((slot, index) => ({ ...slot, id: existing[index]?.id })), ...existing.slice(desired.length).map((slot) => ({ ...slot, status: 'inactive' as const }))]; setSaving(true); setError(''); try { await onSaved({ scheduleId: schedule?.id, name: schedule?.name ?? '常规直播计划', status: 'active', slots: normalized }); } catch (saveError) { setError(friendlyLiveError(saveError)); } finally { setSaving(false); } }
+  return <SystemModal title="主播直播计划" subtitle={creator.displayName} onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>关闭</button><button className="primary-button compact-button" type="submit" form="offline-live-schedule-form" disabled={saving}>{saving ? '保存中...' : '保存计划'}</button></>}><form id="offline-live-schedule-form" className="offline-live-schedule-form" onSubmit={submit}><div className="segmented-choice">{(['weekdays', 'daily', 'custom'] as const).map((value) => <button key={value} type="button" className={mode === value ? 'active' : ''} onClick={() => setPreset(value)}>{value === 'weekdays' ? '工作日' : value === 'daily' ? '每天' : '自定义'}</button>)}</div>{mode === 'custom' ? <div className="offline-live-weekdays">{['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((label, index) => <label key={label}><input type="checkbox" checked={days.includes(index + 1)} onChange={(event) => setDays((current) => event.target.checked ? [...current, index + 1].sort() : current.filter((day) => day !== index + 1))} /> {label}</label>)}</div> : null}<div className="offline-live-slot-list">{slots.map((slot, index) => <div key={index} className="offline-live-slot"><label><span className="sr-only">开播时间</span><input type="time" value={slot.started_at_time} onChange={(event) => setSlots((current) => current.map((value, currentIndex) => currentIndex === index ? { ...value, started_at_time: event.target.value } : value))} /></label><span className="offline-live-slot-arrow">→</span><label><span className="sr-only">下播时间</span><input type="time" value={slot.ended_at_time} onChange={(event) => setSlots((current) => current.map((value, currentIndex) => currentIndex === index ? { ...value, ended_at_time: event.target.value } : value))} /></label><span className="offline-live-slot-summary">{formatScheduleSlotSummary(slot.started_at_time, slot.ended_at_time)}</span>{slots.length > 1 ? <button type="button" onClick={() => setSlots((current) => current.filter((_, currentIndex) => currentIndex !== index))}>移除</button> : null}</div>)}</div><button className="secondary-button compact-button" type="button" onClick={() => setSlots((current) => [...current, { iso_weekday: 1, started_at_time: '21:00', ended_at_time: '23:00' }])}><Plus size={14} />增加时段</button>{error ? <p className="form-alert">{error}</p> : null}</form></SystemModal>;
+}
+
 function TextField({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
   return (
     <label className="form-field">
@@ -695,6 +856,16 @@ function getSelectedDateRange(quickRange: QuickRange, todayIso: string, customSt
   if (quickRange === 'month') return getMonthDateRange(todayIso.slice(0, 7));
   if (quickRange === 'custom') return normalizeDateRange(customStart, customEnd, { startIso: todayIso, endIso: todayIso });
   return { startIso: todayIso, endIso: todayIso };
+}
+
+function getSessionDateRange(quickRange: QuickRange, todayIso: string, customStart: string, customEnd: string): DateRange {
+  if (quickRange === 'month') return getMonthDateRange(todayIso.slice(0, 7));
+  if (quickRange === 'custom') return normalizeDateRange(customStart, customEnd, { startIso: todayIso, endIso: todayIso });
+  const today = parseIsoDate(todayIso);
+  const day = today.getDay() || 7;
+  const start = new Date(today); start.setDate(today.getDate() - day + 1);
+  const end = new Date(start); end.setDate(start.getDate() + 6);
+  return { startIso: formatLocalDate(start), endIso: formatLocalDate(end) };
 }
 
 function mapRevenuePeriodSettingsToRanges(settings: RevenuePeriodSetting[]): OfflineLiveRoomPeriodRange[] {
@@ -800,6 +971,40 @@ function formatDate(value: string) {
 function formatDateTime(value: string) {
   return value ? new Date(value).toLocaleString('zh-MY') : '--';
 }
+
+function malaysiaDateOf(value: string) { return formatMalaysiaDate(new Date(value)); }
+function formatMalaysiaTime(value: string) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)); }
+function formatDuration(seconds: number) { const minutes = Math.max(0, Math.round(seconds / 60)); return `${Math.floor(minutes / 60)}小时${String(minutes % 60).padStart(2, '0')}分`; }
+function sessionTimes(date: string, start: string, end: string) {
+  if (!isValidIsoDate(date) || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return null;
+  const startedAt = new Date(`${date}T${start}:00+08:00`);
+  let endedAt = new Date(`${date}T${end}:00+08:00`);
+  if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) return null;
+  const nextDay = endedAt.getTime() <= startedAt.getTime();
+  if (nextDay) endedAt = new Date(endedAt.getTime() + 86_400_000);
+  return { startedAt, endedAt, nextDay };
+}
+function formatScheduleSummary(schedule: OfflineLiveCreatorSchedule) { const slots = schedule.slots.filter((slot) => slot.status === 'active').sort((a, b) => a.iso_weekday - b.iso_weekday || a.sort_order - b.sort_order); if (!slots.length) return '未设置时段'; const days = [...new Set(slots.map((slot) => slot.iso_weekday))]; const dayText = JSON.stringify(days) === JSON.stringify([1, 2, 3, 4, 5]) ? '周一～周五' : days.length === 7 ? '每天' : days.map((day) => `周${['一', '二', '三', '四', '五', '六', '日'][day - 1]}`).join('、'); return `${dayText} · ${slots.filter((slot, index) => index === 0 || slot.started_at_time !== slots[index - 1].started_at_time || slot.ended_at_time !== slots[index - 1].ended_at_time).map((slot) => `${slot.started_at_time.slice(0, 5)}–${slot.ended_at_time.slice(0, 5)}`).join(' / ')}`; }
+function formatScheduleSlotSummary(startedAt: string, endedAt: string) { if (!startedAt || !endedAt) return '请选择时间'; const start = startedAt.slice(0, 5); const end = endedAt.slice(0, 5); const [startHour, startMinute] = start.split(':').map(Number); const [endHour, endMinute] = end.split(':').map(Number); if ([startHour, startMinute, endHour, endMinute].some(Number.isNaN)) return '请选择时间'; let minutes = endHour * 60 + endMinute - startHour * 60 - startMinute; const nextDay = minutes <= 0; if (nextDay) minutes += 24 * 60; return `${nextDay ? '次日 ' : ''}${end} · ${formatDuration(minutes * 60)}`; }
+function scheduleMode(schedule: OfflineLiveCreatorSchedule | null): 'weekdays' | 'daily' | 'custom' { const days = scheduleDays(schedule); return JSON.stringify(days) === JSON.stringify([1, 2, 3, 4, 5]) ? 'weekdays' : days.length === 7 ? 'daily' : 'custom'; }
+function scheduleDays(schedule: OfflineLiveCreatorSchedule | null) { return [...new Set(schedule?.slots.filter((slot) => slot.status === 'active').map((slot) => slot.iso_weekday) ?? [])].sort(); }
+function sessionToTemporaryCreatorSummary(session: OfflineLiveSession): OfflineLiveRoomCreatorSummary {
+  const profiles = session.creator_platforms.map((platform, index) => ({
+    id: `${session.creator_entity_id}:${platform.platform}:${index}`,
+    platform: platform.platform,
+    creator_name: platform.creator_name ?? session.creator_display_name,
+    platform_user_id: platform.platform_user_id ?? '',
+    platform_account: platform.platform_account ?? '',
+  } as OfflineLiveRoomCreatorEntity['profiles'][number]));
+  return {
+    entityId: session.creator_entity_id,
+    displayName: session.creator_display_name,
+    profiles: profiles.map((profile) => ({ profile, records: [], total: 0, record: null })),
+  };
+}
+function uniqueScheduleTimes(schedule: OfflineLiveCreatorSchedule | null) { const seen = new Set<string>(); const values = (schedule?.slots ?? []).filter((slot) => slot.status === 'active').sort((first, second) => first.sort_order - second.sort_order).filter((slot) => { const key = `${slot.started_at_time}:${slot.ended_at_time}`; if (seen.has(key)) return false; seen.add(key); return true; }).map((slot) => ({ started_at_time: slot.started_at_time.slice(0, 5), ended_at_time: slot.ended_at_time.slice(0, 5), iso_weekday: 1 })); return values.length ? values : [{ iso_weekday: 1, started_at_time: '14:00', ended_at_time: '18:30' }]; }
+function friendlyLiveError(error: unknown) { const message = getErrorMessage(error); if (/overlap/i.test(message)) return '该主播的直播时间与已有记录重叠，请检查时间。'; if (/function|schema cache|does not exist/i.test(message)) return '直播时长服务尚未部署或暂不可用。'; if (/permission|access denied/i.test(message)) return '没有权限或当前区域不可访问。'; return message; }
+function isRpcUnavailable(error: unknown) { return /function|schema cache|does not exist/i.test(getErrorMessage(error)); }
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
