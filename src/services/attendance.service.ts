@@ -21,8 +21,8 @@ type AttendanceRowWithEmployee = AttendanceRecord & {
 };
 
 export const attendanceService = {
-  async listMyAttendanceRecords(profileId: string) {
-    const { data, error } = await supabase
+  async listMyAttendanceRecords(profileId: string, range?: { start: string; end: string }) {
+    let query = supabase
       .from('attendance_records')
       .select(
         `
@@ -30,7 +30,13 @@ export const attendanceService = {
         employees:employee_id(id, full_name, employee_code)
       `,
       )
-      .eq('profile_id', profileId)
+      .eq('profile_id', profileId);
+
+    if (range) {
+      query = query.gte('punched_at', range.start).lt('punched_at', range.end);
+    }
+
+    const { data, error } = await query
       .order('punched_at', { ascending: false });
 
     if (error) {

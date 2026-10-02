@@ -3237,6 +3237,74 @@ a {
   margin-top: 12px;
 }
 
+.employee-attendance-page .attendance-grid { grid-template-columns: minmax(320px, 40%) minmax(0, 1fr); }
+.employee-attendance-page .camera-frame { aspect-ratio: 16 / 9; max-height: 270px; }
+.employee-attendance-page .attendance-page-tabs { gap: 16px; }
+.employee-attendance-page .attendance-page-tabs button { padding: 12px 16px; font-size: 15px; }
+.employee-attendance-page .attendance-page-tabs button.active { border-bottom-width: 3px; }
+.employee-attendance-page .camera-panel { border-color: #c8dce2; border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f5fafb); box-shadow: 0 10px 24px rgba(31, 122, 140, 0.09); }
+.employee-attendance-page .camera-panel .panel-title-row { margin-bottom: 14px; }
+.employee-attendance-page .camera-panel .panel-title-row h3 { font-size: 19px; }
+.employee-attendance-page .camera-frame { border-color: #bdd5dc; box-shadow: 0 4px 12px rgba(16, 25, 40, 0.14); }
+.employee-location { display: flex; align-items: center; gap: 7px; margin: 12px 0; color: var(--muted); font-size: 14px; font-weight: 700; }
+.employee-punch-actions { margin-top: 16px; }
+.employee-punch-actions button { min-height: 58px; border: 1px solid transparent; border-radius: 10px; font: inherit; font-size: 16px; font-weight: 850; cursor: pointer; }
+.employee-punch-actions .punch-action-ready { color: #ffffff; box-shadow: 0 8px 16px color-mix(in srgb, currentColor 18%, transparent); }
+.employee-punch-actions .punch-clock_in { border-color: #168d52; background: linear-gradient(135deg, #15965b, #168d52); }
+.employee-punch-actions .punch-break_start { border-color: #d88809; background: linear-gradient(135deg, #efa722, #d88809); }
+.employee-punch-actions .punch-break_end { border-color: #2678c7; background: linear-gradient(135deg, #3489dc, #2678c7); }
+.employee-punch-actions .punch-clock_out { border-color: #c84658; background: linear-gradient(135deg, #dc5c6d, #c84658); }
+.employee-punch-actions .punch-action-muted { border-color: var(--border); background: var(--panel-soft); color: #8a9198; box-shadow: none; }
+.employee-punch-actions button:disabled { border-color: var(--border); background: #f1f3f5; color: #9aa1a8; box-shadow: none; cursor: not-allowed; }
+.employee-today-details, .employee-history, .employee-timeline { display: grid; gap: 14px; }
+.employee-history { max-width: 960px; }
+.employee-status-card { display: grid; gap: 6px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); box-shadow: 0 8px 20px rgba(16, 25, 40, 0.06); }
+.employee-status-card > span { color: var(--muted); font-size: 14px; font-weight: 800; }
+.employee-status-main { display: flex; align-items: center; gap: 10px; }
+.employee-status-main > strong { font-size: 30px; letter-spacing: .02em; }
+.employee-status-card p { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--muted); font-size: 15px; font-weight: 700; }
+.employee-status-not_started { border-color: #d6dce3; background: #f4f6f8; color: #68717a; }
+.employee-status-working { border-color: #b9e2c8; background: #eefaf2; color: #16834b; }
+.employee-status-on_break { border-color: #f1d28b; background: #fff8e6; color: #b67508; }
+.employee-status-clocked_out { border-color: #bfd8f1; background: #eef6ff; color: #2874be; }
+.employee-anomalies { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px; border: 1px solid #efcfd4; border-radius: 8px; background: #fffafb; color: #a85c68; font-size: 13px; }
+.employee-anomalies span { padding: 3px 7px; border-radius: 999px; background: #fbecef; font-weight: 700; }
+.employee-timeline { padding: 20px; border: 1px solid #d7e4eb; border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f8fbfc); box-shadow: 0 8px 20px rgba(16, 25, 40, 0.05); }
+.employee-timeline h3 { margin: 0; font-size: 18px; }
+.employee-punch-timeline li { justify-content: flex-start; }
+.employee-punch-timeline li > div { min-width: 0; }
+.employee-punch-timeline li > div strong { font-size: 15px; }
+.employee-punch-timeline li > div span { font-size: 14px; font-weight: 700; }
+.employee-punch-timeline .today-photo-thumbnail, .employee-punch-timeline .today-photo-loading, .employee-punch-timeline .today-photo-denied { margin-left: auto; }
+.punch-icon-clock_in, .timeline-clock_in { color: #168d52; }
+.punch-icon-break_start, .timeline-break_start { color: #c47c08; }
+.punch-icon-break_end, .timeline-break_end { color: #2678c7; }
+.punch-icon-clock_out, .timeline-clock_out { color: #c84658; }
+.employee-punch-timeline .timeline-clock_in { border-color: #c5e7d1; background: #f3fcf6; }
+.employee-punch-timeline .timeline-break_start { border-color: #f1ddaa; background: #fffaf0; }
+.employee-punch-timeline .timeline-break_end { border-color: #c8dff5; background: #f3f8ff; }
+.employee-punch-timeline .timeline-clock_out { border-color: #f0cbd1; background: #fff6f7; }
+.employee-history-controls { display: flex; flex-wrap: nowrap; align-items: end; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.employee-history-controls label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.employee-history-controls input { box-sizing: border-box; width: 180px; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-soft); color: var(--text); font: inherit; }
+.employee-history-refresh { width: 100px; min-width: 100px; height: 38px; min-height: 38px; margin: 0; }
+.employee-day-cards { display: grid; width: min(100%, 960px); gap: 12px; }
+.employee-day-card { overflow: hidden; border: 1px solid #d7e4eb; border-radius: 12px; background: linear-gradient(180deg, #ffffff, #f9fbfd); box-shadow: 0 6px 16px rgba(16, 25, 40, 0.04); }
+.employee-day-card-head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 12px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.employee-day-card-head div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.employee-day-card-head strong { font-size: 17px; }
+.employee-day-card-head > span { color: var(--primary); font-size: 14px; font-weight: 800; }
+.employee-day-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 18px 18px; }
+.employee-time-block { display: grid; min-width: 0; justify-items: center; gap: 5px; min-height: 76px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; text-align: center; }
+.employee-time-block > span { font-size: 13px; font-weight: 800; }
+.employee-time-block > strong { overflow-wrap: anywhere; font-size: 17px; font-weight: 850; line-height: 1.25; }
+.employee-time-clock_in { border-color: #c5e7d1; background: #f3fcf6; color: #168d52; }
+.employee-time-break_start { border-color: #f1ddaa; background: #fffaf0; color: #c47c08; }
+.employee-time-break_end { border-color: #c8dff5; background: #f3f8ff; color: #2678c7; }
+.employee-time-clock_out { border-color: #f0cbd1; background: #fff6f7; color: #c84658; }
+.employee-day-card .employee-timeline { margin: 0 15px 15px; }
+.employee-empty-state { width: fit-content; max-width: 100%; padding: 18px 22px; border: 1px dashed #b9d4dc; border-radius: 12px; background: #f6fbfc; color: var(--muted); font-size: 15px; font-weight: 700; }
+
 .form-helper {
   margin: 0;
   color: var(--muted);
@@ -5235,6 +5303,21 @@ button.leave-chip:disabled {
   .attendance-grid {
     grid-template-columns: 1fr;
   }
+
+  .employee-attendance-page .attendance-grid { grid-template-columns: 1fr; }
+  .employee-attendance-page .camera-panel { padding: 16px; }
+  .employee-attendance-page .camera-frame { max-height: none; }
+  .employee-today-details { grid-template-columns: 1fr; }
+  .employee-status-card { padding: 16px; }
+  .employee-status-main > strong { font-size: 24px; }
+  .employee-timeline { padding: 14px; }
+  .employee-day-card-head { align-items: flex-start; }
+  .employee-day-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 14px 14px; }
+  .employee-time-block { min-height: 70px; padding: 10px; }
+  .employee-time-block > strong { font-size: 17px; }
+  .employee-history-controls { flex-wrap: nowrap; align-items: end; gap: 8px; padding: 12px; }
+  .employee-history-controls label { flex: 1 1 0; min-width: 0; }
+  .employee-history-controls input { width: 100%; }
 
   .leave-calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

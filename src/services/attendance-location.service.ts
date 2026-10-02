@@ -168,7 +168,7 @@ function toGeoErrorMessage(error: unknown): Error {
   }
 
   if (error.code === 1) {
-    return new Error('请允许定位权限后再打卡。iPhone 请确认“定位服务”已开启，并允许 Safari / DY Group 使用定位。');
+    return new Error(getGeoPermissionGuidance());
   }
 
   if (error.code === 2) {
@@ -180,6 +180,25 @@ function toGeoErrorMessage(error: unknown): Error {
   }
 
   return new Error('无法取得当前位置，请检查浏览器定位权限或网络后重试。');
+}
+
+export function getGeoPermissionGuidance(userAgent = navigator.userAgent): string {
+  const agent = userAgent.toLowerCase();
+  const isAppleMobile = /iphone|ipad|ipod/.test(agent) || (agent.includes('macintosh') && agent.includes('mobile'));
+
+  if (isAppleMobile) {
+    return '请允许定位权限后再打卡。请确认 iPhone 定位服务已开启，并允许 Safari 或 DY Group 使用定位。';
+  }
+
+  if (agent.includes('android')) {
+    return '请允许定位权限后再打卡。请开启设备定位，并允许当前浏览器使用定位。';
+  }
+
+  if (agent.includes('windows nt') || agent.includes('macintosh')) {
+    return '请允许定位权限后再打卡。请检查系统定位设置，并允许当前网站使用位置权限。';
+  }
+
+  return '请允许定位权限后再打卡。请检查设备定位服务及当前网站的位置权限。';
 }
 
 function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
