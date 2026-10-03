@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 
 const apiUrl = required('API_URL');
@@ -33,34 +34,64 @@ async function getRegions() {
 }
 
 async function createFixtureAccounts(regions) {
+  // Auth user creation creates the pending profile through the production
+  // trigger. The isolated database fixture then supplies the approved
+  // employee records before any business RPC is exercised.
+  const fixtureActor = await createAuthAccount('fixture-actor');
   const accounts = {
-    employee: await createAccount('employee', 'staff', 'active', regions.primary.id),
-    regionalHr: await createAccount('regional-hr', 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']),
-    crossRegionHr: await createAccount('cross-region-hr', 'hr', 'active', regions.secondary.id, ['outgoing-approval', 'outgoing-management']),
-    superAdmin: await createAccount('super-admin', 'super_admin', 'active', regions.secondary.id),
-    inactiveEmployee: await createAccount('inactive', 'staff', 'inactive', regions.primary.id),
+    employee: await createAuthAccount('employee'),
+    regionalHr: await createAuthAccount('regional-hr'),
+    crossRegionHr: await createAuthAccount('cross-region-hr'),
+    superAdmin: await createAuthAccount('super-admin'),
+    inactiveEmployee: await createAuthAccount('inactive'),
   };
-  await grant(accounts.employee.employeeId, ['outgoing-application']);
+  await provisionLocalFixtureAccounts(fixtureActor.profileId, accounts, regions);
   return accounts;
 }
 
-async function createAccount(label, role, employeeStatus, regionId, permissions = []) {
+async function createAuthAccount(label) {
   const email = `phase3-${label}-${crypto.randomUUID()}@example.test`;
   const { data, error } = await admin.auth.admin.createUser({ email, password: 'Phase3-local-only-123!', email_confirm: true, user_metadata: { full_name: `Phase 3 ${label}` } });
   assert.ifError(error);
-  const profileId = data.user.id;
-  const { error: profileError } = await admin.from('profiles').update({ full_name: `Phase 3 ${label}`, role, status: 'approved', region_id: regionId }).eq('id', profileId);
-  assert.ifError(profileError);
-  const { data: employee, error: employeeError } = await admin.from('employees').insert({ profile_id: profileId, employee_code: `P3-${label}-${crypto.randomUUID().slice(0, 8)}`, full_name: `Phase 3 ${label}`, email, region_id: regionId, status: employeeStatus, require_attendance: employeeStatus === 'active' }).select('id').single();
-  assert.ifError(employeeError);
-  if (permissions.length) await grant(employee.id, permissions);
-  return { email, profileId, employeeId: employee.id };
+  return { label, email, profileId: data.user.id, employeeId: crypto.randomUUID() };
 }
 
-async function grant(employeeId, permissionKeys) {
-  const rows = permissionKeys.map((permission_key) => ({ employee_id: employeeId, permission_key, can_view: true, can_use: true, effect: 'grant' }));
-  const { error } = await admin.from('employee_permission_overrides').upsert(rows, { onConflict: 'employee_id,permission_key' });
-  assert.ifError(error);
+async function provisionLocalFixtureAccounts(fixtureActorId, accounts, regions) {
+  const definitions = [
+    [accounts.employee, 'staff', 'active', regions.primary.id, ['outgoing-application']],
+    [accounts.regionalHr, 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']],
+    [accounts.crossRegionHr, 'hr', 'active', regions.secondary.id, ['outgoing-approval', 'outgoing-management']],
+    [accounts.superAdmin, 'super_admin', 'active', regions.secondary.id, []],
+    [accounts.inactiveEmployee, 'staff', 'inactive', regions.primary.id, ['outgoing-application']],
+  ];
+  const statements = [
+    'begin;',
+    `select set_config('request.jwt.claim.sub', ${sqlLiteral(fixtureActorId)}, true);`,
+  ];
+  for (const [account, role, employeeStatus, regionId, permissions] of definitions) {
+    const name = `Phase 3 ${account.label}`;
+    statements.push(
+      `update public.profiles set full_name = ${sqlLiteral(name)}, role = ${sqlLiteral(role)}::public.app_role, status = 'approved'::public.profile_status, region_id = ${sqlLiteral(regionId)}::uuid where id = ${sqlLiteral(account.profileId)}::uuid;`,
+      `insert into public.employees (id, profile_id, employee_code, full_name, email, region_id, status, require_attendance) values (${sqlLiteral(account.employeeId)}::uuid, ${sqlLiteral(account.profileId)}::uuid, ${sqlLiteral(`P3-${account.label}-${account.employeeId.slice(0, 8)}`)}, ${sqlLiteral(name)}, ${sqlLiteral(account.email)}, ${sqlLiteral(regionId)}::uuid, ${sqlLiteral(employeeStatus)}::public.employee_status, ${employeeStatus === 'active'}) on conflict (id) do nothing;`,
+    );
+    for (const permission of permissions) {
+      statements.push(`insert into public.employee_permission_overrides (employee_id, permission_key, can_view, can_use, effect) values (${sqlLiteral(account.employeeId)}::uuid, ${sqlLiteral(permission)}, true, true, 'grant') on conflict (employee_id, permission_key) do update set can_view = excluded.can_view, can_use = excluded.can_use, effect = excluded.effect;`);
+    }
+  }
+  statements.push('commit;');
+  const dbContainer = findLocalSupabaseDatabaseContainer();
+  execFileSync('docker', ['exec', '-i', dbContainer, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres', '-c', statements.join('\n')], { stdio: 'pipe' });
+}
+
+function findLocalSupabaseDatabaseContainer() {
+  const rows = execFileSync('docker', ['ps', '--format', '{{.ID}}\t{{.Names}}\t{{.Labels}}'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+  const matches = rows.map((row) => row.split('\t')).filter(([, name, labels]) => name.startsWith('supabase_db_') && labels.includes('com.supabase.cli.project=dy-group-phase3-ci'));
+  assert.equal(matches.length, 1, `Expected exactly one isolated Supabase database container; found ${matches.length}`);
+  return matches[0][0];
+}
+
+function sqlLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 async function signIn(email) {
