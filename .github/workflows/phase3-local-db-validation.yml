@@ -7,6 +7,11 @@ on:
         description: "Type VALIDATE-PHASE3-LOCAL-DB to run the disposable local database test"
         required: true
         type: string
+      target_ref:
+        description: "Approved isolated Phase 3 test branch"
+        required: true
+        default: "codex/phase3-isolated-db-validation"
+        type: string
 
 permissions:
   contents: read
@@ -33,6 +38,19 @@ jobs:
 
       - name: Check out selected ref
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+
+      - name: Require approved isolated Phase 3 ref
+        env:
+          TARGET_REF: ${{ inputs.target_ref }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REF" = "codex/phase3-isolated-db-validation" || {
+            echo "Refusing to run Phase 3 database validation against an unapproved ref: $TARGET_REF"
+            exit 1
+          }
+          echo "Validated isolated ref: $TARGET_REF at $(git rev-parse HEAD)"
 
       - name: Set up Node.js for the local-only test harness
         uses: actions/setup-node@v4
