@@ -35,9 +35,9 @@ async function getRegions() {
 
 async function createFixtureAccounts(regions) {
   // Auth user creation creates the pending profile through the production
-  // trigger. The isolated database fixture then supplies the approved
-  // employee records before any business RPC is exercised.
-  const fixtureActor = await createAuthAccount('fixture-actor');
+  // trigger. The disposable database fixture replaces those pending rows
+  // before any business RPC is exercised; it never disables RLS or fabricates
+  // a JWT authentication claim.
   const accounts = {
     employee: await createAuthAccount('employee'),
     regionalHr: await createAuthAccount('regional-hr'),
@@ -45,7 +45,7 @@ async function createFixtureAccounts(regions) {
     superAdmin: await createAuthAccount('super-admin'),
     inactiveEmployee: await createAuthAccount('inactive'),
   };
-  await provisionLocalFixtureAccounts(fixtureActor.profileId, accounts, regions);
+  await provisionLocalFixtureAccounts(accounts, regions);
   return accounts;
 }
 
@@ -56,7 +56,7 @@ async function createAuthAccount(label) {
   return { label, email, profileId: data.user.id, employeeId: crypto.randomUUID() };
 }
 
-async function provisionLocalFixtureAccounts(fixtureActorId, accounts, regions) {
+async function provisionLocalFixtureAccounts(accounts, regions) {
   const definitions = [
     [accounts.employee, 'staff', 'active', regions.primary.id, ['outgoing-application']],
     [accounts.regionalHr, 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']],
@@ -66,12 +66,12 @@ async function provisionLocalFixtureAccounts(fixtureActorId, accounts, regions) 
   ];
   const statements = [
     'begin;',
-    `select set_config('request.jwt.claim.sub', ${sqlLiteral(fixtureActorId)}, true);`,
+    `delete from public.profiles where id in (${definitions.map(([account]) => `${sqlLiteral(account.profileId)}::uuid`).join(', ')});`,
   ];
   for (const [account, role, employeeStatus, regionId, permissions] of definitions) {
     const name = `Phase 3 ${account.label}`;
     statements.push(
-      `update public.profiles set full_name = ${sqlLiteral(name)}, role = ${sqlLiteral(role)}::public.app_role, status = 'approved'::public.profile_status, region_id = ${sqlLiteral(regionId)}::uuid where id = ${sqlLiteral(account.profileId)}::uuid;`,
+      `insert into public.profiles (id, email, full_name, role, status, region_id) values (${sqlLiteral(account.profileId)}::uuid, ${sqlLiteral(account.email)}, ${sqlLiteral(name)}, ${sqlLiteral(role)}::public.app_role, 'approved'::public.profile_status, ${sqlLiteral(regionId)}::uuid);`,
       `insert into public.employees (id, profile_id, employee_code, full_name, email, region_id, status, require_attendance) values (${sqlLiteral(account.employeeId)}::uuid, ${sqlLiteral(account.profileId)}::uuid, ${sqlLiteral(`P3-${account.label}-${account.employeeId.slice(0, 8)}`)}, ${sqlLiteral(name)}, ${sqlLiteral(account.email)}, ${sqlLiteral(regionId)}::uuid, ${sqlLiteral(employeeStatus)}::public.employee_status, ${employeeStatus === 'active'}) on conflict (id) do nothing;`,
     );
     for (const permission of permissions) {
