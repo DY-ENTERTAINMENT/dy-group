@@ -58,6 +58,8 @@ jobs:
           ci_dir="$RUNNER_TEMP/phase3-local-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$ci_dir"
           cp -R "$GITHUB_WORKSPACE/supabase" "$ci_dir/supabase"
+          node "$GITHUB_WORKSPACE/scripts/restore-phase3-ci-historical-migrations.mjs" \
+            "$ci_dir/supabase/migrations"
           python3 - "$ci_dir/supabase/config.toml" <<'PY'
           from pathlib import Path
           import re
