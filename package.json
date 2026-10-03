@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:attendance-day": "node scripts/test-attendance-day.mjs"
+    "test:attendance-day": "node scripts/test-attendance-day.mjs",
+    "test:outgoing-phase3a": "node scripts/test-outgoing-phase3a.mjs",
+    "test:outgoing-phase3b": "node scripts/test-outgoing-phase3b.mjs",
+    "test:outgoing-feature-gate": "node scripts/test-outgoing-feature-gate.mjs",
+    "test:outgoing-local-preview": "node --experimental-strip-types scripts/test-outgoing-local-preview.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

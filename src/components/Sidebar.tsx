@@ -15,6 +15,7 @@ import { NavLink } from 'react-router-dom';
 import { menuItems, toolGroupOrder } from '../routes/menu';
 import logoUrl from '../assets/logo.png';
 import { usePermissions } from '../hooks/usePermissions';
+import { useOutgoingPendingApprovalCount } from '../services/outgoing-notification.service';
 
 type SidebarProps = {
   collapsed: boolean;
@@ -217,8 +218,14 @@ function SidebarLink({
       }}
     >
       <Icon size={nested ? 18 : 20} />
-      <span>{item.label}</span>
+      <span>{item.label}{item.key === 'attendance-management' ? <OutgoingSidebarBadge /> : null}</span>
     </NavLink>
   );
+}
+
+function OutgoingSidebarBadge() {
+  const { count, mode } = useOutgoingPendingApprovalCount();
+  const label = mode === 'local-preview' ? `${count} 个本地待审批外出申请` : `${count} 个待审批外出申请`;
+  return count ? <span className="outgoing-notification-badge sidebar-outgoing-notification-badge" aria-label={label}>{count}</span> : null;
 }
 
