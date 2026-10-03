@@ -50,7 +50,14 @@ jobs:
             exit 1
           }
 
-          printf '%s\n' "$EXPECTED_MIGRATIONS" | sed -E 's/\r$//' | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/expected_migrations"
+          # workflow_dispatch text inputs may be entered as a space-separated
+          # line or one filename per line. Split only on whitespace: valid
+          # migration filenames cannot contain whitespace, then keep that
+          # caller-supplied order for the exact dry-run comparison below.
+          printf '%s\n' "$EXPECTED_MIGRATIONS" \
+            | tr '\r\n\t' '   ' \
+            | awk '{ for (index = 1; index <= NF; index++) print $index }' \
+            > "$RUNNER_TEMP/expected_migrations"
           test -s "$RUNNER_TEMP/expected_migrations" || {
             echo "expected_migrations must contain at least one filename"
             exit 1
