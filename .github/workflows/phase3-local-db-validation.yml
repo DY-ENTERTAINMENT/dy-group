@@ -70,6 +70,41 @@ jobs:
               raise SystemExit('Unable to create an isolated local project identifier.')
           path.write_text(source)
           PY
+          python3 - "$ci_dir/supabase/migrations" <<'PY'
+          from pathlib import Path
+          import sys
+
+          migrations = Path(sys.argv[1])
+          dependency = migrations / '202606190003_authorized_regions_default_employee_region.sql'
+          target = migrations / '202606190005_force_replace_current_user_has_permission.sql'
+          canonical = migrations / '202608110001_version_current_user_can_access_region.sql'
+
+          for path in (dependency, target, canonical):
+              if not path.is_file():
+                  raise SystemExit(f'Required migration is missing from the CI-only copy: {path.name}')
+          if not (dependency.name < target.name < canonical.name):
+              raise SystemExit('Unexpected migration ordering; refusing to inject the CI-only bootstrap.')
+
+          dependency_source = dependency.read_text()
+          canonical_source = canonical.read_text()
+          target_source = target.read_text()
+          if 'create or replace function public.current_user_authorized_region_ids()' not in dependency_source:
+              raise SystemExit('The region-access dependency is not created by the expected prior migration.')
+          if 'create or replace function public.current_user_can_access_region(region_id uuid)' not in canonical_source:
+              raise SystemExit('The canonical region-access function definition is not available.')
+          if 'public.current_user_authorized_region_ids()' not in canonical_source:
+              raise SystemExit('The canonical function no longer uses the expected authorization helper.')
+          if 'create policy "Registration viewers can read scoped pending profiles"' not in target_source:
+              raise SystemExit('The expected early RLS policy migration has changed; refusing CI bootstrap injection.')
+
+          target.write_text(
+              '-- CI-only bootstrap: this temporary copy restores the pre-existing Production helper\n'
+              '-- that was first versioned in 202608110001. It is not a repository migration.\n\n'
+              + canonical_source
+              + '\n\n-- Original 202606190005 migration follows unchanged below.\n\n'
+              + target_source
+          )
+          PY
           printf 'ci_dir=%s\n' "$ci_dir" >> "$GITHUB_OUTPUT"
 
       - name: Start and reset only the local Supabase stack
