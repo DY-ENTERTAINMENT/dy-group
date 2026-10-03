@@ -13,15 +13,13 @@ const today = malaysiaDate();
 
 const regions = await getRegions();
 const accounts = await createFixtureAccounts(regions);
-const employee = await signIn(accounts.employee.email);
-const regionalHr = await signIn(accounts.regionalHr.email);
-const crossRegionHr = await signIn(accounts.crossRegionHr.email);
-const superAdmin = await signIn(accounts.superAdmin.email);
-const inactiveEmployee = await signIn(accounts.inactiveEmployee.email);
+const { employee, regionalHr, crossRegionHr, superAdmin, inactiveEmployee } = await signInAll(accounts);
 
+await assertFixturePreflight({ employee, regionalHr, crossRegionHr, superAdmin, inactiveEmployee }, accounts, regions);
 await assertAttendanceRegression(employee, accounts.employee, regions.primary);
 await assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts, regions.primary);
 await assertOutgoingLifecycleAndReconciliation(employee, regionalHr, crossRegionHr, accounts, regions.primary);
+await assertAttendanceRegressionAfterOutgoing(employee, crossRegionHr, superAdmin, accounts.employee);
 await expectError(() => inactiveEmployee.rpc('create_outgoing_request', requestInput('16:00', '16:30', 'inactive account')), /permission|active|employee/i);
 
 console.log('Phase 3 isolated local database integration tests passed');
@@ -102,6 +100,40 @@ async function signIn(email) {
   return client;
 }
 
+async function signInAll(accounts) {
+  const entries = Object.entries(accounts);
+  const settled = await Promise.allSettled(entries.map(async ([label, account]) => [label, await signIn(account.email)]));
+  const failures = settled.filter((result) => result.status === 'rejected');
+  assert.equal(failures.length, 0, `Fixture authentication failed: ${failures.map((result) => String(result.reason?.message ?? result.reason)).join('; ')}`);
+  return Object.fromEntries(settled.map((result) => result.value));
+}
+
+async function assertFixturePreflight(clients, accounts, regions) {
+  const { data: rows, error } = await admin.from('employees').select('id, profile_id, region_id, status').in('profile_id', Object.values(accounts).map((account) => account.profileId));
+  assert.ifError(error);
+  assert.equal(rows.length, 5, 'all authenticated fixture accounts must have exactly one employee row before business tests');
+  for (const account of Object.values(accounts)) {
+    const row = rows.find((candidate) => candidate.profile_id === account.profileId);
+    assert.ok(row, `missing employee fixture for ${account.label}`);
+    assert.equal(row.id, account.employeeId, `unexpected employee fixture identity for ${account.label}`);
+  }
+  assert.equal(rows.find((row) => row.profile_id === accounts.employee.profileId)?.region_id, regions.primary.id);
+  assert.equal(rows.find((row) => row.profile_id === accounts.crossRegionHr.profileId)?.region_id, regions.secondary.id);
+
+  const activeChecks = await Promise.allSettled([
+    clients.employee.rpc('current_user_is_active_employee'),
+    clients.regionalHr.rpc('current_user_is_active_employee'),
+    clients.crossRegionHr.rpc('current_user_is_active_employee'),
+    clients.superAdmin.rpc('current_user_is_active_employee'),
+    clients.inactiveEmployee.rpc('current_user_is_active_employee'),
+  ]);
+  assert.equal(activeChecks.filter((result) => result.status === 'rejected' || result.value.error).length, 0, 'fixture active-account checks must be callable by real sessions');
+  assert.deepEqual(activeChecks.map((result) => result.value.data), [true, true, true, true, false], 'fixture statuses must be visible to the production account guard');
+  assert.equal(await rpc(clients.employee, 'current_user_has_permission', { p_permission_key: 'outgoing-application', p_action: 'use' }), true);
+  assert.equal(await rpc(clients.regionalHr, 'current_user_has_permission', { p_permission_key: 'outgoing-approval', p_action: 'use' }), true);
+  assert.equal(await rpc(clients.crossRegionHr, 'current_user_can_access_region', { region_id: regions.primary.id }), false, 'cross-region fixture must not gain primary-region access');
+}
+
 async function assertAttendanceRegression(client, account, region) {
   const location = await createLocation(region.id);
   await upload(client, 'attendance-photos', `${account.profileId}/clock-in.jpg`);
@@ -119,6 +151,22 @@ async function assertAttendanceRegression(client, account, region) {
   assert.ifError(readError);
   assert.deepEqual(new Set(records.map((record) => record.punch_type)), new Set(['clock_in', 'break_start', 'break_end']), 'existing clock-in and break paths must remain available');
   return location;
+}
+
+async function assertAttendanceRegressionAfterOutgoing(employee, crossRegionHr, superAdmin, account) {
+  const { data: ownRows, error: ownError } = await employee.from('attendance_records').select('punch_type').eq('profile_id', account.profileId);
+  assert.ifError(ownError);
+  assert.deepEqual(new Set(ownRows.map((row) => row.punch_type)), new Set(['clock_in', 'break_start', 'break_end', 'clock_out']), 'existing employee attendance timeline must remain readable after outgoing reconciliation');
+  const { data: superRows, error: superError } = await superAdmin.from('attendance_records').select('punch_type').eq('profile_id', account.profileId);
+  assert.ifError(superError);
+  assert.equal(superRows.length, 4, 'super-admin attendance access must remain available after Phase 3 migrations');
+  const { data: crossRows, error: crossError } = await crossRegionHr.from('attendance_records').select('id').eq('profile_id', account.profileId);
+  assert.ifError(crossError);
+  assert.equal(crossRows.length, 0, 'unrelated HR must not gain attendance-record access');
+  const { error: ownPhotoError } = await employee.storage.from('attendance-photos').download(`${account.profileId}/clock-out.jpg`);
+  assert.equal(ownPhotoError, null, 'employee must retain access to their original attendance photo');
+  const { error: unrelatedPhotoError } = await crossRegionHr.storage.from('attendance-photos').download(`${account.profileId}/clock-out.jpg`);
+  assert.ok(unrelatedPhotoError, 'unrelated HR must not gain attendance-photo access');
 }
 
 async function createLocation(regionId) {
