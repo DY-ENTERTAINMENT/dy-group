@@ -10,6 +10,7 @@ const managementPage = await readFile(new URL('../src/pages/AttendanceManagement
 
 assert.match(feature, /VITE_ENABLE_OUTGOING_REAL_SERVICE === 'true'/);
 assert.match(feature, /VITE_OUTGOING_REAL_SERVICE_APPROVED === 'true'/);
+assert.match(feature, /VITE_OUTGOING_REAL_SERVICE_RELEASE_APPROVED === 'true'/);
 assert.match(feature, /isSupabaseConfigured/);
 
 for (const method of [

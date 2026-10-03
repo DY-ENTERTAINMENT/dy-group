@@ -1,14 +1,15 @@
 import { isSupabaseConfigured } from '../lib/supabase';
 
 /**
- * Real outgoing access is deliberately opt-in twice. Both build-time values
- * must be set to the literal string "true" only after the isolated database
- * validation and an explicit release approval. The default is always off.
+ * Real outgoing access is deliberately opt-in three times. The release gate
+ * is new for the first Production rollout, so an existing Vercel environment
+ * cannot enable this feature unless the release approver explicitly adds it.
  */
 export function isOutgoingRealServiceEnabled() {
   return isSupabaseConfigured
     && import.meta.env.VITE_ENABLE_OUTGOING_REAL_SERVICE === 'true'
-    && import.meta.env.VITE_OUTGOING_REAL_SERVICE_APPROVED === 'true';
+    && import.meta.env.VITE_OUTGOING_REAL_SERVICE_APPROVED === 'true'
+    && import.meta.env.VITE_OUTGOING_REAL_SERVICE_RELEASE_APPROVED === 'true';
 }
 
 export function assertOutgoingRealServiceEnabled() {
