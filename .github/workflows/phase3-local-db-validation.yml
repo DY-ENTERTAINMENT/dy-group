@@ -1,0 +1,106 @@
+name: Validate Phase 3 in Isolated Local Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type VALIDATE-PHASE3-LOCAL-DB to run the disposable local database test"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-local-db-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Replay migrations and validate Phase 3 locally
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Require explicit local-validation confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "VALIDATE-PHASE3-LOCAL-DB" || {
+            echo "Confirmation did not match; no local database was started."
+            exit 1
+          }
+
+      - name: Check out selected ref
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for the local-only test harness
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install repository test dependencies
+        run: npm ci
+
+      - name: Verify disposable Docker runtime
+        run: |
+          set -euo pipefail
+          docker version
+
+      - name: Create isolated Supabase work directory
+        id: local
+        run: |
+          set -euo pipefail
+          test ! -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "Production Supabase token must not be present."; exit 1; }
+          test ! -n "${SUPABASE_PROJECT_REF:-}" || { echo "Production project ref must not be present."; exit 1; }
+          test ! -n "${SUPABASE_DB_PASSWORD:-}" || { echo "Production database password must not be present."; exit 1; }
+          ci_dir="$RUNNER_TEMP/phase3-local-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$ci_dir"
+          cp -R "$GITHUB_WORKSPACE/supabase" "$ci_dir/supabase"
+          python3 - "$ci_dir/supabase/config.toml" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          source, count = re.subn(r'^project_id\s*=\s*"[^"]*"', 'project_id = "dy-group-phase3-ci"', source, count=1, flags=re.M)
+          if count != 1:
+              raise SystemExit('Unable to create an isolated local project identifier.')
+          path.write_text(source)
+          PY
+          printf 'ci_dir=%s\n' "$ci_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Start and reset only the local Supabase stack
+        env:
+          SUPABASE_TELEMETRY_DISABLED: "1"
+          CI_DIR: ${{ steps.local.outputs.ci_dir }}
+        run: |
+          set -euo pipefail
+          cd "$CI_DIR"
+          npx --yes supabase@2.117.0 start
+          npx --yes supabase@2.117.0 db reset --local
+          npx --yes supabase@2.117.0 status -o env > "$RUNNER_TEMP/phase3-local-supabase.env"
+
+      - name: Run Phase 3 local database integration tests
+        env:
+          SUPABASE_TELEMETRY_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          set -a
+          . "$RUNNER_TEMP/phase3-local-supabase.env"
+          set +a
+          API_URL="$API_URL" ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+            node scripts/test-phase3-local-db.mjs
+
+      - name: Stop disposable local Supabase stack
+        if: always()
+        env:
+          SUPABASE_TELEMETRY_DISABLED: "1"
+          CI_DIR: ${{ steps.local.outputs.ci_dir }}
+        run: |
+          set -euo pipefail
+          test -n "${CI_DIR:-}" && test -d "$CI_DIR" || exit 0
+          cd "$CI_DIR"
+          npx --yes supabase@2.117.0 stop --no-backup || true

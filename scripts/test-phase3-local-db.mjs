@@ -1,0 +1,161 @@
+import assert from 'node:assert/strict';
+import { createClient } from '@supabase/supabase-js';
+
+const apiUrl = required('API_URL');
+const anonKey = required('ANON_KEY');
+const serviceRoleKey = required('SERVICE_ROLE_KEY');
+assert.match(apiUrl, /^http:\/\/(127\.0\.0\.1|localhost):\d+$/, 'tests must target only a local Supabase API');
+
+const admin = createClient(apiUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+const fixturePhoto = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
+const today = malaysiaDate();
+
+const regions = await getRegions();
+const accounts = await createFixtureAccounts(regions);
+const employee = await signIn(accounts.employee.email);
+const regionalHr = await signIn(accounts.regionalHr.email);
+const crossRegionHr = await signIn(accounts.crossRegionHr.email);
+const superAdmin = await signIn(accounts.superAdmin.email);
+const inactiveEmployee = await signIn(accounts.inactiveEmployee.email);
+
+await assertAttendanceRegression(employee, accounts.employee, regions.primary);
+await assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts, regions.primary);
+await assertOutgoingLifecycleAndReconciliation(employee, regionalHr, crossRegionHr, accounts, regions.primary);
+await expectError(() => inactiveEmployee.rpc('create_outgoing_request', requestInput('16:00', '16:30', 'inactive account')), /permission|active|employee/i);
+
+console.log('Phase 3 isolated local database integration tests passed');
+
+async function getRegions() {
+  const { data, error } = await admin.from('regions').select('id, code').order('code');
+  assert.ifError(error);
+  assert.ok(data.length >= 2, 'fixture requires at least two regions from the base migrations');
+  return { primary: data[0], secondary: data[1] };
+}
+
+async function createFixtureAccounts(regions) {
+  const accounts = {
+    employee: await createAccount('employee', 'staff', 'active', regions.primary.id),
+    regionalHr: await createAccount('regional-hr', 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']),
+    crossRegionHr: await createAccount('cross-region-hr', 'hr', 'active', regions.secondary.id, ['outgoing-approval', 'outgoing-management']),
+    superAdmin: await createAccount('super-admin', 'super_admin', 'active', regions.secondary.id),
+    inactiveEmployee: await createAccount('inactive', 'staff', 'inactive', regions.primary.id),
+  };
+  await grant(accounts.employee.employeeId, ['outgoing-application']);
+  return accounts;
+}
+
+async function createAccount(label, role, employeeStatus, regionId, permissions = []) {
+  const email = `phase3-${label}-${crypto.randomUUID()}@example.test`;
+  const { data, error } = await admin.auth.admin.createUser({ email, password: 'Phase3-local-only-123!', email_confirm: true, user_metadata: { full_name: `Phase 3 ${label}` } });
+  assert.ifError(error);
+  const profileId = data.user.id;
+  const { error: profileError } = await admin.from('profiles').update({ full_name: `Phase 3 ${label}`, role, status: 'approved', region_id: regionId }).eq('id', profileId);
+  assert.ifError(profileError);
+  const { data: employee, error: employeeError } = await admin.from('employees').insert({ profile_id: profileId, employee_code: `P3-${label}-${crypto.randomUUID().slice(0, 8)}`, full_name: `Phase 3 ${label}`, email, region_id: regionId, status: employeeStatus, require_attendance: employeeStatus === 'active' }).select('id').single();
+  assert.ifError(employeeError);
+  if (permissions.length) await grant(employee.id, permissions);
+  return { email, profileId, employeeId: employee.id };
+}
+
+async function grant(employeeId, permissionKeys) {
+  const rows = permissionKeys.map((permission_key) => ({ employee_id: employeeId, permission_key, can_view: true, can_use: true, effect: 'grant' }));
+  const { error } = await admin.from('employee_permission_overrides').upsert(rows, { onConflict: 'employee_id,permission_key' });
+  assert.ifError(error);
+}
+
+async function signIn(email) {
+  const client = createClient(apiUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data, error } = await client.auth.signInWithPassword({ email, password: 'Phase3-local-only-123!' });
+  assert.ifError(error);
+  assert.ok(data.session?.access_token, `missing local session for ${email}`);
+  return client;
+}
+
+async function assertAttendanceRegression(client, account, region) {
+  const location = await createLocation(region.id);
+  await upload(client, 'attendance-photos', `${account.profileId}/clock-in.jpg`);
+  const { error } = await client.rpc('create_attendance_record_checked', {
+    p_punch_type: 'clock_in', p_photo_path: `${account.profileId}/clock-in.jpg`, p_latitude: 3.139, p_longitude: 101.6869,
+    p_accuracy: 5, p_ip_address: '127.0.0.1', p_device_info: 'Phase 3 isolated CI',
+  });
+  assert.ifError(error);
+  for (const punchType of ['break_start', 'break_end']) {
+    const path = `${account.profileId}/${punchType}.jpg`;
+    await upload(client, 'attendance-photos', path);
+    await rpc(client, 'create_attendance_record_checked', { p_punch_type: punchType, p_photo_path: path, p_latitude: 3.139, p_longitude: 101.6869, p_accuracy: 5, p_ip_address: '127.0.0.1', p_device_info: 'Phase 3 isolated CI' });
+  }
+  const { data: records, error: readError } = await client.from('attendance_records').select('punch_type').eq('profile_id', account.profileId);
+  assert.ifError(readError);
+  assert.deepEqual(new Set(records.map((record) => record.punch_type)), new Set(['clock_in', 'break_start', 'break_end']), 'existing clock-in and break paths must remain available');
+  return location;
+}
+
+async function createLocation(regionId) {
+  const { data, error } = await admin.from('attendance_locations').insert({ region_id: regionId, name: `Phase 3 CI ${crypto.randomUUID()}`, latitude: 3.139, longitude: 101.6869, radius_meters: 500 }).select('id').single();
+  assert.ifError(error);
+  return data;
+}
+
+async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin) {
+  const requestId = await createRequest(employee, '09:00', '09:30', 'approval and RLS');
+  await expectError(() => crossRegionHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /permission/i);
+  await rpc(regionalHr, 'review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null });
+  await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /final|already/i);
+  const { data: own, error: ownError } = await employee.from('outgoing_requests').select('id').eq('id', requestId);
+  assert.ifError(ownError); assert.equal(own.length, 1);
+  const { data: denied, error: deniedError } = await crossRegionHr.from('outgoing_requests').select('id').eq('id', requestId);
+  assert.ifError(deniedError); assert.equal(denied.length, 0, 'cross-region HR must not read this request');
+  const { data: all, error: superError } = await superAdmin.from('outgoing_requests').select('id').eq('id', requestId);
+  assert.ifError(superError); assert.equal(all.length, 1, 'super admin must retain global access');
+  const cancellationId = await createRequest(employee, '09:30', '10:00', 'cancellation');
+  await rpc(employee, 'cancel_outgoing_request', { p_request_id: cancellationId });
+  await expectError(() => employee.rpc('cancel_outgoing_request', { p_request_id: cancellationId }), /only|not found/i);
+  const rejectedId = await createRequest(employee, '10:00', '10:30', 'rejection');
+  await rpc(regionalHr, 'review_outgoing_request', { p_request_id: rejectedId, p_decision: 'rejected', p_note: 'fixture rejection' });
+  await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: rejectedId, p_decision: 'rejected', p_note: 'duplicate' }), /final|already/i);
+}
+
+async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, crossRegionHr, accounts) {
+  const requestId = await approvedRequest(employee, regionalHr, '11:00', '11:30', 'lifecycle');
+  const basePath = `${accounts.employee.profileId}/${requestId}`;
+  await upload(employee, 'outgoing-photos', `${basePath}/far.jpg`);
+  await expectError(() => employee.rpc('start_outgoing_event', startArgs(requestId, `${basePath}/far.jpg`, 0, 0)), /outside|location/i);
+  await upload(employee, 'outgoing-photos', `${basePath}/start.jpg`);
+  const key = crypto.randomUUID();
+  const eventId = await rpc(employee, 'start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: key });
+  assert.equal(await rpc(employee, 'start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: key }), eventId, 'same start key must be idempotent');
+  await expectError(() => employee.rpc('start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: crypto.randomUUID() }), /already/i);
+  const { error: crossPhotoError } = await crossRegionHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
+  assert.ok(crossPhotoError, 'cross-region HR must not read a private outgoing photo');
+  const { error: regionalPhotoError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
+  assert.equal(regionalPhotoError, null, 'authorized regional HR must read the private outgoing photo');
+  await upload(employee, 'outgoing-photos', `${basePath}/end.jpg`);
+  const endKey = crypto.randomUUID();
+  assert.equal(await rpc(employee, 'finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: endKey }), eventId);
+  assert.equal(await rpc(employee, 'finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: endKey }), eventId, 'same end key must be idempotent');
+  await expectError(() => employee.rpc('finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: crypto.randomUUID() }), /cannot be finished/i);
+
+  const concurrent = await Promise.all(['12:00', '12:30'].map((start, index) => approvedRequest(employee, regionalHr, start, index ? '13:00' : '12:30', `concurrent-${index}`)));
+  for (const id of concurrent) await upload(employee, 'outgoing-photos', `${accounts.employee.profileId}/${id}/start.jpg`);
+  const outcomes = await Promise.allSettled(concurrent.map((id) => employee.rpc('start_outgoing_event', startArgs(id, `${accounts.employee.profileId}/${id}/start.jpg`, 3.139, 101.6869))));
+  assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled' && !outcome.value.error).length, 1, 'only one concurrent outgoing event may start');
+  const activeRequestId = concurrent[outcomes.findIndex((outcome) => outcome.status === 'fulfilled' && !outcome.value.error)];
+  await upload(employee, 'attendance-photos', `${accounts.employee.profileId}/clock-out.jpg`);
+  await rpc(employee, 'create_attendance_record_checked', { p_punch_type: 'clock_out', p_photo_path: `${accounts.employee.profileId}/clock-out.jpg`, p_latitude: 3.139, p_longitude: 101.6869, p_accuracy: 5, p_ip_address: '127.0.0.1', p_device_info: 'Phase 3 isolated CI' });
+  assert.equal(await rpc(employee, 'reconcile_outgoing_exceptions', { p_employee_id: null }), 1, 'clock-out must be reconciled independently');
+  await expectError(() => employee.rpc('finish_outgoing_event', startArgs(activeRequestId, `${accounts.employee.profileId}/${activeRequestId}/start.jpg`, 3.139, 101.6869)), /cannot be finished|clock-out/i);
+  const { data: exception, error: exceptionError } = await employee.from('outgoing_events').select('id, status').eq('request_id', activeRequestId).single();
+  assert.ifError(exceptionError); assert.equal(exception.status, 'exception');
+  await rpc(regionalHr, 'handle_outgoing_exception', { p_event_id: exception.id });
+  await rpc(regionalHr, 'handle_outgoing_exception', { p_event_id: exception.id });
+}
+
+async function createRequest(client, start, end, reason) { return rpc(client, 'create_outgoing_request', requestInput(start, end, reason)); }
+async function approvedRequest(employee, hr, start, end, reason) { const id = await createRequest(employee, start, end, reason); await rpc(hr, 'review_outgoing_request', { p_request_id: id, p_decision: 'approved', p_note: null }); return id; }
+function requestInput(start, end, reason) { return { p_outgoing_date: today, p_planned_start_time: start, p_planned_return_time: end, p_outgoing_type: 'client_visit', p_location: 'Phase 3 local CI fixture', p_reason: reason, p_related_contact: null, p_remarks: null }; }
+function startArgs(requestId, path, latitude, longitude) { return { p_request_id: requestId, p_photo_path: path, p_latitude: latitude, p_longitude: longitude, p_accuracy: 5, p_idempotency_key: crypto.randomUUID() }; }
+async function upload(client, bucket, path) { const { error } = await client.storage.from(bucket).upload(path, fixturePhoto, { contentType: 'image/jpeg', upsert: false }); assert.ifError(error); }
+async function rpc(client, name, args) { const { data, error } = await client.rpc(name, args); assert.ifError(error); return data; }
+async function expectError(run, pattern) { try { const result = await run(); if (result?.error) throw result.error; assert.fail('Expected operation to fail'); } catch (error) { assert.match(String(error?.message ?? error), pattern); } }
+function required(name) { const value = process.env[name]; assert.ok(value, `Missing ${name}`); return value; }
+function malaysiaDate() { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()); return `${parts.find((part) => part.type === 'year').value}-${parts.find((part) => part.type === 'month').value}-${parts.find((part) => part.type === 'day').value}`; }
