@@ -42,6 +42,16 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Require Node.js 22 with native WebSocket
+        run: |
+          set -euo pipefail
+          node_version="$(node --version)"
+          case "$node_version" in
+            v22.*) ;;
+            *) echo "Phase 3 local database validation requires Node.js 22; found $node_version"; exit 1 ;;
+          esac
+          node -e 'if (typeof WebSocket !== "function") { throw new Error("Native WebSocket is unavailable") }'
+
       - name: Install repository test dependencies
         run: npm ci
 
