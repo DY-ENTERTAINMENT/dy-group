@@ -275,19 +275,27 @@ begin
   select * into target_employee from public.employees where id = coalesce(p_employee_id, caller_employee.id) and deleted_at is null limit 1;
   if target_employee.id is null then raise exception 'Target employee not found.'; end if;
   if target_employee.id <> caller_employee.id and (not public.current_user_has_permission('outgoing-management', 'view') or not public.current_user_can_access_region(target_employee.region_id)) then raise exception 'No permission to reconcile this employee.'; end if;
-  with changed as (
-    update public.outgoing_events e set status = 'exception', exception_reason = 'Employee clocked out before ending outgoing.', exception_detected_at = ar.punched_at, updated_at = now()
-    from public.outgoing_requests r
+  -- An UPDATE target alias cannot be referenced from a FROM/JOIN LATERAL item.
+  -- Compute candidate clock-outs first, where source_event is an ordinary FROM
+  -- alias, then update the matching target row exactly once.
+  with matching_clock_outs as (
+    select source_event.id as event_id, source_event.request_id, clock_out.punched_at, clock_out.id as attendance_record_id
+    from public.outgoing_events source_event
+    join public.outgoing_requests request_row on request_row.id = source_event.request_id
     join lateral (
-      select punched_at, id from public.attendance_records
-      where employee_id = target_employee.id and punch_type = 'clock_out'
-        and (punched_at at time zone 'Asia/Kuala_Lumpur')::date = r.outgoing_date
-        and punched_at >= e.started_at
-        and (e.status = 'in_progress' or punched_at <= e.ended_at)
-      order by punched_at desc limit 1
-    ) ar on true
-    where e.request_id = r.id and e.employee_id = target_employee.id and e.status in ('in_progress', 'completed')
-    returning e.id, e.request_id, ar.id as attendance_record_id
+      select ar.punched_at, ar.id from public.attendance_records ar
+      where ar.employee_id = target_employee.id and ar.punch_type = 'clock_out'
+        and (ar.punched_at at time zone 'Asia/Kuala_Lumpur')::date = request_row.outgoing_date
+        and ar.punched_at >= source_event.started_at
+        and (source_event.status = 'in_progress' or ar.punched_at <= source_event.ended_at)
+      order by ar.punched_at desc limit 1
+    ) clock_out on true
+    where source_event.employee_id = target_employee.id and source_event.status in ('in_progress', 'completed')
+  ), changed as (
+    update public.outgoing_events target_event set status = 'exception', exception_reason = 'Employee clocked out before ending outgoing.', exception_detected_at = matching_clock_outs.punched_at, updated_at = now()
+    from matching_clock_outs
+    where target_event.id = matching_clock_outs.event_id and target_event.status in ('in_progress', 'completed')
+    returning target_event.id, target_event.request_id, matching_clock_outs.attendance_record_id
   ), audit as (
     insert into public.outgoing_event_audit_history(event_id, request_id, action, actor_name, note)
     select id, request_id, 'exception_detected', 'System outgoing reconciliation', 'Attendance clock-out record: ' || attendance_record_id::text from changed
