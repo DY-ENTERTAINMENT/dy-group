@@ -211,6 +211,10 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
   assert.ok(crossPhotoError, 'cross-region HR must not read a private outgoing photo');
   const { error: regionalPhotoError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
   assert.equal(regionalPhotoError, null, 'authorized regional HR must read the private outgoing photo');
+  const { error: revokePhotoPermissionError } = await admin.from('employee_permission_overrides').delete().eq('employee_id', accounts.regionalHr.employeeId).eq('permission_key', 'outgoing-photos');
+  assert.ifError(revokePhotoPermissionError);
+  const { error: noExplicitPhotoPermissionError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
+  assert.ok(noExplicitPhotoPermissionError, 'approval and management permissions must not implicitly grant outgoing-photo access');
   await upload(employee, 'outgoing-photos', `${basePath}/end.jpg`);
   const endKey = crypto.randomUUID();
   assert.equal(await rpc(employee, 'finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: endKey }), eventId);
