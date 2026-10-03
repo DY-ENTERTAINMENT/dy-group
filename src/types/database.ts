@@ -200,6 +200,16 @@ export type AttendanceLocation = {
   updated_at: string;
 };
 
+export type OutgoingRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+export type OutgoingType = 'streamer_visit' | 'client_visit' | 'company_business' | 'procurement' | 'event' | 'other';
+export type OutgoingReviewAction = 'submitted' | 'approved' | 'rejected' | 'cancelled';
+export type OutgoingRequest = { id: string; profile_id: string; employee_id: string; region_id: string; outgoing_date: string; planned_start_time: string; planned_return_time: string; outgoing_type: OutgoingType; location: string; reason: string; related_contact: string | null; remarks: string | null; status: OutgoingRequestStatus; reviewed_by: string | null; reviewed_by_name: string | null; reviewed_at: string | null; review_note: string | null; cancelled_by: string | null; cancelled_at: string | null; created_at: string; updated_at: string; };
+export type OutgoingRequestReviewHistory = { id: string; request_id: string; action: OutgoingReviewAction; actor_profile_id: string | null; actor_name: string; previous_status: OutgoingRequestStatus | null; next_status: OutgoingRequestStatus | null; note: string | null; created_at: string; };
+export type OutgoingEventStatus = 'in_progress' | 'completed' | 'exception';
+export type OutgoingEventAuditAction = 'started' | 'completed' | 'exception_detected' | 'exception_handled';
+export type OutgoingEvent = { id: string; request_id: string; profile_id: string; employee_id: string; region_id: string; status: OutgoingEventStatus; started_at: string; start_photo_path: string; start_latitude: number; start_longitude: number; start_accuracy: number | null; start_attendance_location_id: string; start_distance_meters: number; start_idempotency_key: string; ended_at: string | null; end_photo_path: string | null; end_latitude: number | null; end_longitude: number | null; end_accuracy: number | null; end_attendance_location_id: string | null; end_distance_meters: number | null; end_idempotency_key: string | null; exception_reason: string | null; exception_detected_at: string | null; exception_handled_by: string | null; exception_handled_at: string | null; created_at: string; updated_at: string; };
+export type OutgoingEventAuditHistory = { id: string; event_id: string; request_id: string; action: OutgoingEventAuditAction; actor_profile_id: string | null; actor_name: string; note: string | null; created_at: string; };
+
 export type Shift = {
   id: string;
   name: string;
@@ -710,6 +720,30 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      outgoing_requests: {
+        Row: OutgoingRequest;
+        Insert: Pick<OutgoingRequest, 'profile_id' | 'employee_id' | 'region_id' | 'outgoing_date' | 'planned_start_time' | 'planned_return_time' | 'outgoing_type' | 'location' | 'reason'> & Partial<Pick<OutgoingRequest, 'id' | 'related_contact' | 'remarks' | 'status' | 'reviewed_by' | 'reviewed_by_name' | 'reviewed_at' | 'review_note' | 'cancelled_by' | 'cancelled_at' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<OutgoingRequest, 'id' | 'profile_id' | 'employee_id' | 'region_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      outgoing_request_review_history: {
+        Row: OutgoingRequestReviewHistory;
+        Insert: Pick<OutgoingRequestReviewHistory, 'request_id' | 'action' | 'actor_name'> & Partial<Pick<OutgoingRequestReviewHistory, 'id' | 'actor_profile_id' | 'previous_status' | 'next_status' | 'note' | 'created_at'>>;
+        Update: Partial<Omit<OutgoingRequestReviewHistory, 'id' | 'request_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      outgoing_events: {
+        Row: OutgoingEvent;
+        Insert: Pick<OutgoingEvent, 'request_id' | 'profile_id' | 'employee_id' | 'region_id' | 'started_at' | 'start_photo_path' | 'start_latitude' | 'start_longitude' | 'start_attendance_location_id' | 'start_distance_meters' | 'start_idempotency_key'> & Partial<Pick<OutgoingEvent, 'id' | 'status' | 'start_accuracy' | 'ended_at' | 'end_photo_path' | 'end_latitude' | 'end_longitude' | 'end_accuracy' | 'end_attendance_location_id' | 'end_distance_meters' | 'end_idempotency_key' | 'exception_reason' | 'exception_detected_at' | 'exception_handled_by' | 'exception_handled_at' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Omit<OutgoingEvent, 'id' | 'request_id' | 'profile_id' | 'employee_id' | 'region_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      outgoing_event_audit_history: {
+        Row: OutgoingEventAuditHistory;
+        Insert: Pick<OutgoingEventAuditHistory, 'event_id' | 'request_id' | 'action' | 'actor_name'> & Partial<Pick<OutgoingEventAuditHistory, 'id' | 'actor_profile_id' | 'note' | 'created_at'>>;
+        Update: Partial<Omit<OutgoingEventAuditHistory, 'id' | 'event_id' | 'request_id' | 'created_at'>>;
+        Relationships: [];
       };
       shifts: {
         Row: Shift;
@@ -1339,6 +1373,23 @@ export type Database = {
         };
         Returns: string;
       };
+      create_outgoing_request: {
+        Args: { p_outgoing_date: string; p_planned_start_time: string; p_planned_return_time: string; p_outgoing_type: OutgoingType; p_location: string; p_reason: string; p_related_contact?: string | null; p_remarks?: string | null };
+        Returns: string;
+      };
+      cancel_outgoing_request: { Args: { p_request_id: string }; Returns: undefined };
+      review_outgoing_request: { Args: { p_request_id: string; p_decision: 'approved' | 'rejected'; p_note?: string | null }; Returns: undefined };
+      get_my_outgoing_approval_pending_count: { Args: Record<string, never>; Returns: number };
+      start_outgoing_event: {
+        Args: { p_request_id: string; p_photo_path: string; p_latitude: number; p_longitude: number; p_accuracy: number | null; p_idempotency_key: string };
+        Returns: string;
+      };
+      finish_outgoing_event: {
+        Args: { p_request_id: string; p_photo_path: string; p_latitude: number; p_longitude: number; p_accuracy: number | null; p_idempotency_key: string };
+        Returns: string;
+      };
+      handle_outgoing_exception: { Args: { p_event_id: string }; Returns: undefined };
+      reconcile_outgoing_exceptions: { Args: { p_employee_id?: string | null }; Returns: number };
       review_attendance_abnormal_record: {
         Args: {
           p_attendance_record_id: string;

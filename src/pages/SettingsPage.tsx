@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Edit3, Plus, RefreshCw, Search, Settings2, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Edit3, Plus, RefreshCw, Search, Settings2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -161,6 +161,19 @@ const explicitHrPermissionItems: PermissionItem[] = [
     viewOnly: true,
     explicitOnly: true,
   },
+  { key: 'outgoing-application', name: '外出申请', parentKey: 'hr', level: 1, explicitOnly: true },
+  { key: 'outgoing-approval', name: '外出审批', parentKey: 'hr', level: 1, explicitOnly: true },
+  { key: 'outgoing-management', name: '外出管理', parentKey: 'hr', level: 1, explicitOnly: true },
+  { key: 'outgoing-exception-handling', name: '外出异常处理', parentKey: 'hr', level: 1, explicitOnly: true },
+  {
+    key: 'outgoing-photos',
+    name: '查看外出打卡照片',
+    parentKey: 'hr',
+    level: 1,
+    viewOnly: true,
+    explicitOnly: true,
+  },
+  { key: 'outgoing-settings', name: '外出设置', parentKey: 'hr', level: 1, explicitOnly: true },
 ];
 const agentSensitivePermissionItems: PermissionItem[] = [
   { key: 'agent-creator-management-settings', name: '编辑主播管理设置', parentKey: 'agent', level: 1 },

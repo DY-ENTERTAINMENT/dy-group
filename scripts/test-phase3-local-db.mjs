@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 
 const apiUrl = required('API_URL');
@@ -12,15 +13,13 @@ const today = malaysiaDate();
 
 const regions = await getRegions();
 const accounts = await createFixtureAccounts(regions);
-const employee = await signIn(accounts.employee.email);
-const regionalHr = await signIn(accounts.regionalHr.email);
-const crossRegionHr = await signIn(accounts.crossRegionHr.email);
-const superAdmin = await signIn(accounts.superAdmin.email);
-const inactiveEmployee = await signIn(accounts.inactiveEmployee.email);
+const { employee, regionalHr, crossRegionHr, superAdmin, inactiveEmployee } = await signInAll(accounts);
 
+await assertFixturePreflight({ employee, regionalHr, crossRegionHr, superAdmin, inactiveEmployee }, accounts, regions);
 await assertAttendanceRegression(employee, accounts.employee, regions.primary);
 await assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts, regions.primary);
 await assertOutgoingLifecycleAndReconciliation(employee, regionalHr, crossRegionHr, accounts, regions.primary);
+await assertAttendanceRegressionAfterOutgoing(employee, crossRegionHr, superAdmin, accounts.employee);
 await expectError(() => inactiveEmployee.rpc('create_outgoing_request', requestInput('16:00', '16:30', 'inactive account')), /permission|active|employee/i);
 
 console.log('Phase 3 isolated local database integration tests passed');
@@ -33,34 +32,64 @@ async function getRegions() {
 }
 
 async function createFixtureAccounts(regions) {
+  // Auth user creation creates the pending profile through the production
+  // trigger. The disposable database fixture replaces those pending rows
+  // before any business RPC is exercised; it never disables RLS or fabricates
+  // a JWT authentication claim.
   const accounts = {
-    employee: await createAccount('employee', 'staff', 'active', regions.primary.id),
-    regionalHr: await createAccount('regional-hr', 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']),
-    crossRegionHr: await createAccount('cross-region-hr', 'hr', 'active', regions.secondary.id, ['outgoing-approval', 'outgoing-management']),
-    superAdmin: await createAccount('super-admin', 'super_admin', 'active', regions.secondary.id),
-    inactiveEmployee: await createAccount('inactive', 'staff', 'inactive', regions.primary.id),
+    employee: await createAuthAccount('employee'),
+    regionalHr: await createAuthAccount('regional-hr'),
+    crossRegionHr: await createAuthAccount('cross-region-hr'),
+    superAdmin: await createAuthAccount('super-admin'),
+    inactiveEmployee: await createAuthAccount('inactive'),
   };
-  await grant(accounts.employee.employeeId, ['outgoing-application']);
+  await provisionLocalFixtureAccounts(accounts, regions);
   return accounts;
 }
 
-async function createAccount(label, role, employeeStatus, regionId, permissions = []) {
+async function createAuthAccount(label) {
   const email = `phase3-${label}-${crypto.randomUUID()}@example.test`;
   const { data, error } = await admin.auth.admin.createUser({ email, password: 'Phase3-local-only-123!', email_confirm: true, user_metadata: { full_name: `Phase 3 ${label}` } });
   assert.ifError(error);
-  const profileId = data.user.id;
-  const { error: profileError } = await admin.from('profiles').update({ full_name: `Phase 3 ${label}`, role, status: 'approved', region_id: regionId }).eq('id', profileId);
-  assert.ifError(profileError);
-  const { data: employee, error: employeeError } = await admin.from('employees').insert({ profile_id: profileId, employee_code: `P3-${label}-${crypto.randomUUID().slice(0, 8)}`, full_name: `Phase 3 ${label}`, email, region_id: regionId, status: employeeStatus, require_attendance: employeeStatus === 'active' }).select('id').single();
-  assert.ifError(employeeError);
-  if (permissions.length) await grant(employee.id, permissions);
-  return { email, profileId, employeeId: employee.id };
+  return { label, email, profileId: data.user.id, employeeId: crypto.randomUUID() };
 }
 
-async function grant(employeeId, permissionKeys) {
-  const rows = permissionKeys.map((permission_key) => ({ employee_id: employeeId, permission_key, can_view: true, can_use: true, effect: 'grant' }));
-  const { error } = await admin.from('employee_permission_overrides').upsert(rows, { onConflict: 'employee_id,permission_key' });
-  assert.ifError(error);
+async function provisionLocalFixtureAccounts(accounts, regions) {
+  const definitions = [
+    [accounts.employee, 'staff', 'active', regions.primary.id, ['outgoing-application']],
+    [accounts.regionalHr, 'hr', 'active', regions.primary.id, ['outgoing-approval', 'outgoing-management', 'outgoing-exception-handling', 'outgoing-photos']],
+    [accounts.crossRegionHr, 'hr', 'active', regions.secondary.id, ['outgoing-approval', 'outgoing-management']],
+    [accounts.superAdmin, 'super_admin', 'active', regions.secondary.id, []],
+    [accounts.inactiveEmployee, 'staff', 'inactive', regions.primary.id, ['outgoing-application']],
+  ];
+  const statements = [
+    'begin;',
+    `delete from public.profiles where id in (${definitions.map(([account]) => `${sqlLiteral(account.profileId)}::uuid`).join(', ')});`,
+  ];
+  for (const [account, role, employeeStatus, regionId, permissions] of definitions) {
+    const name = `Phase 3 ${account.label}`;
+    statements.push(
+      `insert into public.profiles (id, email, full_name, role, status, region_id) values (${sqlLiteral(account.profileId)}::uuid, ${sqlLiteral(account.email)}, ${sqlLiteral(name)}, ${sqlLiteral(role)}::public.app_role, 'approved'::public.profile_status, ${sqlLiteral(regionId)}::uuid);`,
+      `insert into public.employees (id, profile_id, employee_code, full_name, email, region_id, status, require_attendance) values (${sqlLiteral(account.employeeId)}::uuid, ${sqlLiteral(account.profileId)}::uuid, ${sqlLiteral(`P3-${account.label}-${account.employeeId.slice(0, 8)}`)}, ${sqlLiteral(name)}, ${sqlLiteral(account.email)}, ${sqlLiteral(regionId)}::uuid, ${sqlLiteral(employeeStatus)}::public.employee_status, ${employeeStatus === 'active'}) on conflict (id) do nothing;`,
+    );
+    for (const permission of permissions) {
+      statements.push(`insert into public.employee_permission_overrides (employee_id, permission_key, can_view, can_use, effect) values (${sqlLiteral(account.employeeId)}::uuid, ${sqlLiteral(permission)}, true, true, 'grant') on conflict (employee_id, permission_key) do update set can_view = excluded.can_view, can_use = excluded.can_use, effect = excluded.effect;`);
+    }
+  }
+  statements.push('commit;');
+  const dbContainer = findLocalSupabaseDatabaseContainer();
+  execFileSync('docker', ['exec', '-i', dbContainer, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres', '-c', statements.join('\n')], { stdio: 'pipe' });
+}
+
+function findLocalSupabaseDatabaseContainer() {
+  const rows = execFileSync('docker', ['ps', '--format', '{{.ID}}\t{{.Names}}\t{{.Labels}}'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+  const matches = rows.map((row) => row.split('\t')).filter(([, name, labels]) => name.startsWith('supabase_db_') && labels.includes('com.supabase.cli.project=dy-group-phase3-ci'));
+  assert.equal(matches.length, 1, `Expected exactly one isolated Supabase database container; found ${matches.length}`);
+  return matches[0][0];
+}
+
+function sqlLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 async function signIn(email) {
@@ -69,6 +98,40 @@ async function signIn(email) {
   assert.ifError(error);
   assert.ok(data.session?.access_token, `missing local session for ${email}`);
   return client;
+}
+
+async function signInAll(accounts) {
+  const entries = Object.entries(accounts);
+  const settled = await Promise.allSettled(entries.map(async ([label, account]) => [label, await signIn(account.email)]));
+  const failures = settled.filter((result) => result.status === 'rejected');
+  assert.equal(failures.length, 0, `Fixture authentication failed: ${failures.map((result) => String(result.reason?.message ?? result.reason)).join('; ')}`);
+  return Object.fromEntries(settled.map((result) => result.value));
+}
+
+async function assertFixturePreflight(clients, accounts, regions) {
+  const { data: rows, error } = await admin.from('employees').select('id, profile_id, region_id, status').in('profile_id', Object.values(accounts).map((account) => account.profileId));
+  assert.ifError(error);
+  assert.equal(rows.length, 5, 'all authenticated fixture accounts must have exactly one employee row before business tests');
+  for (const account of Object.values(accounts)) {
+    const row = rows.find((candidate) => candidate.profile_id === account.profileId);
+    assert.ok(row, `missing employee fixture for ${account.label}`);
+    assert.equal(row.id, account.employeeId, `unexpected employee fixture identity for ${account.label}`);
+  }
+  assert.equal(rows.find((row) => row.profile_id === accounts.employee.profileId)?.region_id, regions.primary.id);
+  assert.equal(rows.find((row) => row.profile_id === accounts.crossRegionHr.profileId)?.region_id, regions.secondary.id);
+
+  const activeChecks = await Promise.allSettled([
+    clients.employee.rpc('current_user_is_active_employee'),
+    clients.regionalHr.rpc('current_user_is_active_employee'),
+    clients.crossRegionHr.rpc('current_user_is_active_employee'),
+    clients.superAdmin.rpc('current_user_is_active_employee'),
+    clients.inactiveEmployee.rpc('current_user_is_active_employee'),
+  ]);
+  assert.equal(activeChecks.filter((result) => result.status === 'rejected' || result.value.error).length, 0, 'fixture active-account checks must be callable by real sessions');
+  assert.deepEqual(activeChecks.map((result) => result.value.data), [true, true, true, true, false], 'fixture statuses must be visible to the production account guard');
+  assert.equal(await rpc(clients.employee, 'current_user_has_permission', { p_permission_key: 'outgoing-application', p_action: 'use' }), true);
+  assert.equal(await rpc(clients.regionalHr, 'current_user_has_permission', { p_permission_key: 'outgoing-approval', p_action: 'use' }), true);
+  assert.equal(await rpc(clients.crossRegionHr, 'current_user_can_access_region', { region_id: regions.primary.id }), false, 'cross-region fixture must not gain primary-region access');
 }
 
 async function assertAttendanceRegression(client, account, region) {
@@ -90,15 +153,34 @@ async function assertAttendanceRegression(client, account, region) {
   return location;
 }
 
+async function assertAttendanceRegressionAfterOutgoing(employee, crossRegionHr, superAdmin, account) {
+  const { data: ownRows, error: ownError } = await employee.from('attendance_records').select('punch_type').eq('profile_id', account.profileId);
+  assert.ifError(ownError);
+  assert.deepEqual(new Set(ownRows.map((row) => row.punch_type)), new Set(['clock_in', 'break_start', 'break_end', 'clock_out']), 'existing employee attendance timeline must remain readable after outgoing reconciliation');
+  const { data: superRows, error: superError } = await superAdmin.from('attendance_records').select('punch_type').eq('profile_id', account.profileId);
+  assert.ifError(superError);
+  assert.equal(superRows.length, 4, 'super-admin attendance access must remain available after Phase 3 migrations');
+  const { data: crossRows, error: crossError } = await crossRegionHr.from('attendance_records').select('id').eq('profile_id', account.profileId);
+  assert.ifError(crossError);
+  assert.equal(crossRows.length, 0, 'unrelated HR must not gain attendance-record access');
+  const { error: ownPhotoError } = await employee.storage.from('attendance-photos').download(`${account.profileId}/clock-out.jpg`);
+  assert.equal(ownPhotoError, null, 'employee must retain access to their original attendance photo');
+  const { error: unrelatedPhotoError } = await crossRegionHr.storage.from('attendance-photos').download(`${account.profileId}/clock-out.jpg`);
+  assert.ok(unrelatedPhotoError, 'unrelated HR must not gain attendance-photo access');
+}
+
 async function createLocation(regionId) {
   const { data, error } = await admin.from('attendance_locations').insert({ region_id: regionId, name: `Phase 3 CI ${crypto.randomUUID()}`, latitude: 3.139, longitude: 101.6869, radius_meters: 500 }).select('id').single();
   assert.ifError(error);
   return data;
 }
 
-async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin) {
+async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts) {
   const requestId = await createRequest(employee, '09:00', '09:30', 'approval and RLS');
   await expectError(() => crossRegionHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /permission/i);
+  const { error: selfApprovalGrantError } = await admin.from('employee_permission_overrides').upsert({ employee_id: accounts.employee.employeeId, permission_key: 'outgoing-approval', can_view: true, can_use: true, effect: 'grant' }, { onConflict: 'employee_id,permission_key' });
+  assert.ifError(selfApprovalGrantError);
+  await expectError(() => employee.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /own outgoing request/i);
   await rpc(regionalHr, 'review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null });
   await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /final|already/i);
   const { data: own, error: ownError } = await employee.from('outgoing_requests').select('id').eq('id', requestId);
@@ -129,6 +211,10 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
   assert.ok(crossPhotoError, 'cross-region HR must not read a private outgoing photo');
   const { error: regionalPhotoError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
   assert.equal(regionalPhotoError, null, 'authorized regional HR must read the private outgoing photo');
+  const { error: revokePhotoPermissionError } = await admin.from('employee_permission_overrides').delete().eq('employee_id', accounts.regionalHr.employeeId).eq('permission_key', 'outgoing-photos');
+  assert.ifError(revokePhotoPermissionError);
+  const { error: noExplicitPhotoPermissionError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
+  assert.ok(noExplicitPhotoPermissionError, 'approval and management permissions must not implicitly grant outgoing-photo access');
   await upload(employee, 'outgoing-photos', `${basePath}/end.jpg`);
   const endKey = crypto.randomUUID();
   assert.equal(await rpc(employee, 'finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: endKey }), eventId);

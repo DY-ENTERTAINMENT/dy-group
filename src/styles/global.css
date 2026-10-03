@@ -3127,6 +3127,15 @@ a {
 .employee-rest-photo-modal > span { color: var(--muted); font-size: 13px; font-weight: 700; }
 .employee-rest-photo-modal > img { width: 100%; max-height: min(62vh, 560px); border-radius: 8px; object-fit: contain; background: var(--panel-soft); }
 
+/* Final compact employee card layout. */
+.outgoing-section.employee-outgoing-preview { gap: 12px; border: 1px solid #93c5fd; border-radius: 14px; padding: 16px; background: #eff6ff; }
+.employee-outgoing-preview .outgoing-preview-heading { padding: 0; }
+.employee-outgoing-preview .outgoing-preview-card { gap: 10px; border: 1px solid rgba(255, 255, 255, .78); border-radius: 12px; padding: 14px; }
+.outgoing-preview-meta { gap: 5px 12px; }
+.outgoing-preview-actions { justify-content: flex-start; gap: 14px; }
+.outgoing-preview-actions .outgoing-start-button, .outgoing-preview-actions .outgoing-finish-button { min-width: 180px; }
+.outgoing-apply-button { border: 0; color: #fff; background: linear-gradient(100deg, #7c4dff, #ec4899); box-shadow: 0 7px 14px rgba(184, 73, 193, .2); }
+
 @media (max-width: 720px) {
   .employee-rest-management-page .rest-management-filters { grid-template-columns: 1fr; }
   .employee-rest-management-page .rest-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -3304,6 +3313,46 @@ a {
 .employee-time-clock_out { border-color: #f0cbd1; background: #fff6f7; color: #c84658; }
 .employee-day-card .employee-timeline { margin: 0 15px 15px; }
 .employee-empty-state { width: fit-content; max-width: 100%; padding: 18px 22px; border: 1px dashed #b9d4dc; border-radius: 12px; background: #f6fbfc; color: var(--muted); font-size: 15px; font-weight: 700; }
+
+/* Phase 3 local-only outgoing UI preview. No request, location, camera, or Supabase call is made here. */
+.outgoing-preview { display: grid; gap: 12px; padding: 18px; border: 1px solid #b9dfe0; border-radius: 12px; background: linear-gradient(145deg, #f4fcfc, #ffffff 62%); box-shadow: 0 8px 20px rgba(31, 122, 140, 0.07); }
+.outgoing-preview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }.outgoing-preview-heading > div { display: grid; gap: 3px; }.outgoing-preview-heading > div > span { color: var(--primary); font-size: 12px; font-weight: 850; }.outgoing-preview-heading h3, .outgoing-preview-heading p { margin: 0; }.outgoing-preview-heading h3 { font-size: 19px; }.outgoing-preview-heading p, .outgoing-preview-footnote { color: var(--muted); font-size: 13px; font-weight: 650; line-height: 1.55; }
+.outgoing-preview-switcher, .outgoing-management-filters { display: flex; flex-wrap: wrap; gap: 7px; }.outgoing-preview-switcher button, .outgoing-management-filters button { border: 1px solid #c9dde0; border-radius: 999px; padding: 6px 10px; color: #52737a; background: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }.outgoing-preview-switcher button.active, .outgoing-management-filters button.active { border-color: var(--primary); color: #fff; background: var(--primary); }
+.outgoing-preview-empty { display: flex; align-items: center; gap: 11px; padding: 16px; border: 1px dashed #acd1d4; border-radius: 10px; color: #3e7479; background: rgba(255, 255, 255, .7); }.outgoing-preview-empty div { display: grid; gap: 3px; }.outgoing-preview-empty span { color: var(--muted); font-size: 13px; }
+.outgoing-preview-card { display: grid; gap: 12px; padding: 16px; border: 1px solid #c7dfe1; border-left: 4px solid var(--primary); border-radius: 10px; background: #fff; }.outgoing-preview-pending { border-left-color: #d48b18; }.outgoing-preview-approved { border-left-color: #238b95; }.outgoing-preview-in_progress { border-left-color: #167c83; }.outgoing-preview-completed { border-left-color: #25865a; }.outgoing-preview-exception { border-left-color: #c84b5b; }
+.outgoing-preview-card-head, .outgoing-management-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.outgoing-preview-card-head > div { display: grid; gap: 4px; }.outgoing-preview-card-head span:first-child, .outgoing-management-card > div > span { color: var(--muted); font-size: 12px; font-weight: 800; }.outgoing-preview-card-head h4, .outgoing-management-card h3, .outgoing-management-card p { margin: 0; }.outgoing-preview-card-head h4 { font-size: 16px; }
+.outgoing-status, .outgoing-notification-badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-size: 12px; font-weight: 850; line-height: 1; white-space: nowrap; }.outgoing-status { padding: 5px 9px; }.outgoing-status-pending { color: #9a6812; background: #fff2ce; }.outgoing-status-approved { color: #08717b; background: #dff6f6; }.outgoing-status-in_progress { color: #08717b; background: #d9f4f3; }.outgoing-status-completed { color: #237144; background: #e3f7e9; }.outgoing-status-exception { color: #a53c4a; background: #fde8eb; }
+.outgoing-preview-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; }.outgoing-preview-meta span { display: inline-flex; align-items: center; gap: 5px; color: #52737a; font-size: 13px; font-weight: 700; }.outgoing-preview-card > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }.outgoing-preview-live { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 8px; color: #12656c; background: #e9f8f8; font-size: 13px; }.outgoing-preview-warning { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; border-radius: 8px; color: #a53c4a; background: #fff0f2; font-size: 13px; font-weight: 700; line-height: 1.45; }
+.outgoing-preview-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }.outgoing-preview-notice { margin: 0; padding: 9px 11px; border-radius: 8px; color: #176873; background: #e8f8f8; font-size: 13px; font-weight: 700; }.outgoing-preview-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }.outgoing-preview-form label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 800; }.outgoing-preview-form input, .outgoing-preview-form select, .outgoing-preview-form textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 7px; padding: 9px 10px; color: var(--text); background: #fff; font: inherit; }.outgoing-preview-form textarea { resize: vertical; }.outgoing-form-wide { grid-column: 1 / -1; }.outgoing-preview-history { display: grid; gap: 7px; }.outgoing-preview-history div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }.outgoing-preview-history > span { margin-bottom: 9px; color: var(--muted); font-size: 13px; }
+.outgoing-management-preview { display: grid; gap: 16px; }.outgoing-management-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }.outgoing-management-summary > div { display: grid; gap: 5px; padding: 15px; border: 1px solid #c9e2e2; border-radius: 10px; background: linear-gradient(145deg, #f4fcfc, #fff); }.outgoing-management-summary span { color: var(--muted); font-size: 13px; font-weight: 800; }.outgoing-management-summary strong { color: var(--primary); font-size: 24px; }.outgoing-management-card { padding: 17px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }.outgoing-management-card > div:first-child { display: grid; gap: 5px; }.outgoing-management-card h3 { font-size: 17px; }.outgoing-management-card p { color: var(--muted); font-size: 13px; }.outgoing-management-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }.outgoing-preview-footnote { margin: 0; }
+.outgoing-notification-badge { min-width: 17px; min-height: 17px; margin-left: 5px; padding: 0 4px; color: #fff; background: #dc4856; vertical-align: middle; }.sidebar-outgoing-notification-badge { position: relative; top: -1px; }
+
+/* Keep the employee request card compact while retaining the existing attendance layout. */
+.employee-outgoing-preview { gap: 9px; padding: 14px; }.employee-outgoing-preview .outgoing-preview-heading { align-items: center; }.employee-outgoing-preview .outgoing-preview-heading > div { gap: 1px; }.employee-outgoing-preview .outgoing-preview-card { gap: 9px; padding: 12px; }.employee-outgoing-preview .outgoing-preview-meta { gap: 5px 12px; }.employee-outgoing-preview .outgoing-preview-actions { gap: 8px; }
+.outgoing-management-summary > div { place-items: center; text-align: center; }.outgoing-management-filter-fields { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }.outgoing-management-filter-fields label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 800; }.outgoing-management-filter-fields input, .outgoing-management-filter-fields select { box-sizing: border-box; width: 100%; min-height: 38px; border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; color: var(--text); background: var(--panel); font: inherit; }.outgoing-management-card { cursor: pointer; }.outgoing-management-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent); outline-offset: 2px; }.outgoing-approval-actions { display: flex; gap: 8px; }.outgoing-approval-actions .compact-button { justify-content: center; min-width: 90px; }
+
+/* Phase 3 outgoing palette: scoped so existing attendance cards retain their visual treatment. */
+.outgoing-preview { gap: 14px; border: 0; border-radius: 14px; padding: 16px; background: #f5f7fb; box-shadow: none; }
+.outgoing-preview-heading { align-items: center; }.outgoing-preview-heading h3 { color: #172b4d; font-size: 20px; }.outgoing-apply-button, .outgoing-start-button, .outgoing-finish-button, .outgoing-approve-button, .outgoing-reject-button, .outgoing-handled-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 10px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 850; cursor: pointer; }.outgoing-apply-button { border: 1px solid #d9cdfc; color: #7541e8; background: #f8f5ff; }.outgoing-start-button { min-height: 46px; min-width: 164px; color: #fff; background: linear-gradient(100deg, #2584e8, #7541e8); box-shadow: 0 7px 14px rgba(74, 89, 213, .22); }.outgoing-finish-button { min-height: 46px; min-width: 164px; color: #fff; background: #f04462; box-shadow: 0 7px 14px rgba(240, 68, 98, .2); }.outgoing-approve-button { min-width: 92px; color: #fff; background: #16a34a; }.outgoing-reject-button { min-width: 92px; color: #f04462; background: #fff0f2; }.outgoing-handled-button { color: #16a34a; background: #e8f7ef; }
+.employee-outgoing-preview { gap: 12px; padding: 0; background: transparent; }.employee-outgoing-preview .outgoing-preview-heading { padding: 2px 2px 0; }.employee-outgoing-preview .outgoing-preview-card { gap: 12px; border: 0; border-left: 0; border-radius: 14px; padding: 16px; box-shadow: 0 5px 15px rgba(23, 43, 77, .055); }.outgoing-preview-pending { background: #fff4db; }.outgoing-preview-approved { background: #f2ecff; }.outgoing-preview-in_progress { background: #e8f3ff; }.outgoing-preview-completed { background: #e8f7ef; }.outgoing-preview-exception { background: #fff0f2; }
+.outgoing-status-heading { display: flex; align-items: center; gap: 10px; }.outgoing-status-heading > div { gap: 2px; }.outgoing-status-heading span:first-child { color: #64748b; }.outgoing-status-heading h4 { color: #172b4d; font-size: 16px; }.outgoing-status-icon { display: inline-grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; }.outgoing-status-icon-pending { color: #d97706; background: #ffe7b2; }.outgoing-status-icon-approved { color: #7541e8; background: #e3d7ff; }.outgoing-status-icon-in_progress { color: #2584e8; background: #d7eaff; }.outgoing-status-icon-completed { color: #16a34a; background: #d1f1db; }.outgoing-status-icon-exception { color: #f04462; background: #ffdbe1; }
+.outgoing-preview-meta { gap: 8px 14px; }.outgoing-preview-meta span { color: #64748b; }.outgoing-preview-card > p { color: #64748b; }.outgoing-preview-live { align-items: center; border-radius: 10px; color: #256baf; background: rgba(255, 255, 255, .58); }.outgoing-preview-live strong { display: inline-flex; align-items: center; gap: 5px; color: #2584e8; }.outgoing-preview-warning { border-radius: 10px; color: #bc3049; background: rgba(255, 255, 255, .52); }.outgoing-preview-warning div { display: grid; gap: 2px; }.outgoing-preview-warning span { color: #9b4354; font-size: 13px; font-weight: 650; }.outgoing-preview-actions { justify-content: space-between; }.outgoing-preview-actions .text-link-button { color: #64748b; }
+.outgoing-status { padding: 6px 9px; }.outgoing-status-pending { color: #d97706; background: #fff4db; }.outgoing-status-approved { color: #7541e8; background: #f2ecff; }.outgoing-status-in_progress { color: #2584e8; background: #e8f3ff; }.outgoing-status-completed { color: #16a34a; background: #e8f7ef; }.outgoing-status-exception { color: #f04462; background: #fff0f2; }.outgoing-notification-badge { background: #ef4444; }
+.outgoing-management-preview { gap: 14px; }.outgoing-management-summary { gap: 14px; }.outgoing-management-summary > div { min-height: 94px; border: 0; border-radius: 14px; box-shadow: 0 4px 12px rgba(23, 43, 77, .045); }.outgoing-management-summary strong { font-size: 27px; }.outgoing-summary-pending { color: #d97706; background: #fff4db !important; }.outgoing-summary-pending strong { color: #d97706; }.outgoing-summary-approved { color: #7541e8; background: #f2ecff !important; }.outgoing-summary-approved strong { color: #7541e8; }.outgoing-summary-in_progress { color: #2584e8; background: #e8f3ff !important; }.outgoing-summary-in_progress strong { color: #2584e8; }.outgoing-summary-exception { color: #f04462; background: #fff0f2 !important; }.outgoing-summary-exception strong { color: #f04462; }
+.outgoing-management-filter-fields { gap: 12px; padding: 14px; border-radius: 14px; background: #f5f7fb; }.outgoing-management-filter-fields label { color: #64748b; }.outgoing-management-filter-fields input, .outgoing-management-filter-fields select { border-color: #e2e8f0; border-radius: 9px; background: #fff; }.outgoing-management-card { align-items: center; border: 0; border-radius: 14px; padding: 18px; box-shadow: 0 5px 15px rgba(23, 43, 77, .06); }.outgoing-management-card h3 { color: #172b4d; font-size: 18px; }.outgoing-management-card p { color: #64748b; }.outgoing-management-location, .outgoing-management-time { display: flex; align-items: center; gap: 5px; margin-top: 5px !important; font-size: 13px; }.outgoing-management-card-actions { align-items: center; }.outgoing-preview-notice { color: #16a34a; background: #e8f7ef; }
+
+@media (max-width: 720px) {
+  .outgoing-preview-heading, .outgoing-preview-card-head, .outgoing-management-card { align-items: stretch; flex-direction: column; }
+  .outgoing-apply-button, .outgoing-start-button, .outgoing-finish-button { width: 100%; }
+  .outgoing-preview-switcher { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .outgoing-preview-switcher button { flex: 0 0 auto; }
+  .outgoing-preview-form { grid-template-columns: 1fr; }
+  .outgoing-form-wide { grid-column: auto; }
+  .outgoing-management-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .outgoing-management-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .outgoing-management-card-actions { justify-content: flex-start; }
+  .outgoing-approval-actions { width: 100%; }.outgoing-approval-actions button { flex: 1; }.outgoing-management-card-actions > .outgoing-handled-button { width: 100%; }
+}
 
 .form-helper {
   margin: 0;
@@ -14264,3 +14313,114 @@ button.leave-chip:disabled {
 @media (max-width: 1100px) { .creator-monthly-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.creator-monthly-kpi-target-item { grid-template-columns: minmax(180px, .9fr) minmax(250px, 1.3fr); }.creator-monthly-kpi-target-actions { grid-column: 1 / -1; grid-template-columns: 1fr auto; align-items: center; min-height: 34px; }.creator-monthly-kpi-target-actions > div { justify-content: flex-end; } }
 @media (max-width: 760px) { .creator-monthly-kpi-grid { grid-template-columns: 1fr; }.creator-monthly-kpi-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.creator-monthly-kpi-summary article { min-height: 100px; padding: 16px 10px; }.creator-monthly-kpi-toolbar > select, .creator-monthly-kpi-toolbar > select[aria-label="经纪人"], .creator-monthly-kpi-search { flex: 1 1 100%; }.creator-monthly-kpi-toolbar .icon-button { margin-left: 0; }.creator-monthly-kpi-target-button { flex: 1 1 100%; margin-left: 0; }.creator-monthly-kpi-card { gap: 12px; padding: 14px; }.creator-monthly-kpi-card header { flex-wrap: wrap; }.creator-monthly-kpi-card header > div { min-width: 0; }.creator-monthly-kpi-card footer .secondary-button { width: 100%; }.creator-monthly-kpi-history article, .creator-monthly-kpi-target-item, .creator-monthly-kpi-modal-filters { grid-template-columns: 1fr; }.creator-monthly-kpi-row { grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr)); gap: 5px; font-size: 11px; }.creator-monthly-kpi-modal-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }.creator-monthly-kpi-target-actions { grid-column: auto; grid-template-columns: 1fr; justify-items: start; align-content: start; }.creator-monthly-kpi-target-actions > div { justify-content: flex-start; }.creator-monthly-kpi-modal-summary { width: 100%; margin-right: 0; }.creator-monthly-kpi-modal .modal-footer { display: flex; }.creator-monthly-kpi-modal .modal-footer .primary-button, .creator-monthly-kpi-modal .modal-footer .secondary-button { flex: 1 1 140px; } }
 @media (max-width: 380px) { .creator-monthly-kpi-summary { grid-template-columns: 1fr; }.creator-monthly-kpi-row { font-size: 10px; } }
+
+/* Phase 3 employee outgoing card: final scoped cascade, intentionally after shared page styles. */
+.outgoing-section.employee-outgoing-preview { display: grid; gap: 12px; border: 1px solid #93c5fd; border-radius: 14px; padding: 16px; background: #eff6ff; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-card { gap: 10px; border: 1px solid rgba(255, 255, 255, .78); border-radius: 12px; padding: 14px; }
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button { border: 0; color: #fff; background: linear-gradient(90deg, #7c4dff, #ec4899); box-shadow: 0 7px 14px rgba(184, 73, 193, .2); }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-empty { gap: 9px; padding: 2px 0; border: 0; color: #64748b; background: transparent; font-size: 14px; font-weight: 700; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-empty svg { color: #2584e8; }
+.outgoing-pending-compact { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #64748b; font-size: 14px; font-weight: 700; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-meta { gap: 5px 12px; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-actions { justify-content: flex-start; gap: 14px; }
+.outgoing-section.employee-outgoing-preview .outgoing-start-button, .outgoing-section.employee-outgoing-preview .outgoing-finish-button { min-width: 180px; }
+
+@media (max-width: 720px) {
+  .outgoing-section.employee-outgoing-preview .outgoing-preview-heading { align-items: stretch; flex-direction: column; }
+  .outgoing-section.employee-outgoing-preview .outgoing-apply-button, .outgoing-section.employee-outgoing-preview .outgoing-start-button, .outgoing-section.employee-outgoing-preview .outgoing-finish-button { width: 100%; }
+  .outgoing-pending-compact { align-items: flex-start; flex-direction: column; }
+}
+
+/* Keep the employee outgoing application action readable and self-sized at every breakpoint. */
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button,
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button:hover,
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button:focus-visible {
+  width: auto;
+  min-height: 44px;
+  height: 44px;
+  gap: 8px;
+  color: #ffffff;
+  background: linear-gradient(90deg, #7c4dff, #ec4899);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button > span {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button > svg {
+  color: #ffffff;
+}
+
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button:hover {
+  filter: brightness(1.04);
+}
+
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button:focus-visible {
+  outline: 3px solid rgba(124, 77, 255, .28);
+  outline-offset: 3px;
+}
+
+.outgoing-section.employee-outgoing-preview .outgoing-apply-button:disabled {
+  color: #ffffff;
+  background: linear-gradient(90deg, #a78bfa, #f9a8d4);
+  cursor: not-allowed;
+  filter: none;
+  opacity: .72;
+}
+
+/* Employee outgoing request state cards share one layout while varying only by status color. */
+.outgoing-section.employee-outgoing-preview .outgoing-preview-card { border: 1px solid transparent; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-pending { background: #fff4db; border-color: #fde0a6; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-approved { background: #f2ecff; border-color: #ded0ff; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-rejected, .outgoing-section.employee-outgoing-preview .outgoing-preview-exception { background: #fff0f2; border-color: #ffc9d2; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-in_progress { background: #e8f3ff; border-color: #bfdbfe; }
+.outgoing-section.employee-outgoing-preview .outgoing-preview-completed { background: #e8f7ef; border-color: #bce8ca; }
+.outgoing-status-rejected { color: #f04462; background: #fff0f2; }
+.outgoing-status-icon-rejected { color: #f04462; background: #ffdbe1; }
+.outgoing-state-notice { padding: 9px 11px; border-radius: 9px; color: #64748b; background: rgba(255, 255, 255, .56); font-size: 13px; font-weight: 700; line-height: 1.45; }
+.outgoing-state-notice-pending { color: #b86908; }.outgoing-state-notice-approved { color: #6840c8; }.outgoing-state-notice-rejected, .outgoing-state-notice-exception { color: #bd4054; }.outgoing-state-notice-in_progress { color: #2875bb; }.outgoing-state-notice-completed { color: #167a40; }
+.outgoing-cancel-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 10px; padding: 0 16px; color: #d9485f; background: rgba(255, 255, 255, .72); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 720px) {
+  .outgoing-section.employee-outgoing-preview .outgoing-cancel-button { width: 100%; }
+}
+
+/* Phase 3 management mock: current authorized employees/regions are inputs; request data remains labeled mock. */
+.outgoing-management-preview .outgoing-management-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.outgoing-management-preview .outgoing-management-summary > button { display: grid; min-height: 96px; place-items: center; gap: 5px; border: 1px solid transparent; border-radius: 14px; padding: 15px; font: inherit; cursor: pointer; transition: border-color .16s ease, transform .16s ease; }
+.outgoing-management-preview .outgoing-management-summary > button:hover { transform: translateY(-1px); }
+.outgoing-management-preview .outgoing-management-summary > button.active { border-width: 2px; }
+.outgoing-management-preview .outgoing-summary-pending.active { border-color: #d97706; }.outgoing-management-preview .outgoing-summary-approved.active { border-color: #7541e8; }.outgoing-management-preview .outgoing-summary-in_progress.active { border-color: #2584e8; }.outgoing-management-preview .outgoing-summary-completed.active { border-color: #16a34a; }.outgoing-management-preview .outgoing-summary-exception.active { border-color: #f04462; }
+.outgoing-management-preview .outgoing-management-filter-fields { grid-template-columns: minmax(170px, 1.2fr) repeat(5, minmax(130px, 1fr)); align-items: end; }
+.outgoing-management-mock-notice { margin: -3px 0 0; color: #64748b; font-size: 12px; font-weight: 650; }
+.outgoing-management-preview .outgoing-management-card { align-items: flex-start; }.outgoing-management-preview .outgoing-management-card-actions { min-width: 210px; }
+.outgoing-management-preview .outgoing-approval-actions button:disabled, .outgoing-management-preview .outgoing-handled-button:disabled { cursor: not-allowed; opacity: .55; }
+
+@media (max-width: 980px) {
+  .outgoing-management-preview .outgoing-management-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .outgoing-management-preview .outgoing-management-filter-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .outgoing-management-preview .outgoing-management-summary { grid-template-columns: 1fr; }
+  .outgoing-management-preview .outgoing-management-filter-fields { grid-template-columns: 1fr; }
+  .outgoing-management-preview .outgoing-management-card-actions { width: 100%; min-width: 0; }
+}
+
+/* Local-only employee outgoing punch controls, separate from existing attendance punch styles. */
+.employee-attendance-page .outgoing-punch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.employee-attendance-page .outgoing-punch-actions button { display: inline-flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; color: #fff; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
+.employee-attendance-page .outgoing-punch-start { background: linear-gradient(100deg, #2584e8, #7541e8); box-shadow: 0 7px 14px rgba(74, 89, 213, .18); }
+.employee-attendance-page .outgoing-punch-finish { background: #f04462; box-shadow: 0 7px 14px rgba(240, 68, 98, .16); }
+.employee-attendance-page .outgoing-punch-actions button:disabled { border-color: #e2e8f0; color: #94a3b8; background: #f1f5f9; box-shadow: none; cursor: not-allowed; }
+.employee-attendance-page .outgoing-attendance-mock { display: grid; gap: 6px; margin-top: 12px; color: #7c3aed; font-size: 12px; font-weight: 750; }
+.employee-attendance-page .outgoing-attendance-mock select { width: 100%; min-height: 40px; border: 1px dashed #b9a6e8; border-radius: 8px; padding: 0 10px; color: #4c1d95; background: #faf8ff; font: inherit; }
+
+@media (max-width: 720px) {
+  .employee-attendance-page .outgoing-punch-actions { grid-template-columns: 1fr; }
+}

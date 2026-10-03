@@ -35,6 +35,9 @@ export type EmployeePermissionOverride = PermissionRow & {
 
 type SpecialPermissionRow = SpecialPermissionTemplate;
 
+// The generated schema intentionally lags the permission-management tables;
+// keep this narrow compatibility cast until those definitions are generated.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 export const permissionManagementService = {

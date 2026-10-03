@@ -2,9 +2,14 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Eye, RefreshCw } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
+import { OutgoingManagementPreview } from '../components/OutgoingPreview';
+import { OutgoingRealManagementPanel } from '../components/OutgoingRealPanels';
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { isOutgoingLocalPreviewEnabled, outgoingLocalPreviewService } from '../services/outgoing-local-preview.service';
+import { getOutgoingDataMode } from '../services/outgoing-feature.service';
+import { useOutgoingPendingApprovalCount } from '../services/outgoing-notification.service';
 import {
   type AttendanceEffectiveWorkTime,
   type AttendanceEffectiveReplacementWorkChange,
@@ -76,7 +81,7 @@ type AbnormalReviewSnapshot = {
 type AbnormalCenterTab = 'pending' | 'abnormal';
 
 type EmployeeStatusFilter = 'working-attendance' | 'all-working' | 'attendance-exempt' | 'left' | 'all';
-type AttendanceTab = 'today' | 'statistics';
+type AttendanceTab = 'today' | 'outgoing' | 'statistics';
 type TodayAttendanceStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out';
 
 type TodayAttendanceRow = {
@@ -119,8 +124,11 @@ export function AttendanceManagementPage() {
   const [showAbnormalCenter, setShowAbnormalCenter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [, setOutgoingRevision] = useState(0);
 
   const isSuperAdmin = profile?.role === 'super_admin';
+  const { count: outgoingPendingCount, mode: outgoingDataMode } = useOutgoingPendingApprovalCount();
+  const outgoingPageMode = getOutgoingDataMode(isOutgoingLocalPreviewEnabled());
   const canRequestOtherAttendancePhotos = isSuperAdmin || (
     permissions.canView('attendance-management') && permissions.canView('attendance-photos')
   );
@@ -176,6 +184,7 @@ export function AttendanceManagementPage() {
   useEffect(() => {
     void loadTodayAttendanceData();
   }, [todayDate, regionId]);
+  useEffect(() => outgoingPageMode === 'local-preview' ? outgoingLocalPreviewService.subscribe(() => setOutgoingRevision((value) => value + 1)) : undefined, [outgoingPageMode]);
 
   usePullToRefresh(loadAttendanceData, [month, regionId]);
 
@@ -238,10 +247,10 @@ export function AttendanceManagementPage() {
         <div className="page-heading">
           <span>工作工具 / 人事部</span>
           <h2>考勤</h2>
-          <p>{activeTab === 'today' ? '按员工当天真实打卡记录只读汇总。' : `${range.startDate} 至 ${range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。`}</p>
+          <p>{activeTab === 'today' ? '按员工当天真实打卡记录只读汇总。' : activeTab === 'outgoing' ? (outgoingDataMode === 'local-preview' ? '外出申请与审批 localStorage 测试，不读取或写入数据库。' : outgoingDataMode === 'real' ? '外出真实服务已显式启用；所有权限与区域范围以服务器端为准。' : '外出功能尚未接入正式数据库。') : `${range.startDate} 至 ${range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。`}</p>
         </div>
 
-        <button className="secondary-action" type="button" onClick={() => activeTab === 'today' ? loadTodayAttendanceData() : loadAttendanceData()} disabled={activeTab === 'today' ? todayLoading : loading}>
+        <button className="secondary-action" type="button" onClick={() => activeTab === 'today' ? loadTodayAttendanceData() : activeTab === 'statistics' ? loadAttendanceData() : undefined} disabled={activeTab === 'today' ? todayLoading : activeTab === 'statistics' ? loading : false}>
           <RefreshCw size={17} />
           <span>刷新</span>
         </button>
@@ -249,6 +258,7 @@ export function AttendanceManagementPage() {
 
       <div className="attendance-page-tabs" role="tablist" aria-label="考勤页面">
         <button className={activeTab === 'today' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'today'} onClick={() => setActiveTab('today')}>今日考勤</button>
+        <button className={activeTab === 'outgoing' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'outgoing'} onClick={() => setActiveTab('outgoing')}>外出管理 {outgoingPendingCount ? <span className="outgoing-notification-badge">{outgoingPendingCount}</span> : null}</button>
         <button className={activeTab === 'statistics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'statistics'} onClick={() => setActiveTab('statistics')}>考勤统计</button>
       </div>
 
@@ -271,7 +281,14 @@ export function AttendanceManagementPage() {
           onStatusFilterChange={setTodayStatusFilter}
           onOpenDetail={(employeeId) => setTodayDetailEmployeeId(employeeId)}
         />
-      ) : <>
+      ) : activeTab === 'outgoing' && outgoingPageMode === 'local-preview' ? <OutgoingManagementPreview
+        regions={regions}
+        employees={todayEmployees}
+        canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')}
+        canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')}
+        reviewerName={profile?.nickname || profile?.full_name || profile?.email || '当前 HR'}
+        onChanged={() => setOutgoingRevision((value) => value + 1)}
+      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : <>
       {canUseAttendance ? (
         <button className="abnormal-banner" type="button" onClick={() => setShowAbnormalCenter(true)}>
           <AlertTriangle size={20} />
@@ -915,186 +932,6 @@ function AbnormalEmployeeCenterV2({
   );
 }
 
-function AbnormalEmployeeCenter({ records, onClose }: { records: AbnormalRecord[]; onClose: () => void }) {
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const [openingPhotoId, setOpeningPhotoId] = useState('');
-  const [photoError, setPhotoError] = useState('');
-  const groupedEmployees = useMemo(() => {
-    const map = new Map<string, { employee: AttendanceEmployee; records: AbnormalRecord[] }>();
-
-    records.forEach((record) => {
-      const current = map.get(record.employee.id) ?? { employee: record.employee, records: [] };
-      current.records.push(record);
-      map.set(record.employee.id, current);
-    });
-
-    return [...map.values()].sort((a, b) => b.records.length - a.records.length);
-  }, [records]);
-  const selected = groupedEmployees.find((item) => item.employee.id === selectedEmployeeId) ?? null;
-
-  async function handleOpenPhoto(record: AbnormalRecord) {
-    if (!record.photoPath) return;
-
-    setPhotoError('');
-    setOpeningPhotoId(record.id);
-    const photoWindow = window.open('', '_blank');
-
-    if (!photoWindow) {
-      setPhotoError('浏览器阻止了新窗口，请允许弹出窗口后重试。');
-      setOpeningPhotoId('');
-      return;
-    }
-
-    photoWindow.opener = null;
-
-    try {
-      const signedUrl = await attendanceManagementService.getAttendancePhotoSignedUrl(record.photoPath);
-      setPhotoError('');
-      photoWindow.location.href = signedUrl;
-    } catch {
-      const message = '读取打卡照片失败，请稍后重试或联系管理员。';
-      setPhotoError(message);
-      photoWindow.document.body.textContent = message;
-    } finally {
-      setOpeningPhotoId('');
-    }
-  }
-
-  return (
-    <SystemModal
-      title={selected ? `${getEmployeeDisplayName(selected.employee)} 的异常记录` : `${records.length} 次异常`}
-      subtitle="异常打卡中心"
-      ariaLabel="异常打卡中心"
-      onClose={onClose}
-      footer={
-        <>
-          {selected ? (
-            <button className="secondary-button compact-button" type="button" onClick={() => setSelectedEmployeeId('')}>
-              返回员工列表
-            </button>
-          ) : null}
-          <button className="primary-button compact-button" type="button" onClick={onClose}>
-            关闭
-          </button>
-        </>
-      }
-    >
-      <div className="employee-detail-sections">
-        <section className="employee-detail-section">
-          <h4>基础资料</h4>
-          <div className="detail-list">
-            <div>
-              <span>异常员工</span>
-              <strong>{selected ? selected.employee.full_name : `${groupedEmployees.length} 位员工`}</strong>
-            </div>
-            <div>
-              <span>异常次数</span>
-              <strong>{selected ? selected.records.length : records.length}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="employee-detail-section">
-          <h4>工作资料</h4>
-          {photoError ? <p className="form-alert table-alert">{photoError}</p> : null}
-          {records.length === 0 ? (
-            <div className="table-state">当前周期暂无异常打卡。</div>
-          ) : selected ? (
-            <div className="staff-table-wrap">
-              <table className="staff-table">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>异常类型</th>
-                    <th>原因</th>
-                    <th>打卡时间</th>
-                    <th>照片</th>
-                    <th>备注</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selected.records.map((record) => (
-                    <tr key={record.id}>
-                      <td>{toDateKey(new Date(record.punchedAt))}</td>
-                      <td>{record.type}</td>
-                      <td>{record.type}</td>
-                      <td>{new Date(record.punchedAt).toLocaleString('zh-CN')}</td>
-                      <td>
-                        {record.photoPath ? (
-                          <>
-                            <button
-                              className="secondary-button compact-button"
-                              type="button"
-                              onClick={() => handleOpenPhoto(record)}
-                              disabled={openingPhotoId === record.id}
-                            >
-                              <Eye size={16} />
-                              <span>{openingPhotoId === record.id ? '读取中' : '查看照片'}</span>
-                            </button>
-                          </>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                      <td className="device-cell">GPS：{record.gps} / IP：{record.ip} / 设备：{record.deviceInfo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="staff-table-wrap">
-              <table className="staff-table">
-                <thead>
-                  <tr>
-                    <th>员工姓名</th>
-                    <th>异常次数</th>
-                    <th>查看</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedEmployees.map((item) => (
-                    <tr key={item.employee.id}>
-                      <td><strong>{getEmployeeDisplayName(item.employee)}</strong></td>
-                      <td>异常 {item.records.length} 次</td>
-                      <td>
-                        <button className="secondary-button compact-button" type="button" onClick={() => setSelectedEmployeeId(item.employee.id)}>
-                          <Eye size={16} />
-                          <span>查看详情</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="employee-detail-section">
-          <h4>薪资资料</h4>
-          <div className="detail-list">
-            <div>
-              <span>薪资处理</span>
-              <strong>按 HR 审核结果处理</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="employee-detail-section">
-          <h4>班次资料</h4>
-          <div className="detail-list">
-            <div>
-              <span>异常来源</span>
-              <strong>打卡时间、GPS、IP、设备</strong>
-            </div>
-          </div>
-        </section>
-      </div>
-    </SystemModal>
-  );
-}
-
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="leave-stat-card">
@@ -1464,11 +1301,6 @@ function getDateRange(startDate: string, endDate: string) {
   }
 
   return dates;
-}
-
-function isWeekend(date: string) {
-  const day = new Date(`${date}T00:00:00`).getDay();
-  return day === 0 || day === 6;
 }
 
 function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string): TodayAttendanceRow[] {
