@@ -25,6 +25,7 @@ assert.doesNotMatch(migration, /p_outgoing_date <> \(now\(\) at time zone 'Asia\
 assert.match(migration, /revoke all on function public\.outgoing_current_actor_name\(\) from public, anon, authenticated/);
 assert.match(migration, /current_user_has_permission\('outgoing-approval', 'use'\)/);
 assert.match(migration, /current_user_can_access_region\(request_row\.region_id\)/);
+assert.match(migration, /request_row\.profile_id = auth\.uid\(\)/);
 assert.doesNotMatch(executableSql, /outgoing_region_approver/);
 assert.doesNotMatch(executableSql, /outgoing_request_approvers/);
 assert.doesNotMatch(executableSql, /set_outgoing_region_approvers/);

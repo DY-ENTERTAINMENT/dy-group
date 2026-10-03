@@ -175,9 +175,12 @@ async function createLocation(regionId) {
   return data;
 }
 
-async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin) {
+async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts) {
   const requestId = await createRequest(employee, '09:00', '09:30', 'approval and RLS');
   await expectError(() => crossRegionHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /permission/i);
+  const { error: selfApprovalGrantError } = await admin.from('employee_permission_overrides').upsert({ employee_id: accounts.employee.employeeId, permission_key: 'outgoing-approval', can_view: true, can_use: true, effect: 'grant' }, { onConflict: 'employee_id,permission_key' });
+  assert.ifError(selfApprovalGrantError);
+  await expectError(() => employee.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /own outgoing request/i);
   await rpc(regionalHr, 'review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null });
   await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /final|already/i);
   const { data: own, error: ownError } = await employee.from('outgoing_requests').select('id').eq('id', requestId);

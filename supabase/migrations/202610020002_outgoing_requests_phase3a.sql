@@ -107,6 +107,7 @@ begin
   select * into request_row from public.outgoing_requests where id = p_request_id for update;
   if request_row.id is null then raise exception 'Outgoing request not found.'; end if;
   if not public.current_user_has_permission('outgoing-approval', 'use') or not public.current_user_can_access_region(request_row.region_id) then raise exception 'No permission to review this outgoing request.'; end if;
+  if request_row.profile_id = auth.uid() then raise exception 'An applicant cannot review their own outgoing request.'; end if;
   if request_row.status <> 'pending' then raise exception 'This outgoing request already has a final result.'; end if;
   next_status := lower(nullif(btrim(coalesce(p_decision, '')), ''));
   if next_status not in ('approved', 'rejected') then raise exception 'Invalid review decision.'; end if;
