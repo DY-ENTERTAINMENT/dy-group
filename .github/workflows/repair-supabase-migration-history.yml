@@ -56,7 +56,7 @@ jobs:
           # caller-supplied order for the exact dry-run comparison below.
           printf '%s\n' "$EXPECTED_MIGRATIONS" \
             | tr '\r\n\t' '   ' \
-            | awk '{ for (index = 1; index <= NF; index++) print $index }' \
+            | awk '{ for (field_idx = 1; field_idx <= NF; field_idx++) print $field_idx }' \
             > "$RUNNER_TEMP/expected_migrations"
           test -s "$RUNNER_TEMP/expected_migrations" || {
             echo "expected_migrations must contain at least one filename"
