@@ -139,11 +139,28 @@ async function assertOutgoingFeatureGate(employee, regionalHr, superAdmin, accou
   assert.equal(await rpc(employee, 'get_outgoing_feature_admissions_enabled', {}), false, 'Phase 3C must default closed');
   await expectError(() => employee.rpc('create_outgoing_request', requestInput('08:00', '08:30', 'closed gate')), /disabled/i);
   await expectError(() => regionalHr.rpc('set_outgoing_feature_admissions_enabled', { p_enabled: true }), /permission/i);
-  await rpc(superAdmin, 'set_outgoing_feature_admissions_enabled', { p_enabled: true });
+  const { error: grantSettingsError } = await admin.from('employee_permission_overrides').upsert({ employee_id: accounts.regionalHr.employeeId, permission_key: 'outgoing-settings', can_view: true, can_use: true, effect: 'grant' }, { onConflict: 'employee_id,permission_key' });
+  assert.ifError(grantSettingsError);
+  await rpc(regionalHr, 'set_outgoing_feature_admissions_enabled', { p_enabled: true });
   assert.equal(await rpc(employee, 'get_outgoing_feature_admissions_enabled', {}), true);
   const { data: audit, error } = await admin.from('outgoing_feature_control_audit').select('previous_enabled, next_enabled, changed_by').eq('next_enabled', true);
   assert.ifError(error);
-  assert.ok(audit.some((row) => row.previous_enabled === false && row.changed_by === accounts.superAdmin.profileId), 'enable action must be audited');
+  assert.ok(audit.some((row) => row.previous_enabled === false && row.changed_by === accounts.regionalHr.profileId), 'explicit outgoing-settings enable action must be audited');
+
+  const { count: disableAuditBefore, error: disableCountError } = await admin.from('outgoing_feature_control_audit').select('id', { count: 'exact', head: true }).eq('previous_enabled', true).eq('next_enabled', false);
+  assert.ifError(disableCountError);
+  await rpc(superAdmin, 'set_outgoing_feature_admissions_enabled', { p_enabled: false });
+  const { data: disableAudit, error: disableAuditError } = await admin.from('outgoing_feature_control_audit').select('previous_enabled, next_enabled, changed_by, changed_at').eq('previous_enabled', true).eq('next_enabled', false).order('changed_at', { ascending: false });
+  assert.ifError(disableAuditError);
+  assert.equal(disableAudit.length, (disableAuditBefore ?? 0) + 1, 'a state change must create exactly one disable audit row');
+  const latestDisable = disableAudit[0];
+  assert.equal(latestDisable.changed_by, accounts.superAdmin.profileId, 'disable audit actor must be the super admin');
+  assert.ok(Number.isFinite(new Date(latestDisable.changed_at).getTime()), 'disable audit must include a valid timestamp');
+  await rpc(superAdmin, 'set_outgoing_feature_admissions_enabled', { p_enabled: false });
+  const { count: disableAuditAfterNoop, error: disableNoopCountError } = await admin.from('outgoing_feature_control_audit').select('id', { count: 'exact', head: true }).eq('previous_enabled', true).eq('next_enabled', false);
+  assert.ifError(disableNoopCountError);
+  assert.equal(disableAuditAfterNoop, disableAudit.length, 'repeating an unchanged disable must not create an audit row');
+  await rpc(superAdmin, 'set_outgoing_feature_admissions_enabled', { p_enabled: true });
 }
 
 async function assertAttendanceRegression(client, account, region) {
@@ -234,8 +251,17 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
   assert.ifError(revokePhotoPermissionError);
   const { error: noExplicitPhotoPermissionError } = await regionalHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
   assert.ok(noExplicitPhotoPermissionError, 'approval and management permissions must not implicitly grant outgoing-photo access');
+  const closedApprovalId = await createRequest(employee, '14:00', '14:10', 'closed approval');
+  const closedCancellationId = await createRequest(employee, '14:15', '14:25', 'closed cancellation');
+  const closedRejectionId = await createRequest(employee, '14:30', '14:40', 'closed rejection');
   await rpc((await signIn(accounts.superAdmin.email)), 'set_outgoing_feature_admissions_enabled', { p_enabled: false });
-  await expectError(() => employee.rpc('create_outgoing_request', requestInput('14:00', '14:30', 'closed after start')), /disabled/i);
+  await expectError(() => employee.rpc('create_outgoing_request', requestInput('14:45', '14:55', 'closed after start')), /disabled/i);
+  await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: closedApprovalId, p_decision: 'approved', p_note: null }), /disabled/i);
+  await rpc(employee, 'cancel_outgoing_request', { p_request_id: closedCancellationId });
+  await rpc(regionalHr, 'review_outgoing_request', { p_request_id: closedRejectionId, p_decision: 'rejected', p_note: 'closed-gate rejection remains allowed' });
+  const { data: closedHistory, error: closedHistoryError } = await employee.from('outgoing_request_review_history').select('action').eq('request_id', closedCancellationId);
+  assert.ifError(closedHistoryError);
+  assert.ok(closedHistory.some((row) => row.action === 'cancelled'), 'history must remain readable while admissions are closed');
   await upload(employee, 'outgoing-photos', `${basePath}/end.jpg`);
   const endKey = crypto.randomUUID();
   assert.equal(await rpc(employee, 'finish_outgoing_event', { ...startArgs(requestId, `${basePath}/end.jpg`, 3.139, 101.6869), p_idempotency_key: endKey }), eventId);
@@ -254,6 +280,8 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
   await expectError(() => employee.rpc('finish_outgoing_event', startArgs(activeRequestId, `${accounts.employee.profileId}/${activeRequestId}/start.jpg`, 3.139, 101.6869)), /cannot be finished|clock-out/i);
   const { data: exception, error: exceptionError } = await employee.from('outgoing_events').select('id, status').eq('request_id', activeRequestId).single();
   assert.ifError(exceptionError); assert.equal(exception.status, 'exception');
+  await rpc((await signIn(accounts.superAdmin.email)), 'set_outgoing_feature_admissions_enabled', { p_enabled: false });
+  assert.equal(await rpc(employee, 'reconcile_outgoing_exceptions', { p_employee_id: null }), 0, 'reconciliation remains callable while admissions are closed');
   await rpc(regionalHr, 'handle_outgoing_exception', { p_event_id: exception.id });
   await rpc(regionalHr, 'handle_outgoing_exception', { p_event_id: exception.id });
 }
