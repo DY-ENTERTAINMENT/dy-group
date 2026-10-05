@@ -1380,6 +1380,8 @@ export type Database = {
       cancel_outgoing_request: { Args: { p_request_id: string }; Returns: undefined };
       review_outgoing_request: { Args: { p_request_id: string; p_decision: 'approved' | 'rejected'; p_note?: string | null }; Returns: undefined };
       get_my_outgoing_approval_pending_count: { Args: Record<string, never>; Returns: number };
+      get_outgoing_feature_admissions_enabled: { Args: Record<string, never>; Returns: boolean };
+      set_outgoing_feature_admissions_enabled: { Args: { p_enabled: boolean }; Returns: undefined };
       start_outgoing_event: {
         Args: { p_request_id: string; p_photo_path: string; p_latitude: number; p_longitude: number; p_accuracy: number | null; p_idempotency_key: string };
         Returns: string;

@@ -29,6 +29,12 @@ export function useOutgoingPendingApprovalCount() {
       return;
     }
     try {
+      // The server is authoritative: when admissions are paused, do not leave
+      // a stale approval badge visible from an earlier enabled session.
+      if (!await outgoingService.getAdmissionsEnabled()) {
+        setCount(0);
+        return;
+      }
       setCount(await outgoingService.getPendingApprovalCount());
     } catch {
       // A notification badge must never block attendance navigation or expose

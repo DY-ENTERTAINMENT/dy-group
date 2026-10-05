@@ -10,7 +10,7 @@ on:
       target_ref:
         description: "Approved isolated Phase 3 test branch"
         required: true
-        default: "codex/phase3-isolated-db-validation"
+        default: "codex/phase3c-server-gate"
         type: string
 
 permissions:
@@ -46,10 +46,13 @@ jobs:
           TARGET_REF: ${{ inputs.target_ref }}
         run: |
           set -euo pipefail
-          test "$TARGET_REF" = "codex/phase3-isolated-db-validation" || {
+          case "$TARGET_REF" in
+            codex/phase3-isolated-db-validation|codex/phase3c-server-gate) ;;
+            *)
             echo "Refusing to run Phase 3 database validation against an unapproved ref: $TARGET_REF"
             exit 1
-          }
+            ;;
+          esac
           echo "Validated isolated ref: $TARGET_REF at $(git rev-parse HEAD)"
 
       - name: Set up Node.js for the local-only test harness
@@ -92,7 +95,8 @@ jobs:
             "$ci_dir/supabase/migrations"
           for migration in \
             202610020002_outgoing_requests_phase3a.sql \
-            202610030001_outgoing_events_phase3b.sql; do
+            202610030001_outgoing_events_phase3b.sql \
+            202610050001_outgoing_feature_server_gate.sql; do
             test -s "$ci_dir/supabase/migrations/$migration" || {
               echo "Selected ref does not contain required Phase 3 migration: $migration"
               exit 1

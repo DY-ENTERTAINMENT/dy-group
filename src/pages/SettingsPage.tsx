@@ -3,6 +3,7 @@ import { Edit3, Plus, RefreshCw, Search, Settings2, ToggleLeft, ToggleRight } fr
 import { useSearchParams } from 'react-router-dom';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { type SettingsFormValues, type SettingsModuleKey, type SettingsRecord, settingsService } from '../services/settings.service';
 import { type EmployeeListItem, type StaffOptions, staffService } from '../services/staff.service';
@@ -14,6 +15,7 @@ import {
 } from '../services/region-permission-settings.service';
 import type { RegionFeaturePermissionKey } from '../services/permission-runtime.service';
 import { menuItems, type MenuItem } from '../routes/menu';
+import { outgoingRealAdapter } from '../services/outgoing-real-adapter.service';
 
 type SettingsModule = {
   key: SettingsModuleKey | 'permissions' | 'region_permissions';
@@ -186,6 +188,10 @@ const scoutAssignmentEligiblePermissionKey = 'scout-assignment-eligible';
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
+  const permissions = usePermissions();
+  const canManageOutgoingService = permissions.canUse('outgoing-settings');
+  const [outgoingAdmissionsEnabled, setOutgoingAdmissionsEnabled] = useState<boolean | null>(null);
+  const [outgoingGateBusy, setOutgoingGateBusy] = useState(false);
   const [activeModuleKey, setActiveModuleKey] = useState<SettingsModule['key']>(() => getSettingsTabFromParams(searchParams));
   const [records, setRecords] = useState<SettingsRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<SettingsRecord | null>(null);
@@ -224,6 +230,28 @@ export function SettingsPage() {
       closeForm();
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!canManageOutgoingService) return;
+    void outgoingRealAdapter.getAdmissionsEnabled().then(setOutgoingAdmissionsEnabled).catch(() => setOutgoingAdmissionsEnabled(null));
+  }, [canManageOutgoingService]);
+
+  async function toggleOutgoingAdmissions() {
+    if (outgoingAdmissionsEnabled === null) return;
+    const next = !outgoingAdmissionsEnabled;
+    if (!window.confirm(next ? '确认启用外出服务？仅已获外出权限和区域授权的员工可使用。' : '确认停止新的外出申请、审批和开始外出？进行中的外出仍可正常结束。')) return;
+    setOutgoingGateBusy(true);
+    setError('');
+    try {
+      await outgoingRealAdapter.setAdmissionsEnabled(next);
+      setOutgoingAdmissionsEnabled(next);
+      setMessage(next ? '外出服务已启用。' : '外出服务已停止新的准入。');
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : '更新外出服务状态失败。');
+    } finally {
+      setOutgoingGateBusy(false);
+    }
+  }
 
   usePullToRefresh(() => loadSettings(activeModuleKey), [activeModuleKey]);
 
@@ -332,6 +360,8 @@ export function SettingsPage() {
     <section className="settings-page">
       {error ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
+
+      {canManageOutgoingService ? <section className="staff-list-panel" aria-label="外出服务设置"><div className="list-header"><div><span>外出设置</span><h3>外出服务准入</h3><p>{outgoingAdmissionsEnabled ? '已启用：具备权限及区域授权的员工可发起新的外出流程。' : '已关闭：不接受新申请、批准或开始外出；进行中的外出可收尾。'}</p></div><button className="secondary-action" type="button" disabled={outgoingGateBusy || outgoingAdmissionsEnabled === null} onClick={() => void toggleOutgoingAdmissions()}>{outgoingAdmissionsEnabled ? <ToggleRight size={17} /> : <ToggleLeft size={17} />}<span>{outgoingAdmissionsEnabled ? '停止新外出' : '启用外出服务'}</span></button></div></section> : null}
 
       <div className="settings-tabs" role="tablist" aria-label="系统设置模块">
         {visibleModules.map((moduleItem) => (
