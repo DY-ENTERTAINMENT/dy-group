@@ -8,8 +8,9 @@ import {
   type OutgoingRequestFormValues,
   type OutgoingRequestWithEvent,
 } from './outgoing.service';
+import { getOutgoingLifecycleStatus, type OutgoingLifecycleStatus } from './outgoing-event-relation';
 
-export type OutgoingLifecycleStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'in_progress' | 'completed' | 'exception';
+export type { OutgoingLifecycleStatus } from './outgoing-event-relation';
 
 export type OutgoingEmployeeState = {
   requests: OutgoingRequestWithEvent[];
@@ -169,8 +170,7 @@ function createOutgoingIdempotencyKey() {
 }
 
 export function lifecycleStatus(request: OutgoingRequestWithEvent): OutgoingLifecycleStatus {
-  const event = request.outgoing_events[0];
-  return event?.status ?? request.status;
+  return getOutgoingLifecycleStatus(request);
 }
 
 function selectCurrentRequest(requests: OutgoingRequestWithEvent[]) {

@@ -8,6 +8,7 @@ import {
   type OutgoingRequestFormValues,
   type OutgoingRequestWithEvent,
 } from '../services/outgoing-real-adapter.service';
+import { getOutgoingEvent } from '../services/outgoing-event-relation';
 import type { AttendanceEmployee } from '../services/attendanceManagement.service';
 import type { OutgoingType, Region } from '../types/database';
 
@@ -26,7 +27,7 @@ type ManagementPanelProps = {
 type OutgoingCapture = (request: OutgoingRequestWithEvent, phase: 'start' | 'end') => Promise<void>;
 
 const statusLabels: Record<OutgoingLifecycleStatus, string> = {
-  pending: '待审批', approved: '已批准', rejected: '已拒绝', cancelled: '已取消',
+  pending: '待审批', approved: '已批准', rejected: '已拒绝', cancelled: '已取消', expired: '已过期',
   in_progress: '外出中', completed: '已完成', exception: '外出异常',
 };
 
@@ -151,7 +152,7 @@ export function OutgoingRealManagementPanel({ regions, employees, canApprove, ca
   }
 
   async function handleException(request: OutgoingRequestWithEvent) {
-    const event = request.outgoing_events[0];
+    const event = getOutgoingEvent(request);
     if (!event) return;
     try {
       await outgoingRealAdapter.handleException(event.id);
@@ -181,13 +182,13 @@ export function OutgoingRealManagementPanel({ regions, employees, canApprove, ca
 
 function OutgoingEmployeeRequestCard({ request, onCancel, onHistory }: { request: OutgoingRequestWithEvent; onCancel: (request: OutgoingRequestWithEvent) => void; onHistory: (request: OutgoingRequestWithEvent) => void }) {
   const status = lifecycleStatus(request);
-  const event = request.outgoing_events[0];
+  const event = getOutgoingEvent(request);
   return <article className={`outgoing-preview-card outgoing-preview-${status}`}><div className="outgoing-preview-card-head"><div className="outgoing-status-heading"><Timer size={20} /><div><span>外出申请</span><h4>{request.reason}</h4></div></div><OutgoingStatusBadge status={status} /></div><div className="outgoing-preview-meta"><span><MapPin size={15} />{request.location}</span><span><CalendarDays size={15} />{request.outgoing_date}</span><span><Clock3 size={15} />预计 {request.planned_start_time} – {request.planned_return_time}</span></div>{event?.status === 'in_progress' ? <p>实际开始：{formatDateTime(event.started_at)}</p> : null}{event?.status === 'completed' ? <p>实际开始：{formatDateTime(event.started_at)} · 实际结束：{formatDateTime(event.ended_at)}</p> : null}{event?.status === 'exception' ? <p>异常：{event.exception_reason} · {event.exception_handled_at ? '已处理' : '待处理'}</p> : null}{request.status === 'rejected' ? <p>拒绝原因：{request.review_note}</p> : null}<div className="outgoing-preview-actions">{(request.status === 'pending' || request.status === 'approved') && !event ? <button className="outgoing-cancel-button" type="button" onClick={() => onCancel(request)}><XCircle size={18} /><span>取消申请</span></button> : null}<button className="text-link-button" type="button" onClick={() => onHistory(request)}>查看我的外出申请记录</button></div></article>;
 }
 
 function OutgoingManagementCard({ request, employeeName, canApprove, canReject, canHandleExceptions, onReview, onDetail, onHandle }: { request: OutgoingRequestWithEvent; employeeName: string; canApprove: boolean; canReject: boolean; canHandleExceptions: boolean; onReview: (decision: 'approved' | 'rejected') => void; onDetail: () => void; onHandle: () => void }) {
   const status = lifecycleStatus(request);
-  const event = request.outgoing_events[0];
+  const event = getOutgoingEvent(request);
   return <article className="outgoing-management-card"><button className="outgoing-management-card-main" type="button" onClick={onDetail}><span>{typeLabel(request.outgoing_type)}</span><h3>{employeeName}</h3><p>{request.reason}</p><p className="outgoing-management-location"><MapPin size={14} />{request.location}</p><p className="outgoing-management-time"><CalendarDays size={14} />{request.outgoing_date} · <Clock3 size={14} />预计 {request.planned_start_time} – {request.planned_return_time}</p>{request.review_note ? <p>拒绝原因：{request.review_note}</p> : null}{event?.status === 'in_progress' ? <p>实际开始：{formatDateTime(event.started_at)}</p> : null}</button><div className="outgoing-management-card-actions"><OutgoingStatusBadge status={status} />{request.status === 'pending' ? <div className="outgoing-approval-actions"><button className="outgoing-reject-button" type="button" disabled={!canReject} onClick={() => onReview('rejected')}><XCircle size={16} /><span>拒绝</span></button><button className="outgoing-approve-button" type="button" disabled={!canApprove} onClick={() => onReview('approved')}><CheckCircle2 size={16} /><span>批准</span></button></div> : null}{event?.status === 'exception' ? <button className="outgoing-handled-button" type="button" disabled={!canHandleExceptions || Boolean(event.exception_handled_at)} onClick={onHandle}><CheckCircle2 size={16} /><span>{event.exception_handled_at ? '已处理' : '标记已处理'}</span></button> : null}</div></article>;
 }
 
@@ -214,7 +215,7 @@ function OutgoingReviewModal({ decision, note, onNoteChange, onClose, onSubmit }
 }
 
 function OutgoingDetailModal({ request, employeeName, onClose }: { request: OutgoingRequestWithEvent; employeeName: string; onClose: () => void }) {
-  const event = request.outgoing_events[0];
+  const event = getOutgoingEvent(request);
   const [photoUrl, setPhotoUrl] = useState('');
   const [error, setError] = useState('');
   async function showPhoto(path: string | null) { if (!path) return; try { setPhotoUrl(await outgoingRealAdapter.getPhotoSignedUrl(path)); } catch (reason) { setError(messageOf(reason)); } }

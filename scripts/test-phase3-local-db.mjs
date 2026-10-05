@@ -206,11 +206,13 @@ async function createLocation(regionId) {
 
 async function assertRequestApprovalAndRls(employee, regionalHr, crossRegionHr, superAdmin, accounts) {
   const requestId = await createRequest(employee, '09:00', '09:30', 'approval and RLS');
+  await assertEmbeddedOutgoingEvent(employee, requestId, null, 'pending request must embed a null to-one outgoing event');
   await expectError(() => crossRegionHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /permission/i);
   const { error: selfApprovalGrantError } = await admin.from('employee_permission_overrides').upsert({ employee_id: accounts.employee.employeeId, permission_key: 'outgoing-approval', can_view: true, can_use: true, effect: 'grant' }, { onConflict: 'employee_id,permission_key' });
   assert.ifError(selfApprovalGrantError);
   await expectError(() => employee.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /own outgoing request/i);
   await rpc(regionalHr, 'review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null });
+  await assertEmbeddedOutgoingEvent(employee, requestId, null, 'approved request must embed a null to-one outgoing event before start');
   await expectError(() => regionalHr.rpc('review_outgoing_request', { p_request_id: requestId, p_decision: 'approved', p_note: null }), /final|already/i);
   const { data: own, error: ownError } = await employee.from('outgoing_requests').select('id').eq('id', requestId);
   assert.ifError(ownError); assert.equal(own.length, 1);
@@ -241,6 +243,7 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
   await upload(employee, 'outgoing-photos', `${basePath}/start.jpg`);
   const key = crypto.randomUUID();
   const eventId = await rpc(employee, 'start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: key });
+  await assertEmbeddedOutgoingEvent(employee, requestId, eventId, 'started request must embed one outgoing event object');
   assert.equal(await rpc(employee, 'start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: key }), eventId, 'same start key must be idempotent');
   await expectError(() => employee.rpc('start_outgoing_event', { ...startArgs(requestId, `${basePath}/start.jpg`, 3.139, 101.6869), p_idempotency_key: crypto.randomUUID() }), /already/i);
   const { error: crossPhotoError } = await crossRegionHr.storage.from('outgoing-photos').download(`${basePath}/start.jpg`);
@@ -287,6 +290,13 @@ async function assertOutgoingLifecycleAndReconciliation(employee, regionalHr, cr
 }
 
 async function createRequest(client, start, end, reason) { return rpc(client, 'create_outgoing_request', requestInput(start, end, reason)); }
+async function assertEmbeddedOutgoingEvent(client, requestId, expectedEventId, message) {
+  const { data, error } = await client.from('outgoing_requests').select('id, outgoing_events(*)').eq('id', requestId).single();
+  assert.ifError(error);
+  assert.equal(Array.isArray(data.outgoing_events), false, `${message}: PostgREST must return a to-one object or null, not an array`);
+  if (expectedEventId === null) assert.equal(data.outgoing_events, null, message);
+  else assert.equal(data.outgoing_events?.id, expectedEventId, message);
+}
 async function approvedRequest(employee, hr, start, end, reason) { const id = await createRequest(employee, start, end, reason); await rpc(hr, 'review_outgoing_request', { p_request_id: id, p_decision: 'approved', p_note: null }); return id; }
 function requestInput(start, end, reason) { return { p_outgoing_date: today, p_planned_start_time: start, p_planned_return_time: end, p_outgoing_type: 'client_visit', p_location: 'Phase 3 local CI fixture', p_reason: reason, p_related_contact: null, p_remarks: null }; }
 function startArgs(requestId, path, latitude, longitude) { return { p_request_id: requestId, p_photo_path: path, p_latitude: latitude, p_longitude: longitude, p_accuracy: 5, p_idempotency_key: crypto.randomUUID() }; }
