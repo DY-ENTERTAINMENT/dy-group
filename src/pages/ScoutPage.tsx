@@ -199,6 +199,19 @@ type CreatorGroupSummary = {
   dualPlatform: number;
 };
 
+type CreatorQuickFilterHandlers = {
+  onPriority: () => void;
+  onRegistrationType: (value: CreatorRegistrationType) => void;
+  onOperationStatus: (value: NonNullable<CreatorProfile['operation_status']>) => void;
+  onCreatorType: (value: CreatorType) => void;
+  onStatus: (value: Exclude<CreatorStatusFilter, 'all'>) => void;
+  onPlatform: (value: CreatorPlatform) => void;
+  onRegion: (value: string) => void;
+  onManager: (value: string) => void;
+  onScout: (value: string) => void;
+  onRevenueCycle: (value: NonNullable<CreatorProfile['revenue_cycle']>) => void;
+};
+
 export function ScoutPage({ mode }: ScoutPageProps) {
   const { profile } = useAuth();
   const permissions = usePermissions();
@@ -1803,7 +1816,23 @@ function CreatorStatsPanel({
         <div className="table-state">暂无主播资料。</div>
       ) : (
         <>
-          <CreatorTable creatorGroups={paginatedCreatorGroups} showScout={isManagement} onView={onView} />
+          <CreatorTable
+            creatorGroups={paginatedCreatorGroups}
+            showScout={isManagement}
+            onView={onView}
+            quickFilters={{
+              onPriority: () => onPriorityFilter('priority'),
+              onRegistrationType: onCreatorRegistrationTypeFilter,
+              onOperationStatus: onOperationStatusFilter,
+              onCreatorType: onCreatorTypeFilter,
+              onStatus: onCreatorStatusFilter,
+              onPlatform: onPlatformFilter,
+              onRegion: onRegionFilter,
+              onManager: onManagerFilter,
+              onScout: onScoutFilter,
+              onRevenueCycle: onRevenueCycleFilter,
+            }}
+          />
           <CreatorPagination
             currentPage={safeCurrentPage}
             pageSize={pageSize}
@@ -1962,12 +1991,12 @@ function CreatorMonthOptions({ selectedMonth }: { selectedMonth: string }) {
   return <>{months.map((value) => <option key={value} value={value}>{value}</option>)}</>;
 }
 
-function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: CreatorProfileGroup[]; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
+function CreatorTable({ creatorGroups, showScout, onView, quickFilters }: { creatorGroups: CreatorProfileGroup[]; showScout: boolean; onView: (group: CreatorProfileGroup) => void; quickFilters: CreatorQuickFilterHandlers }) {
   return (
     <>
       <div className="creator-mobile-cards">
         {creatorGroups.map((group) => (
-          <CreatorMobileCard key={group.id} group={group} showScout={showScout} onView={onView} />
+          <CreatorMobileCard key={group.id} group={group} showScout={showScout} onView={onView} quickFilters={quickFilters} />
         ))}
       </div>
       <div className="creator-list-wrap">
@@ -1988,32 +2017,32 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
             <tr key={group.id} className="creator-profile-row">
               <td>
                 <strong className="creator-row-name">{group.displayName}</strong>
-                <span className={`creator-row-registration creator-row-registration--${group.profiles.some((creator) => creator.registration_type === 'existing_creator') ? 'existing' : 'new'}`}>{getCreatorRegistrationTypeLabel(group.profiles)}</span>
-                <CreatorManagementBadges creator={group.profiles[0]} entityLevel />
+                <CreatorRegistrationBadge profiles={group.profiles} quickFilters={quickFilters} />
+                <CreatorManagementBadges creator={group.profiles[0]} entityLevel quickFilters={quickFilters} />
               </td>
               <td>
                 <div className="creator-platform-lines">
                   {group.profiles.map((creator) => (
                     <div key={creator.id} className={`creator-platform-line creator-platform-line--${creator.platform}`}>
-                      <span className="creator-platform-name">
+                      <CreatorQuickFilterButton className="creator-platform-name" onClick={() => quickFilters.onPlatform(creator.platform)} ariaLabel={`筛选${platformLabels[creator.platform]}主播`}>
                         <PlatformLogo platform={creator.platform} />
                         <span>{platformLabels[creator.platform]}</span>
-                      </span>
+                      </CreatorQuickFilterButton>
                       <span className="creator-platform-details">
                         <span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}：{creator.platform_account}</span>
                         <span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音UID'}：{creator.platform_user_id}</span>
-                        <span>主播形式：{creatorTypeLabels[creator.creator_type]}</span>
-                        <CreatorRevenueSettingMeta creator={creator} />
+                        <span>主播形式：<CreatorQuickFilterButton onClick={() => quickFilters.onCreatorType(creator.creator_type)} ariaLabel={`筛选${creatorTypeLabels[creator.creator_type]}主播`}>{creatorTypeLabels[creator.creator_type]}</CreatorQuickFilterButton></span>
+                        <CreatorRevenueSettingMeta creator={creator} onQuickFilter={quickFilters.onRevenueCycle} />
                       </span>
                     </div>
                   ))}
                 </div>
               </td>
-              <td>{getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')}</td>
-              <td>{group.managerName}</td>
-              {showScout ? <td>{group.scoutName}</td> : null}
+              <td><CreatorGroupQuickFilter profiles={group.profiles} label={getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '')} getId={(creator) => creator.region_id} onQuickFilter={quickFilters.onRegion} ariaLabel="筛选区域" /></td>
+              <td><CreatorGroupQuickFilter profiles={group.profiles} label={group.managerName} getId={(creator) => creator.manager_employee_id} onQuickFilter={quickFilters.onManager} ariaLabel="筛选经纪人" /></td>
+              {showScout ? <td><CreatorGroupQuickFilter profiles={group.profiles} label={group.scoutName} getId={(creator) => creator.scout_employee_id} onQuickFilter={quickFilters.onScout} ariaLabel="筛选星探" /></td> : null}
               <td>
-                <CreatorStatusBadge status={group.status} />
+                <CreatorStatusBadge status={group.status} onQuickFilter={quickFilters.onStatus} />
               </td>
               <td>
                 <button className="creator-view-button" type="button" onClick={() => onView(group)}>
@@ -2030,7 +2059,7 @@ function CreatorTable({ creatorGroups, showScout, onView }: { creatorGroups: Cre
   );
 }
 
-function CreatorMobileCard({ group, showScout, onView }: { group: CreatorProfileGroup; showScout: boolean; onView: (group: CreatorProfileGroup) => void }) {
+function CreatorMobileCard({ group, showScout, onView, quickFilters }: { group: CreatorProfileGroup; showScout: boolean; onView: (group: CreatorProfileGroup) => void; quickFilters: CreatorQuickFilterHandlers }) {
   const primaryProfile = group.profiles[0];
 
   return (
@@ -2038,13 +2067,13 @@ function CreatorMobileCard({ group, showScout, onView }: { group: CreatorProfile
       <header className="creator-mobile-card-header">
         <div className="creator-mobile-card-identity">
           <strong className="creator-row-name">{group.displayName}</strong>
-          <span className={`creator-row-registration creator-row-registration--${group.profiles.some((creator) => creator.registration_type === 'existing_creator') ? 'existing' : 'new'}`}>{getCreatorRegistrationTypeLabel(group.profiles)}</span>
+          <CreatorRegistrationBadge profiles={group.profiles} quickFilters={quickFilters} />
         </div>
-        <CreatorStatusBadge status={group.status} />
+        <CreatorStatusBadge status={group.status} onQuickFilter={quickFilters.onStatus} />
       </header>
 
       <div className="creator-mobile-card-badges">
-        <CreatorManagementBadges creator={primaryProfile} entityLevel />
+        <CreatorManagementBadges creator={primaryProfile} entityLevel quickFilters={quickFilters} />
       </div>
 
       <div className="creator-mobile-platforms">
@@ -2052,22 +2081,22 @@ function CreatorMobileCard({ group, showScout, onView }: { group: CreatorProfile
           <section key={creator.id} className="creator-mobile-platform">
             <div className="creator-mobile-platform-heading">
               <PlatformLogo platform={creator.platform} />
-              <strong>{platformLabels[creator.platform]}</strong>
+              <CreatorQuickFilterButton onClick={() => quickFilters.onPlatform(creator.platform)} ariaLabel={`筛选${platformLabels[creator.platform]}主播`}>{platformLabels[creator.platform]}</CreatorQuickFilterButton>
             </div>
             <div className="creator-mobile-platform-details">
               <div><span>{creator.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'}</span><strong>{creator.platform_account || '-'}</strong></div>
               <div><span>{creator.platform === 'tiktok' ? 'TikTok ID' : '抖音 UID'}</span><strong>{creator.platform_user_id || '-'}</strong></div>
-              <div><span>直播形式</span><strong>{creatorTypeLabels[creator.creator_type]}</strong></div>
-              <div><span>流水填写</span><strong><CreatorRevenueSettingMeta creator={creator} /></strong></div>
+              <div><span>直播形式</span><strong><CreatorQuickFilterButton onClick={() => quickFilters.onCreatorType(creator.creator_type)} ariaLabel={`筛选${creatorTypeLabels[creator.creator_type]}主播`}>{creatorTypeLabels[creator.creator_type]}</CreatorQuickFilterButton></strong></div>
+              <div><span>流水填写</span><strong><CreatorRevenueSettingMeta creator={creator} onQuickFilter={quickFilters.onRevenueCycle} /></strong></div>
             </div>
           </section>
         ))}
       </div>
 
       <div className={`creator-mobile-card-meta${showScout ? ' creator-mobile-card-meta--with-scout' : ''}`}>
-        <div><span>区域</span><strong>{getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '') || '-'}</strong></div>
-        <div><span>经纪人</span><strong>{group.managerName || '-'}</strong></div>
-        {showScout ? <div><span>星探</span><strong>{group.scoutName || '-'}</strong></div> : null}
+        <div><span>区域</span><strong><CreatorGroupQuickFilter profiles={group.profiles} label={getConsistentValue(group.profiles, (creator) => creator.region?.code ?? creator.region?.name ?? '') || '-'} getId={(creator) => creator.region_id} onQuickFilter={quickFilters.onRegion} ariaLabel="筛选区域" /></strong></div>
+        <div><span>经纪人</span><strong><CreatorGroupQuickFilter profiles={group.profiles} label={group.managerName || '-'} getId={(creator) => creator.manager_employee_id} onQuickFilter={quickFilters.onManager} ariaLabel="筛选经纪人" /></strong></div>
+        {showScout ? <div><span>星探</span><strong><CreatorGroupQuickFilter profiles={group.profiles} label={group.scoutName || '-'} getId={(creator) => creator.scout_employee_id} onQuickFilter={quickFilters.onScout} ariaLabel="筛选星探" /></strong></div> : null}
       </div>
 
       <button className="creator-view-button creator-mobile-view-button" type="button" onClick={() => onView(group)}>
@@ -2136,19 +2165,47 @@ function CreatorTypeBadge({ type }: { type: CreatorType }) {
   return <span className={`creator-type-badge creator-type-badge--${type === '5+1' ? 'plus' : 'standard'} creator-type-badge--${type.replace('+', '-plus-')}`}>{creatorTypeLabels[type]}</span>;
 }
 
-function CreatorStatusBadge({ status }: { status: CreatorGroupStatus }) {
-  return <span className={`creator-status-badge creator-status-badge--${status}`}>{getCreatorStatusLabel(status)}</span>;
+function CreatorQuickFilterButton({ children, className = '', onClick, ariaLabel }: { children: ReactNode; className?: string; onClick: () => void; ariaLabel: string }) {
+  return <button type="button" className={`creator-quick-filter${className ? ` ${className}` : ''}`} onClick={onClick} aria-label={ariaLabel}>{children}</button>;
 }
 
-function CreatorManagementBadges({ creator, entityLevel = false }: { creator: CreatorProfile; entityLevel?: boolean }) {
+function getSingleProfileValue(profiles: CreatorProfile[], getValue: (creator: CreatorProfile) => string | null | undefined) {
+  const values = Array.from(new Set(profiles.map(getValue).filter((value): value is string => Boolean(value))));
+  return values.length === 1 && profiles.every((creator) => Boolean(getValue(creator))) ? values[0] : null;
+}
+
+function CreatorGroupQuickFilter({ profiles, label, getId, onQuickFilter, ariaLabel }: { profiles: CreatorProfile[]; label: string; getId: (creator: CreatorProfile) => string | null | undefined; onQuickFilter: (value: string) => void; ariaLabel: string }) {
+  const id = getSingleProfileValue(profiles, getId);
+  if (!id || !label || label === '-' || label === '资料不同') return <>{label || '-'}</>;
+  return <CreatorQuickFilterButton onClick={() => onQuickFilter(id)} ariaLabel={`${ariaLabel}：${label}`}>{label}</CreatorQuickFilterButton>;
+}
+
+function CreatorRegistrationBadge({ profiles, quickFilters }: { profiles: CreatorProfile[]; quickFilters: CreatorQuickFilterHandlers }) {
+  const registrationType = getSingleProfileValue(profiles, (creator) => creator.registration_type);
+  const label = getCreatorRegistrationTypeLabel(profiles);
+  const className = `creator-row-registration creator-row-registration--${registrationType === 'existing_creator' ? 'existing' : 'new'}`;
+  if (!registrationType) return <span className={className}>{label}</span>;
+  return <CreatorQuickFilterButton className={className} onClick={() => quickFilters.onRegistrationType(registrationType as CreatorRegistrationType)} ariaLabel={`筛选登记类型：${label}`}>{label}</CreatorQuickFilterButton>;
+}
+
+function CreatorStatusBadge({ status, onQuickFilter }: { status: CreatorGroupStatus; onQuickFilter?: (value: Exclude<CreatorStatusFilter, 'all'>) => void }) {
+  const label = getCreatorStatusLabel(status);
+  const className = `creator-status-badge creator-status-badge--${status}`;
+  if (!onQuickFilter || status === 'mixed') return <span className={className}>{label}</span>;
+  return <CreatorQuickFilterButton className={className} onClick={() => onQuickFilter(status)} ariaLabel={`筛选状态：${label}`}>{label}</CreatorQuickFilterButton>;
+}
+
+function CreatorManagementBadges({ creator, entityLevel = false, quickFilters }: { creator: CreatorProfile; entityLevel?: boolean; quickFilters?: CreatorQuickFilterHandlers }) {
   const operationStatus = creator.operation_status ?? 'normal';
   const operationLabels: Record<string, string> = { normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' };
-  return entityLevel ? <span className="creator-management-badges">{creator.is_priority ? <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}<span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabels[operationStatus] ?? '其他'}</span></span> : null;
+  const operationLabel = operationLabels[operationStatus] ?? '其他';
+  return entityLevel ? <span className="creator-management-badges">{creator.is_priority ? quickFilters ? <CreatorQuickFilterButton className="creator-management-badge creator-management-badge--priority" onClick={quickFilters.onPriority} ariaLabel="筛选重点关注主播">⭐ 重点关注</CreatorQuickFilterButton> : <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}{quickFilters ? <CreatorQuickFilterButton className={`creator-management-badge creator-management-badge--operation-${operationStatus}`} onClick={() => quickFilters.onOperationStatus(operationStatus)} ariaLabel={`筛选运营状态：${operationLabel}`}>{operationLabel}</CreatorQuickFilterButton> : <span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabel}</span>}</span> : null;
 }
 
-function CreatorRevenueSettingMeta({ creator }: { creator: CreatorProfile }) {
+function CreatorRevenueSettingMeta({ creator, onQuickFilter }: { creator: CreatorProfile; onQuickFilter?: (value: NonNullable<CreatorProfile['revenue_cycle']>) => void }) {
   const cycle = creator.revenue_cycle === 'monthly' ? '月流水' : creator.revenue_cycle === 'none' ? '不需要填写' : '周流水';
-  return <span>流水：{cycle}</span>;
+  const value = creator.revenue_cycle ?? 'weekly';
+  return <span>流水：{onQuickFilter ? <CreatorQuickFilterButton onClick={() => onQuickFilter(value)} ariaLabel={`筛选${cycle}主播`}>{cycle}</CreatorQuickFilterButton> : cycle}</span>;
 }
 
 function PlatformLogo({ platform }: { platform: CreatorPlatform }) {

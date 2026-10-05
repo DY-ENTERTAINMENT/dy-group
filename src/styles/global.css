@@ -9500,6 +9500,23 @@ button.leave-chip:disabled {
 .creator-management-badge--input { background: #f1f5f9; color: #526174; }
 .creator-platform-revenue-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }.creator-platform-revenue-card { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 9px; }.creator-platform-revenue-card > strong { display: inline-flex; align-items: center; gap: 6px; }.creator-platform-revenue-card > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
+.creator-quick-filter { display: inline-flex; align-items: inherit; min-width: 0; margin: 0; padding: 0; border: 0; color: inherit; font: inherit; line-height: inherit; text-align: inherit; background: transparent; cursor: pointer; }
+.creator-quick-filter:hover { filter: brightness(.82); }
+.creator-quick-filter:focus-visible { outline: 2px solid var(--dy-purple, #7c3aed); outline-offset: 2px; border-radius: 5px; }
+.creator-quick-filter.creator-row-registration { min-height: 20px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.creator-quick-filter.creator-row-registration--new { color: #287153; background: #eaf8f0; }
+.creator-quick-filter.creator-row-registration--existing { color: #9a6412; background: #fff4dc; }
+.creator-quick-filter.creator-status-badge { min-height: 24px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.creator-quick-filter.creator-status-badge--active { color: #166534; background: #dcfce7; }
+.creator-quick-filter.creator-status-badge--invalid { color: #7f1d1d; background: #fee2e2; }
+.creator-quick-filter.creator-management-badge { min-height: 20px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+.creator-quick-filter.creator-management-badge--priority { color: #926d15; background: #fff7df; }
+.creator-quick-filter.creator-management-badge--operation-normal { color: #27765a; background: #edf8f2; }
+.creator-quick-filter.creator-management-badge--operation-paused, .creator-quick-filter.creator-management-badge--operation-long_term_stopped { color: #9a6813; background: #fff7e8; }
+.creator-quick-filter.creator-management-badge--operation-resigned, .creator-quick-filter.creator-management-badge--operation-terminated, .creator-quick-filter.creator-management-badge--operation-other { color: #697386; background: #f3f4f6; }
+.creator-profile-table .creator-quick-filter.creator-platform-name { display: grid; grid-column: 1 / span 2; grid-template-columns: 20px 72px; align-items: center; }
+.creator-mobile-platform-heading > .creator-quick-filter { font-weight: 850; }
+
 .creator-view-button {
   display: inline-flex;
   align-items: center;
