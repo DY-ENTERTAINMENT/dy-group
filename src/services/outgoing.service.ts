@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { OutgoingEvent, OutgoingRequest, OutgoingRequestReviewHistory, OutgoingType } from '../types/database';
 import { assertOutgoingRealServiceEnabled } from './outgoing-feature.service';
+import { getOutgoingEvent, type OutgoingEventRelation } from './outgoing-event-relation';
 
 export type OutgoingRequestFormValues = {
   outgoingDate: string;
@@ -28,7 +29,8 @@ export type OutgoingCaptureValues = {
 };
 
 export type OutgoingRequestWithEvent = OutgoingRequest & {
-  outgoing_events: OutgoingEvent[];
+  /** PostgREST to-one embed: null until the approved request is started. */
+  outgoing_events: OutgoingEvent | null;
 };
 
 export type OutgoingManagementFilters = {
@@ -99,7 +101,7 @@ export const outgoingService = {
       .order('outgoing_date', { ascending: false })
       .order('planned_start_time', { ascending: false });
     if (error) throw error;
-    return (data ?? []) as unknown as OutgoingRequestWithEvent[];
+    return normalizeOutgoingRequests(data);
   },
 
   async listManagedRequests(filters: OutgoingManagementFilters = {}) {
@@ -117,8 +119,8 @@ export const outgoingService = {
     if (filters.requestStatus) query = query.eq('status', filters.requestStatus);
     const { data, error } = await query;
     if (error) throw error;
-    const rows = (data ?? []) as unknown as OutgoingRequestWithEvent[];
-    return filters.eventStatus ? rows.filter((row) => row.outgoing_events.some((event) => event.status === filters.eventStatus)) : rows;
+    const rows = normalizeOutgoingRequests(data);
+    return filters.eventStatus ? rows.filter((row) => getOutgoingEvent(row)?.status === filters.eventStatus) : rows;
   },
 
   async listReviewHistory(requestId: string) {
@@ -189,6 +191,15 @@ export const outgoingService = {
     return data.signedUrl;
   },
 };
+
+/** Normalize the embedded relation once at the PostgREST boundary. */
+function normalizeOutgoingRequests(data: unknown): OutgoingRequestWithEvent[] {
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => {
+    const request = row as OutgoingRequest & { outgoing_events?: OutgoingEventRelation };
+    return { ...request, outgoing_events: getOutgoingEvent(request) };
+  });
+}
 
 async function resolveOutgoingPhotoPath(values: OutgoingCaptureValues, phase: 'start' | 'end') {
   if (values.photoPath) return values.photoPath;

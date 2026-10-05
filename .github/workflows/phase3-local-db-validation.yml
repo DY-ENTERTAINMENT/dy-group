@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET_REF" in
-            codex/phase3-isolated-db-validation|codex/phase3c-server-gate) ;;
+            codex/phase3-isolated-db-validation|codex/phase3c-server-gate|codex/phase3-outgoing-event-shape-fix) ;;
             *)
             echo "Refusing to run Phase 3 database validation against an unapproved ref: $TARGET_REF"
             exit 1
