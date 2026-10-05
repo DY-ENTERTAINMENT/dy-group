@@ -48,6 +48,17 @@ const requestWithEventSelect = '*, outgoing_events(*)';
  * mock UI until the Phase 3 migrations have been verified in an isolated DB.
  */
 export const outgoingService = {
+  async getAdmissionsEnabled() {
+    assertOutgoingRealServiceEnabled();
+    const { data, error } = await supabase.rpc('get_outgoing_feature_admissions_enabled');
+    if (error) throw error;
+    return data === true;
+  },
+  async setAdmissionsEnabled(enabled: boolean) {
+    assertOutgoingRealServiceEnabled();
+    const { error } = await supabase.rpc('set_outgoing_feature_admissions_enabled', { p_enabled: enabled });
+    if (error) throw error;
+  },
   async createRequest(values: OutgoingRequestFormValues) {
     assertOutgoingRealServiceEnabled();
     const { data, error } = await supabase.rpc('create_outgoing_request', {

@@ -27,6 +27,15 @@ export type OutgoingManagementState = {
  * outgoing.service, so importing this module has no network side effects.
  */
 export const outgoingRealAdapter = {
+  async getAdmissionsEnabled() {
+    assertOutgoingRealServiceEnabled();
+    return outgoingService.getAdmissionsEnabled();
+  },
+  async setAdmissionsEnabled(enabled: boolean) {
+    assertOutgoingRealServiceEnabled();
+    await outgoingService.setAdmissionsEnabled(enabled);
+    notifyOutgoingRealDataChanged();
+  },
   async loadEmployeeState(): Promise<OutgoingEmployeeState> {
     assertOutgoingRealServiceEnabled();
     const requests = await outgoingService.listMyRequests();
