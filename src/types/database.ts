@@ -175,6 +175,19 @@ export type AttendanceRecord = {
   created_at: string;
 };
 
+/** Immutable audit row: the linked clock-out remains in attendance_records. */
+export type AttendanceClockOutRecovery = {
+  id: string;
+  attendance_record_id: string;
+  employee_id: string;
+  profile_id: string;
+  original_clock_out_at: string;
+  recovered_at: string;
+  recovered_by: string;
+  reason: 'break_clock_out_mistake';
+  created_at: string;
+};
+
 export type AttendanceAbnormalReviewHistory = {
   id: string;
   attendance_record_id: string;
@@ -206,7 +219,7 @@ export type OutgoingReviewAction = 'submitted' | 'approved' | 'rejected' | 'canc
 export type OutgoingRequest = { id: string; profile_id: string; employee_id: string; region_id: string; outgoing_date: string; planned_start_time: string; planned_return_time: string; outgoing_type: OutgoingType; location: string; reason: string; related_contact: string | null; remarks: string | null; status: OutgoingRequestStatus; reviewed_by: string | null; reviewed_by_name: string | null; reviewed_at: string | null; review_note: string | null; cancelled_by: string | null; cancelled_at: string | null; created_at: string; updated_at: string; };
 export type OutgoingRequestReviewHistory = { id: string; request_id: string; action: OutgoingReviewAction; actor_profile_id: string | null; actor_name: string; previous_status: OutgoingRequestStatus | null; next_status: OutgoingRequestStatus | null; note: string | null; created_at: string; };
 export type OutgoingEventStatus = 'in_progress' | 'completed' | 'exception';
-export type OutgoingEventAuditAction = 'started' | 'completed' | 'exception_detected' | 'exception_handled';
+export type OutgoingEventAuditAction = 'started' | 'completed' | 'exception_detected' | 'exception_handled' | 'clock_out_recovered';
 export type OutgoingEvent = { id: string; request_id: string; profile_id: string; employee_id: string; region_id: string; status: OutgoingEventStatus; started_at: string; start_photo_path: string; start_latitude: number; start_longitude: number; start_accuracy: number | null; start_attendance_location_id: string; start_distance_meters: number; start_idempotency_key: string; ended_at: string | null; end_photo_path: string | null; end_latitude: number | null; end_longitude: number | null; end_accuracy: number | null; end_attendance_location_id: string | null; end_distance_meters: number | null; end_idempotency_key: string | null; exception_reason: string | null; exception_detected_at: string | null; exception_handled_by: string | null; exception_handled_at: string | null; created_at: string; updated_at: string; };
 export type OutgoingEventAuditHistory = { id: string; event_id: string; request_id: string; action: OutgoingEventAuditAction; actor_profile_id: string | null; actor_name: string; note: string | null; created_at: string; };
 
@@ -668,6 +681,18 @@ export type Database = {
             referencedRelation: 'attendance_locations';
             referencedColumns: ['id'];
           },
+        ];
+      };
+      attendance_clock_out_recoveries: {
+        Row: AttendanceClockOutRecovery;
+        Insert: Pick<AttendanceClockOutRecovery, 'attendance_record_id' | 'employee_id' | 'profile_id' | 'original_clock_out_at' | 'recovered_by' | 'reason'> &
+          Partial<Pick<AttendanceClockOutRecovery, 'id' | 'recovered_at' | 'created_at'>>;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'attendance_clock_out_recoveries_attendance_record_id_fkey'; columns: ['attendance_record_id']; isOneToOne: true; referencedRelation: 'attendance_records'; referencedColumns: ['id']; },
+          { foreignKeyName: 'attendance_clock_out_recoveries_employee_id_fkey'; columns: ['employee_id']; isOneToOne: false; referencedRelation: 'employees'; referencedColumns: ['id']; },
+          { foreignKeyName: 'attendance_clock_out_recoveries_profile_id_fkey'; columns: ['profile_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id']; },
+          { foreignKeyName: 'attendance_clock_out_recoveries_recovered_by_fkey'; columns: ['recovered_by']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id']; },
         ];
       };
       attendance_abnormal_review_history: {
@@ -1371,6 +1396,10 @@ export type Database = {
           p_ip_address: string | null;
           p_device_info: string;
         };
+        Returns: string;
+      };
+      recover_my_break_clock_out: {
+        Args: Record<string, never>;
         Returns: string;
       };
       create_outgoing_request: {

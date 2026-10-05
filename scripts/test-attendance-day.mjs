@@ -16,6 +16,13 @@ assert.equal(logic.summarizeAttendanceDay([record('1', 'break_start', '2026-10-0
 assert.equal(logic.summarizeAttendanceDay([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'clock_in', '2026-10-02T02:00:00Z')]).anomalies.includes('重复上班打卡'), true);
 assert.equal(logic.summarizeAttendanceDay([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'break_end', '2026-10-02T02:00:00Z')]).anomalies.includes('缺少开始休息记录'), true);
 assert.equal(logic.summarizeAttendanceDay([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'clock_out', '2026-10-02T02:00:00Z')]).status, 'clocked_out');
+const mistakenClockOut = { ...record('3', 'clock_out', '2026-10-02T03:00:00Z'), clockOutRecovery: { id: 'recovery' } };
+const breakMistakeRecords = [record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'break_start', '2026-10-02T02:00:00Z'), mistakenClockOut];
+assert.equal(logic.summarizeAttendanceDay(breakMistakeRecords).status, 'on_break');
+assert.equal(logic.findRecoverableBreakClockOut([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'break_start', '2026-10-02T02:00:00Z'), record('3', 'clock_out', '2026-10-02T03:00:00Z')])?.id, '3');
+assert.equal(logic.findRecoverableBreakClockOut([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'clock_out', '2026-10-02T02:00:00Z')]), null);
+assert.equal(logic.findRecoverableBreakClockOut([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'break_start', '2026-10-02T02:00:00Z'), record('3', 'break_end', '2026-10-02T02:30:00Z'), record('4', 'clock_out', '2026-10-02T03:00:00Z')]), null);
+assert.equal(logic.findRecoverableBreakClockOut([...breakMistakeRecords, record('4', 'break_end', '2026-10-02T04:00:00Z')]), null);
 assert.equal(logic.summarizeAttendanceDay([record('1', 'clock_in', '2026-10-02T01:00:00Z'), record('2', 'clock_out', '2026-10-02T02:00:00Z'), record('3', 'break_start', '2026-10-02T03:00:00Z')]).anomalies.includes('下班后仍有打卡记录'), true);
 assert.equal(logic.mytDateKey('2026-10-01T16:30:00Z'), '2026-10-02');
 

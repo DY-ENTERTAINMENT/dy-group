@@ -112,6 +112,7 @@ export function AttendanceManagementPage() {
   const [todayStatusFilter, setTodayStatusFilter] = useState<TodayAttendanceStatus | 'abnormal' | ''>('');
   const [todayEmployees, setTodayEmployees] = useState<AttendanceEmployee[]>([]);
   const [todayRecords, setTodayRecords] = useState<AttendanceRecord[]>([]);
+  const [todayRecoveredClockOutIds, setTodayRecoveredClockOutIds] = useState<string[]>([]);
   const [todayLoading, setTodayLoading] = useState(true);
   const [todayError, setTodayError] = useState('');
   const [todayDetailEmployeeId, setTodayDetailEmployeeId] = useState('');
@@ -162,8 +163,8 @@ export function AttendanceManagementPage() {
   const pendingAbnormalRecords = abnormalRecords.filter((record) => record.reviewStatus === 'pending');
   const abnormalEmployeeCount = new Set(pendingAbnormalRecords.map((record) => record.employee.id)).size;
   const todayRows = useMemo(
-    () => buildTodayAttendanceRows(todayEmployees, todayRecords, todayDate, malaysiaDateKey(new Date())),
-    [todayDate, todayEmployees, todayRecords],
+    () => buildTodayAttendanceRows(todayEmployees, todayRecords, todayDate, malaysiaDateKey(new Date()), new Set(todayRecoveredClockOutIds)),
+    [todayDate, todayEmployees, todayRecords, todayRecoveredClockOutIds],
   );
   const filteredTodayRows = useMemo(() => {
     const search = todaySearch.trim().toLowerCase();
@@ -203,6 +204,7 @@ export function AttendanceManagementPage() {
         buildSummaries(
           data.employees,
           data.attendanceRecords,
+          new Set(data.recoveredClockOutRecordIds),
           data.abnormalReviewHistory,
           data.leaveRequests,
           data.restDays,
@@ -233,6 +235,7 @@ export function AttendanceManagementPage() {
       setRegions((current) => current.length ? current : data.regions);
       setTodayEmployees(data.employees);
       setTodayRecords(data.attendanceRecords);
+      setTodayRecoveredClockOutIds(data.recoveredClockOutRecordIds);
       setTodayDetailEmployeeId('');
     } catch (loadError) {
       setTodayError(loadError instanceof Error ? loadError.message : '读取今日考勤数据失败。');
@@ -949,6 +952,7 @@ function getEmployeeDisplayName(employee: Pick<AttendanceEmployee, 'full_name' |
 function buildSummaries(
   employees: AttendanceEmployee[],
   attendanceRecords: AttendanceRecord[],
+  recoveredClockOutRecordIds: Set<string>,
   abnormalReviewHistory: AttendanceAbnormalReviewHistory[],
   leaveRequests: LeaveRequest[],
   restDays: AttendanceRestDay[],
@@ -997,7 +1001,7 @@ function buildSummaries(
       const clockIn = records.find((record) => record.punch_type === 'clock_in') ?? null;
       const breakStart = records.find((record) => record.punch_type === 'break_start') ?? null;
       const breakEnd = records.find((record) => record.punch_type === 'break_end') ?? null;
-      const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out') ?? null;
+      const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out' && !recoveredClockOutRecordIds.has(record.id)) ?? null;
       const leave = leavesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const replacementMakeUpDate = replacementMakeUpDatesByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
       const replacementLeaveEffect = replacementLeaveEffectsByEmployeeDate.get(`${employee.id}:${date}`) ?? null;
@@ -1079,6 +1083,9 @@ function buildSummaries(
 
       if (!exemptFromRules) {
         records.forEach((record) => {
+          if (record.punch_type === 'clock_out' && recoveredClockOutRecordIds.has(record.id)) {
+            return;
+          }
           const abnormalTypes = getDeviceAbnormalTypes(record, expectedIp, expectedGps, expectedDevice);
 
           if (abnormalTypes.length === 0) {
@@ -1303,7 +1310,7 @@ function getDateRange(startDate: string, endDate: string) {
   return dates;
 }
 
-function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string): TodayAttendanceRow[] {
+function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string, recoveredClockOutRecordIds: Set<string>): TodayAttendanceRow[] {
   const recordsByEmployee = new Map<string, AttendanceRecord[]>();
   attendanceRecords.forEach((record) => {
     if (!record.employee_id || malaysiaDateKey(new Date(record.punched_at)) !== date) return;
@@ -1313,17 +1320,17 @@ function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRec
   return employees.map((employee) => {
     const records = [...(recordsByEmployee.get(employee.id) ?? [])].sort((a, b) => +new Date(a.punched_at) - +new Date(b.punched_at) || a.id.localeCompare(b.id));
     const clockIn = records.find((record) => record.punch_type === 'clock_in') ?? null;
-    const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out') ?? null;
+    const clockOut = [...records].reverse().find((record) => record.punch_type === 'clock_out' && !recoveredClockOutRecordIds.has(record.id)) ?? null;
     const breakStart = records.find((record) => record.punch_type === 'break_start') ?? null;
     const breakEnd = records.find((record) => record.punch_type === 'break_end') ?? null;
-    const notices = deriveTodayNotices(records, clockIn, clockOut, date < malaysiaToday);
+    const notices = deriveTodayNotices(records, clockIn, clockOut, date < malaysiaToday, recoveredClockOutRecordIds);
     const hasUnclosedBreak = hasUnclosedBreakAtEnd(records);
     const status: TodayAttendanceStatus = clockOut ? 'clocked_out' : hasUnclosedBreak ? 'on_break' : clockIn ? 'working' : 'not_started';
     return { employee, records, clockIn, breakStart, breakEnd, clockOut, status, notices };
   });
 }
 
-function deriveTodayNotices(records: AttendanceRecord[], clockIn: AttendanceRecord | null, clockOut: AttendanceRecord | null, isHistoricalDate: boolean) {
+function deriveTodayNotices(records: AttendanceRecord[], clockIn: AttendanceRecord | null, clockOut: AttendanceRecord | null, isHistoricalDate: boolean, recoveredClockOutRecordIds: Set<string>) {
   const notices: string[] = [];
   if (isHistoricalDate && clockIn && !clockOut) notices.push('缺少下班打卡记录');
   let openBreak = false;
@@ -1336,7 +1343,7 @@ function deriveTodayNotices(records: AttendanceRecord[], clockIn: AttendanceReco
       if (!openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
       openBreak = false;
     }
-    if (record.punch_type === 'clock_out' && openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
+    if (record.punch_type === 'clock_out' && !recoveredClockOutRecordIds.has(record.id) && openBreak && !notices.includes('存在重复或顺序异常的休息记录')) notices.push('存在重复或顺序异常的休息记录');
   });
   if (isHistoricalDate && openBreak && !notices.includes('休息记录未结束')) notices.push('休息记录未结束');
   return notices;

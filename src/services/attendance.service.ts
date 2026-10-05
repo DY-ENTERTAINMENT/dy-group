@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AttendancePunchType, AttendanceRecord, Employee } from '../types/database';
+import type { AttendanceClockOutRecovery, AttendancePunchType, AttendanceRecord, Employee } from '../types/database';
 
 export type AttendanceCapturePayload = {
   profileId: string;
@@ -14,6 +14,7 @@ export type AttendanceCapturePayload = {
 
 export type AttendanceRecordItem = AttendanceRecord & {
   employee: Pick<Employee, 'id' | 'full_name' | 'employee_code'> | null;
+  clockOutRecovery: AttendanceClockOutRecovery | null;
 };
 
 type AttendanceRowWithEmployee = AttendanceRecord & {
@@ -43,7 +44,13 @@ export const attendanceService = {
       throw error;
     }
 
-    return ((data ?? []) as unknown as AttendanceRowWithEmployee[]).map(mapAttendanceRow);
+    const rows = (data ?? []) as unknown as AttendanceRowWithEmployee[];
+    const clockOutIds = rows.filter((row) => row.punch_type === 'clock_out').map((row) => row.id);
+    const recoveries = clockOutIds.length
+      ? await listClockOutRecoveries(clockOutIds)
+      : new Map<string, AttendanceClockOutRecovery>();
+
+    return rows.map((row) => mapAttendanceRow(row, recoveries.get(row.id) ?? null));
   },
 
   async createAttendanceRecord(payload: AttendanceCapturePayload) {
@@ -63,6 +70,11 @@ export const attendanceService = {
       throw error;
     }
   },
+
+  async recoverMyBreakClockOut() {
+    const { error } = await supabase.rpc('recover_my_break_clock_out');
+    if (error) throw error;
+  },
 };
 
 export async function getPublicIpAddress() {
@@ -80,10 +92,20 @@ export async function getPublicIpAddress() {
   }
 }
 
-function mapAttendanceRow(row: AttendanceRowWithEmployee): AttendanceRecordItem {
+async function listClockOutRecoveries(clockOutIds: string[]) {
+  const { data, error } = await supabase
+    .from('attendance_clock_out_recoveries')
+    .select('*')
+    .in('attendance_record_id', clockOutIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((recovery) => [recovery.attendance_record_id, recovery]));
+}
+
+function mapAttendanceRow(row: AttendanceRowWithEmployee, clockOutRecovery: AttendanceClockOutRecovery | null): AttendanceRecordItem {
   return {
     ...row,
     employee: row.employees,
+    clockOutRecovery,
   };
 }
 

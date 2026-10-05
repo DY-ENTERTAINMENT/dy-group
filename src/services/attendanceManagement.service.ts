@@ -41,6 +41,7 @@ export type AttendanceEmployee = Pick<
 export type AttendancePeriodData = {
   employees: AttendanceEmployee[];
   attendanceRecords: AttendanceRecord[];
+  recoveredClockOutRecordIds: string[];
   abnormalReviewHistory: AttendanceAbnormalReviewHistory[];
   leaveRequests: LeaveRequest[];
   restDays: AttendanceRestDay[];
@@ -173,6 +174,7 @@ export const attendanceManagementService = {
     const [
       employeesResult,
       attendanceResult,
+      recoveriesResult,
       leaveResult,
       replacementLeaveResult,
       restResult,
@@ -185,6 +187,7 @@ export const attendanceManagementService = {
     ] = await Promise.all([
       scopedEmployeesQuery,
       fetchAttendanceRecordsByPeriod(range),
+      fetchClockOutRecoveriesByPeriod(range),
       supabase
         .from('leave_requests')
         .select('*')
@@ -228,6 +231,7 @@ export const attendanceManagementService = {
     if (employeesResult.error) {
       throw employeesResult.error;
     }
+    if (recoveriesResult.error) throw recoveriesResult.error;
 
     if (leaveResult.error) {
       throw leaveResult.error;
@@ -278,6 +282,7 @@ export const attendanceManagementService = {
         .map(mapEmployeeRow)
         .filter((employee) => shouldShowEmployeeForPeriod(employee, range.startDate)),
       attendanceRecords: attendanceResult,
+      recoveredClockOutRecordIds: (recoveriesResult.data ?? []).map((item) => item.attendance_record_id),
       abnormalReviewHistory: abnormalReviewHistoryResult.data ?? [],
       leaveRequests: mergeLeaveRequests(leaveResult.data ?? [], replacementLeaveResult.data ?? []),
       restDays: (restResult.data ?? []) as AttendanceRestDay[],
@@ -305,6 +310,14 @@ export function getAttendancePeriodRange(month: string): AttendancePeriodRange {
     startDate: toDateKey(start),
     endDate: toDateKey(lastDay),
   };
+}
+
+async function fetchClockOutRecoveriesByPeriod(range: AttendancePeriodRange) {
+  return supabase
+    .from('attendance_clock_out_recoveries')
+    .select('attendance_record_id')
+    .gte('original_clock_out_at', range.startIso)
+    .lt('original_clock_out_at', range.endIso);
 }
 
 function mapEmployeeRow(row: EmployeeRowWithRelations): AttendanceEmployee {

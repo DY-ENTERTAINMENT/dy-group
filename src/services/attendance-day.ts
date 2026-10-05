@@ -1,6 +1,6 @@
 import type { AttendancePunchType } from '../types/database';
 
-export type AttendanceDayRecord = { id: string; punched_at: string; punch_type: AttendancePunchType };
+export type AttendanceDayRecord = { id: string; punched_at: string; punch_type: AttendancePunchType; clockOutRecovery?: unknown | null };
 export type AttendanceDayStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out';
 
 export type AttendanceDaySummary = {
@@ -51,6 +51,9 @@ export function summarizeAttendanceDay(records: AttendanceDayRecord[]): Attendan
   const anomalies: string[] = [];
 
   for (const record of sorted) {
+    // A recovery never changes the source punch. It only removes that one
+    // clock-out from operational state/calculation while leaving it auditable.
+    if (record.punch_type === 'clock_out' && record.clockOutRecovery) continue;
     if (hasClockOut) anomalies.push('下班后仍有打卡记录');
     if (record.punch_type === 'clock_in') {
       if (hasClockIn) anomalies.push('重复上班打卡');
@@ -75,4 +78,26 @@ export function summarizeAttendanceDay(records: AttendanceDayRecord[]): Attendan
   }
 
   return { status: hasClockOut ? 'clocked_out' : breakOpen ? 'on_break' : hasClockIn ? 'working' : 'not_started', anomalies: [...new Set(anomalies)], hasClockIn, hasClockOut, breakOpen };
+}
+
+/** Returns the sole UI candidate; the database RPC repeats every security check. */
+export function findRecoverableBreakClockOut<T extends AttendanceDayRecord>(records: T[]): T | null {
+  const sorted = sortAttendanceRecords(records);
+  let hasClockIn = false;
+  let breakOpen = false;
+  let candidate: T | null = null;
+
+  for (const record of sorted) {
+    if (record.punch_type === 'clock_in') hasClockIn = true;
+    if (record.punch_type === 'break_start') breakOpen = true;
+    if (record.punch_type === 'break_end') breakOpen = false;
+    if (record.punch_type === 'clock_out') {
+      candidate = hasClockIn && breakOpen && !record.clockOutRecovery ? record : null;
+    } else if (candidate) {
+      // The source clock-out must be the final event of the Malaysia day.
+      candidate = null;
+    }
+  }
+
+  return candidate;
 }
