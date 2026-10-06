@@ -14466,9 +14466,19 @@ button.leave-chip:disabled {
   .outgoing-management-preview .outgoing-management-photo-time { display: grid; gap: 1px; color: #8190a5; font-size: 10px; line-height: 1.25; }
   .outgoing-management-preview .outgoing-management-photo-time strong { color: #25334a; font-size: 11px; font-weight: 750; }
   .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) .outgoing-management-photos img { width: 108px; height: 81px; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; }
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card).outgoing-management-card-completed .outgoing-management-card-main { align-items: center; padding-top: 12px; padding-bottom: 12px; }
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card).outgoing-management-card-completed .outgoing-management-card-actions { padding-top: 8px; padding-bottom: 8px; }
+}
+
+@media (min-width: 1121px) {
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card).outgoing-management-card-completed { grid-template-columns: minmax(0, 1fr) max-content; }
 }
 
 @media (max-width: 720px) {
   .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) .outgoing-management-photos { width: fit-content; max-width: 100%; grid-template-columns: repeat(2, minmax(0, 108px)); justify-content: center; gap: 10px; margin-inline: auto; }
   .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) .outgoing-management-photos img { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; }
+}
+
+@media (max-width: 390px) {
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) .outgoing-management-photos { grid-template-columns: minmax(0, 108px); }
 }
