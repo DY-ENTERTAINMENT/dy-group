@@ -1408,6 +1408,8 @@ export type Database = {
       };
       cancel_outgoing_request: { Args: { p_request_id: string }; Returns: undefined };
       review_outgoing_request: { Args: { p_request_id: string; p_decision: 'approved' | 'rejected'; p_note?: string | null }; Returns: undefined };
+      list_my_outgoing_requests: { Args: Record<string, never>; Returns: OutgoingRequest[] };
+      list_my_outgoing_request_review_history: { Args: { p_request_id: string }; Returns: OutgoingRequestReviewHistory[] };
       get_my_outgoing_approval_pending_count: { Args: Record<string, never>; Returns: number };
       get_outgoing_feature_admissions_enabled: { Args: Record<string, never>; Returns: boolean };
       set_outgoing_feature_admissions_enabled: { Args: { p_enabled: boolean }; Returns: undefined };

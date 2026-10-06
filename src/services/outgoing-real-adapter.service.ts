@@ -174,7 +174,16 @@ export function lifecycleStatus(request: OutgoingRequestWithEvent): OutgoingLife
 }
 
 function selectCurrentRequest(requests: OutgoingRequestWithEvent[]) {
-  return [...requests].sort((left, right) => lifecyclePriority(right) - lifecyclePriority(left) || right.updated_at.localeCompare(left.updated_at))[0] ?? null;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date());
+  return requests
+    .filter((request) => {
+      const status = lifecycleStatus(request);
+      if (status === 'cancelled') return false;
+      if (status === 'in_progress' || status === 'exception') return true;
+      if (status === 'completed') return request.outgoing_date === today;
+      return request.outgoing_date >= today;
+    })
+    .sort((left, right) => lifecyclePriority(right) - lifecyclePriority(left) || right.updated_at.localeCompare(left.updated_at))[0] ?? null;
 }
 
 function lifecyclePriority(request: OutgoingRequestWithEvent) {

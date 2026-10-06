@@ -72,7 +72,7 @@ export function OutgoingRealEmployeePanel({ regionId, onChanged }: EmployeePanel
 
   return <section className="outgoing-section employee-outgoing-preview" aria-label="外出办公">
     <div className="outgoing-preview-heading"><h3>外出办公</h3>{admissionsEnabled ? <button className="outgoing-apply-button" type="button" onClick={() => setFormOpen(true)}><FilePlus2 size={16} /><span>申请外出办公</span></button> : null}</div>
-    {loading ? <p className="outgoing-management-empty">正在读取外出申请…</p> : current ? <OutgoingEmployeeRequestCard request={current} onCancel={(request) => void cancel(request)} onHistory={setHistoryRequest} /> : <div className="outgoing-preview-empty"><span>外出需先提交申请，经批准后方可开始外出。</span></div>}
+    {loading ? <p className="outgoing-management-empty">正在读取外出申请…</p> : current ? <OutgoingEmployeeRequestCard request={current} onCancel={(request) => void cancel(request)} onHistory={setHistoryRequest} /> : null}
     {!admissionsEnabled ? <p className="outgoing-management-empty">外出服务暂未启用；已有外出记录仍可查看和收尾。</p> : null}{error ? <p className="form-alert">{error}</p> : null}
     {formOpen ? <OutgoingRequestFormModal regionId={regionId} onClose={() => setFormOpen(false)} onSaved={() => { setFormOpen(false); void load(); onChanged(); }} /> : null}
     {historyRequest ? <OutgoingHistoryModal request={historyRequest} onClose={() => setHistoryRequest(null)} /> : null}
@@ -225,7 +225,19 @@ function OutgoingDetailModal({ request, employeeName, onClose }: { request: Outg
 }
 
 function OutgoingStatusBadge({ status }: { status: OutgoingLifecycleStatus }) { return <span className={`outgoing-status outgoing-status-${status}`}>{statusLabels[status]}</span>; }
-function selectCurrent(requests: OutgoingRequestWithEvent[]) { return [...requests].sort((left, right) => priority(right) - priority(left) || right.updated_at.localeCompare(left.updated_at))[0] ?? null; }
+function selectCurrent(requests: OutgoingRequestWithEvent[]) {
+  const today = malaysiaDate();
+  return requests
+    .filter((request) => isCurrentRequest(request, today))
+    .sort((left, right) => priority(right) - priority(left) || right.updated_at.localeCompare(left.updated_at))[0] ?? null;
+}
+function isCurrentRequest(request: OutgoingRequestWithEvent, today: string) {
+  const status = lifecycleStatus(request);
+  if (status === 'cancelled') return false;
+  if (status === 'in_progress' || status === 'exception') return true;
+  if (status === 'completed') return request.outgoing_date === today;
+  return request.outgoing_date >= today;
+}
 function priority(request: OutgoingRequestWithEvent) { const status = lifecycleStatus(request); return status === 'in_progress' ? 4 : status === 'approved' ? 3 : status === 'pending' ? 2 : 1; }
 function formatDateTime(value: string | null) { return value ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—'; }
 function malaysiaDate() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date()); }

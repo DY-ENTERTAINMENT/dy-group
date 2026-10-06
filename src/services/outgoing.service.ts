@@ -95,13 +95,28 @@ export const outgoingService = {
 
   async listMyRequests() {
     assertOutgoingRealServiceEnabled();
-    const { data, error } = await supabase
-      .from('outgoing_requests')
-      .select(requestWithEventSelect)
-      .order('outgoing_date', { ascending: false })
-      .order('planned_start_time', { ascending: false });
+    const { data, error } = await supabase.rpc('list_my_outgoing_requests');
     if (error) throw error;
-    return normalizeOutgoingRequests(data);
+    const requests = (data ?? []) as OutgoingRequest[];
+    if (!requests.length) return [];
+
+    // Defense in depth: the RPC is authoritative, and the browser also rejects
+    // any row not owned by the authenticated profile before rendering it.
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    const profileId = authData.user?.id;
+    if (!profileId) throw new Error('当前登录会话无效。');
+    const ownRequests = requests.filter((request) => request.profile_id === profileId);
+    const ids = ownRequests.map((request) => request.id);
+    if (!ids.length) return [];
+    const { data: events, error: eventsError } = await supabase
+      .from('outgoing_events')
+      .select('*')
+      .eq('profile_id', profileId)
+      .in('request_id', ids);
+    if (eventsError) throw eventsError;
+    const eventsByRequest = new Map((events ?? []).map((event) => [event.request_id, event as OutgoingEvent]));
+    return ownRequests.map((request) => ({ ...request, outgoing_events: eventsByRequest.get(request.id) ?? null }));
   },
 
   async listManagedRequests(filters: OutgoingManagementFilters = {}) {
@@ -125,11 +140,7 @@ export const outgoingService = {
 
   async listReviewHistory(requestId: string) {
     assertOutgoingRealServiceEnabled();
-    const { data, error } = await supabase
-      .from('outgoing_request_review_history')
-      .select('*')
-      .eq('request_id', requestId)
-      .order('created_at', { ascending: true });
+    const { data, error } = await supabase.rpc('list_my_outgoing_request_review_history', { p_request_id: requestId });
     if (error) throw error;
     return (data ?? []) as OutgoingRequestReviewHistory[];
   },
