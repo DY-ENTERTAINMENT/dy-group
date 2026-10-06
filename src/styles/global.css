@@ -6181,6 +6181,55 @@ button.leave-chip:disabled {
   }
 }
 
+@media (max-width: 720px) {
+  .home-page.dashboard-workbench {
+    gap: 12px;
+  }
+
+  .dashboard-panel-header {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .dashboard-panel-header h3 {
+    font-size: 16px;
+  }
+
+  .dashboard-header-actions {
+    gap: 6px;
+  }
+
+  .dashboard-header-actions .dashboard-add-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .dashboard-header-actions .dashboard-add-button:last-child {
+    width: 36px;
+    padding: 0;
+  }
+
+  .todo-filter-bar {
+    gap: 6px;
+    padding-block: 8px;
+  }
+
+  .todo-filter-bar button {
+    min-height: 32px;
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  .todo-item,
+  .upcoming-event-item {
+    padding-block: 10px;
+  }
+
+  .dashboard-empty {
+    padding-block: 18px;
+  }
+}
+
 .scout-page {
   display: grid;
   gap: 18px;
