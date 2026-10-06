@@ -4959,6 +4959,23 @@ button.leave-chip:disabled {
   background: var(--panel-soft);
 }
 
+.dashboard-header-actions .dashboard-add-button:last-child {
+  display: inline-flex;
+  width: auto;
+  gap: 7px;
+  padding: 0 13px;
+  border-color: transparent;
+  color: #ffffff;
+  background: #7c4dff;
+}
+
+.dashboard-header-actions .dashboard-add-button:last-child::after {
+  content: '新增工作';
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .dashboard-header-actions {
   display: flex;
   gap: 8px;
@@ -5014,7 +5031,6 @@ button.leave-chip:disabled {
   border-bottom: 1px solid var(--border);
 }
 
-.todo-filter-bar button,
 .todo-date-options button {
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -5028,10 +5044,30 @@ button.leave-chip:disabled {
   cursor: pointer;
 }
 
+.todo-filter-bar button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.todo-filter-bar button:nth-child(1) { color: #6941c6; background: #f3f0ff; }
+.todo-filter-bar button:nth-child(2) { color: #3b82f6; background: #eff6ff; }
+.todo-filter-bar button:nth-child(3) { color: #ef4444; background: #fef2f2; }
+.todo-filter-bar button:nth-child(4) { color: #7c3aed; background: #f5f3ff; }
+
 .todo-filter-bar button.active {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
-  color: var(--primary);
-  background: var(--panel-soft);
+  border-color: transparent;
+  color: #ffffff;
+  background: #7c4dff;
 }
 
 .todo-item {
@@ -6100,6 +6136,8 @@ button.leave-chip:disabled {
   }
 
   .todo-filter-bar { padding-inline: 14px; }
+  .dashboard-header-actions .dashboard-add-button:last-child { width: 40px; padding: 0; gap: 0; }
+  .dashboard-header-actions .dashboard-add-button:last-child::after { display: none; }
   .todo-item { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; }
   .todo-date { max-width: 82px; overflow: hidden; text-overflow: ellipsis; }
   .todo-toast { right: 14px; bottom: 14px; left: 14px; justify-content: space-between; }
