@@ -4939,6 +4939,12 @@ button.leave-chip:disabled {
   overflow: hidden;
 }
 
+.todo-panel {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+}
+
 .dashboard-panel-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -5123,6 +5129,11 @@ button.leave-chip:disabled {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 8px 22px rgba(32, 49, 74, 0.14);
+}
+
+.todo-item:nth-last-child(-n + 3) .todo-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .todo-menu button {
