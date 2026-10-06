@@ -6205,8 +6205,14 @@ button.leave-chip:disabled {
   }
 
   .dashboard-header-actions .dashboard-add-button:last-child {
-    width: 36px;
-    padding: 0;
+    width: auto;
+    gap: 5px;
+    padding: 0 11px;
+  }
+
+  .dashboard-header-actions .dashboard-add-button:last-child::after {
+    display: inline;
+    content: '新增';
   }
 
   .todo-filter-bar {
@@ -6227,6 +6233,18 @@ button.leave-chip:disabled {
 
   .dashboard-empty {
     padding-block: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .dashboard-header-actions .dashboard-add-button:last-child {
+    width: 36px;
+    gap: 0;
+    padding: 0;
+  }
+
+  .dashboard-header-actions .dashboard-add-button:last-child::after {
+    display: none;
   }
 }
 
