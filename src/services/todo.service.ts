@@ -17,13 +17,12 @@ export const recurringTodoFrequencyLabels: Record<RecurringTodoFrequency, string
 };
 
 export const todoService = {
-  async getMyOpenTodos() {
+  async getMyTodos() {
     const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from('todo_items')
       .select('*')
       .eq('profile_id', userId)
-      .eq('is_completed', false)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -31,6 +30,11 @@ export const todoService = {
     }
 
     return (data ?? []) as TodoItem[];
+  },
+
+  async getMyOpenTodos() {
+    const todos = await this.getMyTodos();
+    return todos.filter((todo) => !todo.is_completed);
   },
 
   async syncTodayRecurringTodos() {
@@ -77,13 +81,14 @@ export const todoService = {
     }
   },
 
-  async createTodo(title: string) {
+  async createTodo(title: string, dueDate: string | null = null) {
     const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from('todo_items')
       .insert({
         profile_id: userId,
         title: title.trim(),
+        due_date: dueDate,
       })
       .select('*')
       .single();
@@ -96,17 +101,50 @@ export const todoService = {
   },
 
   async completeTodo(id: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('todo_items')
       .update({
         is_completed: true,
         completed_at: new Date().toISOString(),
       })
-      .eq('id', id);
+      .eq('id', id)
+      .select('*')
+      .single();
 
     if (error) {
       throw error;
     }
+
+    return data as TodoItem | null;
+  },
+
+  async reopenTodo(id: string) {
+    const { data, error } = await supabase
+      .from('todo_items')
+      .update({ is_completed: false, completed_at: null })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data as TodoItem;
+  },
+
+  async updateTodo(id: string, values: Pick<TodoItem, 'title' | 'due_date'>) {
+    const { data, error } = await supabase
+      .from('todo_items')
+      .update({ title: values.title.trim(), due_date: values.due_date })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data as TodoItem;
+  },
+
+  async deleteTodo(id: string) {
+    const { error } = await supabase.from('todo_items').delete().eq('id', id);
+    if (error) throw error;
   },
 
   async getMyRecurringTodos() {

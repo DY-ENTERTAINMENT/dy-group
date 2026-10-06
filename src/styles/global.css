@@ -5006,6 +5006,121 @@ button.leave-chip:disabled {
   text-decoration: line-through;
 }
 
+.todo-filter-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-filter-bar button,
+.todo-date-options button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.todo-filter-bar button.active {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  color: var(--primary);
+  background: var(--panel-soft);
+}
+
+.todo-item {
+  grid-template-columns: auto minmax(0, 1fr) minmax(72px, auto) auto;
+}
+
+.todo-title-button,
+.todo-date {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.todo-title-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-item.completed .todo-title-button {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.todo-date {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.todo-date.today { color: var(--primary); }
+.todo-date.overdue { color: #b25d57; }
+.todo-date.empty { visibility: hidden; }
+.todo-date.completed-date { font-size: 12px; }
+.todo-menu-wrap { position: relative; }
+.todo-more-button { width: 32px; height: 32px; }
+.todo-menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 104px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 22px rgba(32, 49, 74, 0.14);
+}
+
+.todo-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.todo-menu button:hover { background: var(--panel-soft); }
+.todo-menu button.danger { color: #a63825; }
+.todo-form { display: grid; gap: 16px; }
+.todo-date-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.todo-date-options input { min-height: 32px; max-width: 150px; }
+.todo-toast {
+  position: fixed;
+  z-index: 5;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 8px 22px rgba(32, 49, 74, 0.14);
+}
+.todo-toast button { border: 0; color: var(--primary); font: inherit; font-weight: 800; background: transparent; cursor: pointer; }
+
 .upcoming-event-item {
   grid-template-columns: 78px minmax(0, 1fr);
   cursor: pointer;
@@ -5983,6 +6098,11 @@ button.leave-chip:disabled {
   .dashboard-empty {
     padding-inline: 14px;
   }
+
+  .todo-filter-bar { padding-inline: 14px; }
+  .todo-item { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; }
+  .todo-date { max-width: 82px; overflow: hidden; text-overflow: ellipsis; }
+  .todo-toast { right: 14px; bottom: 14px; left: 14px; justify-content: space-between; }
 
   .modal-backdrop {
     padding: 8px;

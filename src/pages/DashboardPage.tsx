@@ -1,436 +1,68 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { CalendarDays, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CalendarDays, MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SystemModal } from '../components/SystemModal';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { scheduleEventService } from '../services/schedule-event.service';
-import { getRecurringTodoRuleLabel, recurringTodoFrequencyLabels, todoService, type RecurringTodoPayload } from '../services/todo.service';
-import type { RecurringTodoFrequency, RecurringTodoItem, ScheduleEvent, TodoItem } from '../types/database';
+import { todoService } from '../services/todo.service';
+import type { ScheduleEvent, TodoItem } from '../types/database';
 
-const emptyRecurringForm: RecurringTodoPayload = {
-  title: '',
-  frequency: 'weekly',
-  weekly_days: [1],
-  monthly_day: 6,
-};
-
-const weekdayOptions = [
-  { value: 1, label: '星期一' },
-  { value: 2, label: '星期二' },
-  { value: 3, label: '星期三' },
-  { value: 4, label: '星期四' },
-  { value: 5, label: '星期五' },
-  { value: 6, label: '星期六' },
-  { value: 0, label: '星期日' },
-];
+type TodoFilter = 'open' | 'today' | 'overdue' | 'completed';
+type TodoForm = { title: string; dueDate: string };
+const emptyTodoForm: TodoForm = { title: '', dueDate: '' };
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [completedTodoIds, setCompletedTodoIds] = useState<Set<string>>(new Set());
   const [upcomingEvents, setUpcomingEvents] = useState<ScheduleEvent[]>([]);
-  const [recurringTodos, setRecurringTodos] = useState<RecurringTodoItem[]>([]);
+  const [filter, setFilter] = useState<TodoFilter>('open');
   const [todoModalOpen, setTodoModalOpen] = useState(false);
-  const [recurringModalOpen, setRecurringModalOpen] = useState(false);
-  const [recurringCreateOpen, setRecurringCreateOpen] = useState(false);
-  const [deletingRecurringTodo, setDeletingRecurringTodo] = useState<RecurringTodoItem | null>(null);
-  const [todoTitle, setTodoTitle] = useState('');
-  const [recurringForm, setRecurringForm] = useState<RecurringTodoPayload>(emptyRecurringForm);
+  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [deletingTodo, setDeletingTodo] = useState<TodoItem | null>(null);
+  const [menuTodoId, setMenuTodoId] = useState<string | null>(null);
+  const [todoForm, setTodoForm] = useState<TodoForm>(emptyTodoForm);
+  const [lastCompleted, setLastCompleted] = useState<TodoItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingTodo, setSavingTodo] = useState(false);
-  const [savingRecurring, setSavingRecurring] = useState(false);
   const [error, setError] = useState('');
-  const hideTimersRef = useRef<number[]>([]);
 
-  useEffect(() => {
-    void loadDashboard();
-
-    return () => {
-      hideTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    };
-  }, []);
-
+  useEffect(() => { void loadDashboard(); }, []);
   usePullToRefresh(loadDashboard);
-
   async function loadDashboard() {
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     try {
       await todoService.syncTodayRecurringTodos();
-      const [todoList, eventList, recurringList] = await Promise.all([
-        todoService.getMyOpenTodos(),
-        scheduleEventService.getMyUpcomingScheduleEvents(7, 5),
-        todoService.getMyRecurringTodos(),
-      ]);
-      setTodos(todoList);
-      setUpcomingEvents(eventList);
-      setRecurringTodos(recurringList);
-      setCompletedTodoIds(new Set());
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
+      const [todoList, eventList] = await Promise.all([todoService.getMyTodos(), scheduleEventService.getMyUpcomingScheduleEvents(7, 5)]);
+      setTodos(todoList); setUpcomingEvents(eventList);
+    } catch (loadError) { setError(getErrorMessage(loadError)); } finally { setLoading(false); }
   }
-
-  async function refreshRecurringTodos() {
-    const recurringList = await todoService.getMyRecurringTodos();
-    setRecurringTodos(recurringList);
-  }
-
-  async function handleAddTodo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const title = todoTitle.trim();
-
-    if (!title) {
-      setError('请输入任务内容。');
-      return;
-    }
-
-    setSavingTodo(true);
-    setError('');
-
-    try {
-      const todo = await todoService.createTodo(title);
-      setTodos((current) => [...current, todo]);
-      setTodoTitle('');
-      setTodoModalOpen(false);
-    } catch (createError) {
-      setError(getErrorMessage(createError));
-    } finally {
-      setSavingTodo(false);
-    }
-  }
-
-  async function handleAddRecurringTodo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSavingRecurring(true);
-    setError('');
-
-    try {
-      await todoService.createRecurringTodo(recurringForm);
-      setRecurringForm(emptyRecurringForm);
-      setRecurringCreateOpen(false);
-      await refreshRecurringTodos();
-      await loadDashboard();
-    } catch (createError) {
-      setError(getErrorMessage(createError));
-    } finally {
-      setSavingRecurring(false);
-    }
-  }
-
-  async function handleDeleteRecurringTodo() {
-    if (!deletingRecurringTodo) return;
-
-    setSavingRecurring(true);
-    setError('');
-
-    try {
-      await todoService.deleteRecurringTodo(deletingRecurringTodo.id);
-      setDeletingRecurringTodo(null);
-      await refreshRecurringTodos();
-    } catch (deleteError) {
-      setError(getErrorMessage(deleteError));
-    } finally {
-      setSavingRecurring(false);
-    }
-  }
-
-  async function handleCompleteTodo(todo: TodoItem) {
-    setCompletedTodoIds((current) => new Set(current).add(todo.id));
-    setError('');
-
-    try {
-      await todoService.completeTodo(todo.id);
-      const timer = window.setTimeout(() => {
-        setTodos((current) => current.filter((item) => item.id !== todo.id));
-        setCompletedTodoIds((current) => {
-          const next = new Set(current);
-          next.delete(todo.id);
-          return next;
-        });
-      }, 2000);
-      hideTimersRef.current.push(timer);
-    } catch (completeError) {
-      setCompletedTodoIds((current) => {
-        const next = new Set(current);
-        next.delete(todo.id);
-        return next;
-      });
-      setError(getErrorMessage(completeError));
-    }
-  }
-
-  function openRecurringCreate() {
-    setRecurringForm(emptyRecurringForm);
-    setRecurringCreateOpen(true);
-  }
-
-  function updateRecurringFrequency(frequency: RecurringTodoFrequency) {
-    setRecurringForm((current) => ({
-      ...current,
-      frequency,
-      weekly_days: frequency === 'weekly' ? current.weekly_days?.length ? current.weekly_days : [1] : [],
-      monthly_day: frequency === 'monthly' ? current.monthly_day ?? 6 : null,
-    }));
-  }
-
-  function toggleWeeklyDay(day: number) {
-    setRecurringForm((current) => {
-      const days = new Set(current.weekly_days ?? []);
-      if (days.has(day)) {
-        days.delete(day);
-      } else {
-        days.add(day);
-      }
-
-      return {
-        ...current,
-        weekly_days: [...days].sort((first, second) => first - second),
-      };
-    });
-  }
-
-  return (
-    <section className="home-page dashboard-workbench">
-      {error ? <p className="form-alert">{error}</p> : null}
-
-      <div className="dashboard-panel todo-panel">
-        <div className="dashboard-panel-header">
-          <h3>工作清单</h3>
-          <div className="dashboard-header-actions">
-            <button className="icon-button dashboard-add-button" type="button" onClick={() => setRecurringModalOpen(true)} aria-label="重复清单管理">
-              <RefreshCw size={18} />
-            </button>
-            <button className="icon-button dashboard-add-button" type="button" onClick={() => setTodoModalOpen(true)} aria-label="新增工作清单">
-              <Plus size={18} />
-            </button>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="table-state compact-state">正在读取工作清单...</div>
-        ) : todos.length === 0 ? (
-          <div className="dashboard-empty">暂无工作清单</div>
-        ) : (
-          <div className="todo-list">
-            {todos.map((todo) => {
-              const completed = completedTodoIds.has(todo.id);
-              return (
-                <label className={`todo-item${completed ? ' completed' : ''}`} key={todo.id}>
-                  <input type="checkbox" checked={completed} onChange={() => void handleCompleteTodo(todo)} disabled={completed} />
-                  <span>{todo.title}</span>
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="dashboard-panel upcoming-panel">
-        <div className="dashboard-panel-header">
-          <h3>近期行程</h3>
-          <CalendarDays size={19} />
-        </div>
-
-        {loading ? (
-          <div className="table-state compact-state">正在读取近期行程...</div>
-        ) : upcomingEvents.length === 0 ? (
-          <div className="dashboard-empty">暂无近期行程</div>
-        ) : (
-          <div className="upcoming-event-list">
-            {upcomingEvents.map((event) => (
-              <button className="upcoming-event-item" type="button" key={event.id} onClick={() => navigate('/itinerary')}>
-                <span>{formatRelativeDate(event.event_date)}</span>
-                <strong>
-                  {formatEventTime(event)}
-                  {event.title}
-                </strong>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {todoModalOpen ? (
-        <SystemModal
-          title="新增工作清单"
-          ariaLabel="新增工作清单"
-          wide={false}
-          onClose={() => setTodoModalOpen(false)}
-          footer={
-            <>
-              <button className="secondary-button compact-button" type="button" onClick={() => setTodoModalOpen(false)} disabled={savingTodo}>
-                取消
-              </button>
-              <button className="primary-button compact-button" type="submit" form="dashboard-todo-form" disabled={savingTodo}>
-                {savingTodo ? '添加中' : '添加'}
-              </button>
-            </>
-          }
-        >
-          <form id="dashboard-todo-form" onSubmit={handleAddTodo}>
-            <label className="form-field">
-              <span>任务内容</span>
-              <input value={todoTitle} onChange={(event) => setTodoTitle(event.target.value)} autoFocus required />
-            </label>
-          </form>
-        </SystemModal>
-      ) : null}
-
-      {recurringModalOpen && !recurringCreateOpen && !deletingRecurringTodo ? (
-        <SystemModal title="重复清单" ariaLabel="重复清单" onClose={() => setRecurringModalOpen(false)}>
-          <div className="recurring-todo-modal-header">
-            <h4>重复清单</h4>
-            <button className="icon-button dashboard-add-button" type="button" onClick={openRecurringCreate} aria-label="新增重复清单">
-              <Plus size={18} />
-            </button>
-          </div>
-
-          {recurringTodos.length === 0 ? (
-            <div className="table-state compact-state">暂无重复清单</div>
-          ) : (
-            <div className="recurring-todo-list">
-              {recurringTodos.map((todo) => (
-                <div className="recurring-todo-row" key={todo.id}>
-                  <button className="icon-button danger-icon-button" type="button" onClick={() => setDeletingRecurringTodo(todo)} aria-label={`删除 ${todo.title}`}>
-                    <Trash2 size={17} />
-                  </button>
-                  <strong>{todo.title}</strong>
-                  <span>{getRecurringTodoRuleLabel(todo)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </SystemModal>
-      ) : null}
-
-      {recurringModalOpen && recurringCreateOpen ? (
-        <SystemModal
-          title="新增重复清单"
-          ariaLabel="新增重复清单"
-          wide={false}
-          onClose={() => setRecurringCreateOpen(false)}
-          footer={
-            <>
-              <button className="secondary-button compact-button" type="button" onClick={() => setRecurringCreateOpen(false)} disabled={savingRecurring}>
-                取消
-              </button>
-              <button className="primary-button compact-button" type="submit" form="dashboard-recurring-todo-form" disabled={savingRecurring}>
-                {savingRecurring ? '新增中' : '新增'}
-              </button>
-            </>
-          }
-        >
-          <form id="dashboard-recurring-todo-form" className="recurring-todo-form" onSubmit={handleAddRecurringTodo}>
-            <label className="form-field">
-              <span>任务名称</span>
-              <input
-                value={recurringForm.title}
-                onChange={(event) => setRecurringForm((current) => ({ ...current, title: event.target.value }))}
-                autoFocus
-                required
-              />
-            </label>
-
-            <fieldset className="recurring-rule-fieldset">
-              <legend>重复规则</legend>
-              {(Object.keys(recurringTodoFrequencyLabels) as RecurringTodoFrequency[]).map((frequency) => (
-                <label className="recurring-rule-option" key={frequency}>
-                  <input
-                    type="radio"
-                    name="recurring-frequency"
-                    checked={recurringForm.frequency === frequency}
-                    onChange={() => updateRecurringFrequency(frequency)}
-                  />
-                  <span>{recurringTodoFrequencyLabels[frequency]}</span>
-                </label>
-              ))}
-            </fieldset>
-
-            {recurringForm.frequency === 'weekly' ? (
-              <div className="recurring-extra-options">
-                {weekdayOptions.map((day) => (
-                  <label className="recurring-check-option" key={day.value}>
-                    <input type="checkbox" checked={(recurringForm.weekly_days ?? []).includes(day.value)} onChange={() => toggleWeeklyDay(day.value)} />
-                    <span>{day.label}</span>
-                  </label>
-                ))}
-              </div>
-            ) : null}
-
-            {recurringForm.frequency === 'monthly' ? (
-              <label className="form-field">
-                <span>每月几号</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={recurringForm.monthly_day ?? 6}
-                  onChange={(event) => setRecurringForm((current) => ({ ...current, monthly_day: Number(event.target.value) }))}
-                />
-              </label>
-            ) : null}
-          </form>
-        </SystemModal>
-      ) : null}
-
-      {deletingRecurringTodo ? (
-        <SystemModal
-          title="删除重复清单"
-          ariaLabel="删除重复清单"
-          wide={false}
-          onClose={() => setDeletingRecurringTodo(null)}
-          footer={
-            <>
-              <button className="secondary-button compact-button" type="button" onClick={() => setDeletingRecurringTodo(null)} disabled={savingRecurring}>
-                取消
-              </button>
-              <button className="primary-button compact-button danger-confirm-button" type="button" onClick={handleDeleteRecurringTodo} disabled={savingRecurring}>
-                确定删除
-              </button>
-            </>
-          }
-        >
-          <div className="delete-recurring-confirm">
-            <p>确定删除：</p>
-            <strong>{deletingRecurringTodo.title}</strong>
-            <p>重复规则：</p>
-            <span>{getRecurringTodoRuleLabel(deletingRecurringTodo)}</span>
-            <em>此操作无法恢复</em>
-          </div>
-        </SystemModal>
-      ) : null}
-    </section>
-  );
+  const counts = useMemo(() => ({ open: todos.filter((todo) => !todo.is_completed).length, today: todos.filter((todo) => !todo.is_completed && todo.due_date === todayKey()).length, overdue: todos.filter((todo) => !todo.is_completed && todo.due_date && todo.due_date < todayKey()).length, completed: todos.filter((todo) => todo.is_completed).length }), [todos]);
+  const visibleTodos = useMemo(() => todos.filter((todo) => filter === 'completed' ? todo.is_completed : !todo.is_completed && (filter === 'open' || filter === 'today' && todo.due_date === todayKey() || filter === 'overdue' && Boolean(todo.due_date && todo.due_date < todayKey()))), [filter, todos]);
+  function openNewTodo() { setTodoForm(emptyTodoForm); setTodoModalOpen(true); }
+  function openEditTodo(todo: TodoItem) { setTodoForm({ title: todo.title, dueDate: todo.due_date ?? '' }); setEditingTodo(todo); setMenuTodoId(null); }
+  function setQuickDate(value: 'today' | 'tomorrow' | 'week') { const date = new Date(); if (value === 'tomorrow') date.setDate(date.getDate() + 1); if (value === 'week') date.setDate(date.getDate() + ((7 - date.getDay()) % 7 || 7)); setTodoForm((current) => ({ ...current, dueDate: toDateKey(date) })); }
+  async function handleSaveTodo(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const title = todoForm.title.trim(); if (!title) { setError('请输入工作内容。'); return; } setSavingTodo(true); setError(''); try { const saved = editingTodo ? await todoService.updateTodo(editingTodo.id, { title, due_date: todoForm.dueDate || null }) : await todoService.createTodo(title, todoForm.dueDate || null); setTodos((current) => editingTodo ? current.map((todo) => todo.id === saved.id ? saved : todo) : [...current, saved]); setTodoModalOpen(false); setEditingTodo(null); setTodoForm(emptyTodoForm); } catch (saveError) { setError(getErrorMessage(saveError)); } finally { setSavingTodo(false); } }
+  async function handleCompleteTodo(todo: TodoItem) { setError(''); try { const completed = await todoService.completeTodo(todo.id); if (!completed) return; setTodos((current) => current.map((item) => item.id === completed.id ? completed : item)); setLastCompleted(completed); } catch (completeError) { setError(getErrorMessage(completeError)); } }
+  async function handleReopenTodo(todo: TodoItem) { setError(''); try { const reopened = await todoService.reopenTodo(todo.id); setTodos((current) => current.map((item) => item.id === reopened.id ? reopened : item)); setLastCompleted((current) => current?.id === todo.id ? null : current); setMenuTodoId(null); } catch (reopenError) { setError(getErrorMessage(reopenError)); } }
+  async function handleDeleteTodo() { if (!deletingTodo) return; setSavingTodo(true); setError(''); try { await todoService.deleteTodo(deletingTodo.id); setTodos((current) => current.filter((todo) => todo.id !== deletingTodo.id)); setLastCompleted((current) => current?.id === deletingTodo.id ? null : current); setDeletingTodo(null); } catch (deleteError) { setError(getErrorMessage(deleteError)); } finally { setSavingTodo(false); } }
+  return <section className="home-page dashboard-workbench">
+    {error ? <p className="form-alert">{error}</p> : null}
+    <div className="dashboard-panel todo-panel"><div className="dashboard-panel-header"><h3>工作清单</h3><div className="dashboard-header-actions"><button className="icon-button dashboard-add-button" type="button" onClick={() => void loadDashboard()} aria-label="刷新工作清单"><RefreshCw size={18} /></button><button className="icon-button dashboard-add-button" type="button" onClick={openNewTodo} aria-label="新增工作"><Plus size={18} /></button></div></div>
+      <div className="todo-filter-bar">{([{ id: 'open', label: '待办' }, { id: 'today', label: '今天' }, { id: 'overdue', label: '逾期' }, { id: 'completed', label: '已完成' }] as const).map((item) => <button className={filter === item.id ? 'active' : ''} type="button" key={item.id} onClick={() => setFilter(item.id)}>{item.label} {counts[item.id]}</button>)}</div>
+      {loading ? <div className="table-state compact-state">正在读取工作清单...</div> : visibleTodos.length === 0 ? <div className="dashboard-empty">暂无{filter === 'completed' ? '已完成记录' : '工作清单'}</div> : <div className="todo-list">{visibleTodos.map((todo) => <div className={`todo-item${todo.is_completed ? ' completed' : ''}`} key={todo.id}><input aria-label={`完成 ${todo.title}`} type="checkbox" checked={todo.is_completed} onChange={() => todo.is_completed ? void handleReopenTodo(todo) : void handleCompleteTodo(todo)} /><button className="todo-title-button" type="button" onClick={() => openEditTodo(todo)}>{todo.title}</button><button className={`todo-date${getTodoDateState(todo)}`} type="button" onClick={() => openEditTodo(todo)}>{todo.is_completed ? formatCompletedAt(todo.completed_at) : formatTodoDate(todo.due_date)}</button><div className="todo-menu-wrap"><button className="icon-button todo-more-button" type="button" aria-label={`${todo.title} 更多操作`} onClick={() => setMenuTodoId((current) => current === todo.id ? null : todo.id)}><MoreHorizontal size={18} /></button>{menuTodoId === todo.id ? <div className="todo-menu">{todo.is_completed ? <button type="button" onClick={() => void handleReopenTodo(todo)}>撤销完成</button> : null}<button type="button" onClick={() => openEditTodo(todo)}>编辑</button><button className="danger" type="button" onClick={() => { setDeletingTodo(todo); setMenuTodoId(null); }}>删除</button></div> : null}</div></div>)}</div>}
+    </div>
+    <div className="dashboard-panel upcoming-panel"><div className="dashboard-panel-header"><h3>近期行程</h3><CalendarDays size={19} /></div>{loading ? <div className="table-state compact-state">正在读取近期行程...</div> : upcomingEvents.length === 0 ? <div className="dashboard-empty">暂无近期行程</div> : <div className="upcoming-event-list">{upcomingEvents.map((event) => <button className="upcoming-event-item" type="button" key={event.id} onClick={() => navigate('/itinerary')}><span>{formatRelativeDate(event.event_date)}</span><strong>{formatEventTime(event)}{event.title}</strong></button>)}</div>}</div>
+    {lastCompleted ? <div className="todo-toast">已完成：{lastCompleted.title}<button type="button" onClick={() => void handleReopenTodo(lastCompleted)}>撤销</button></div> : null}
+    {(todoModalOpen || editingTodo) ? <SystemModal title={editingTodo ? '编辑工作' : '新增工作'} ariaLabel={editingTodo ? '编辑工作' : '新增工作'} wide={false} onClose={() => { setTodoModalOpen(false); setEditingTodo(null); }} footer={<><button className="secondary-button compact-button" type="button" onClick={() => { setTodoModalOpen(false); setEditingTodo(null); }} disabled={savingTodo}>取消</button><button className="primary-button compact-button" type="submit" form="dashboard-todo-form" disabled={savingTodo}>{savingTodo ? '保存中' : editingTodo ? '保存' : '新增工作'}</button></>}><form id="dashboard-todo-form" className="todo-form" onSubmit={handleSaveTodo}><label className="form-field"><span>工作内容</span><input value={todoForm.title} onChange={(event) => setTodoForm((current) => ({ ...current, title: event.target.value }))} autoFocus required /></label><div className="form-field"><span>日期提醒（选填）</span><div className="todo-date-options"><button type="button" onClick={() => setQuickDate('today')}>今天</button><button type="button" onClick={() => setQuickDate('tomorrow')}>明天</button><button type="button" onClick={() => setQuickDate('week')}>本周</button><input aria-label="选择日期" type="date" value={todoForm.dueDate} onChange={(event) => setTodoForm((current) => ({ ...current, dueDate: event.target.value }))} /></div></div></form></SystemModal> : null}
+    {deletingTodo ? <SystemModal title="删除工作" ariaLabel="删除工作确认" wide={false} onClose={() => setDeletingTodo(null)} footer={<><button className="secondary-button compact-button" type="button" onClick={() => setDeletingTodo(null)} disabled={savingTodo}>取消</button><button className="primary-button compact-button danger-confirm-button" type="button" onClick={() => void handleDeleteTodo()} disabled={savingTodo}>确定删除</button></>}><p>确定删除「{deletingTodo.title}」吗？此操作无法恢复。</p></SystemModal> : null}
+  </section>;
 }
-
-function formatRelativeDate(date: string) {
-  const today = startOfDay(new Date());
-  const target = startOfDay(new Date(`${date}T00:00:00`));
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
-
-  if (diffDays === 0) return '今天';
-  if (diffDays === 1) return '明天';
-
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  }).format(target);
-}
-
-function formatEventTime(event: ScheduleEvent) {
-  return event.start_time ? `${event.start_time.slice(0, 5)} ` : '';
-}
-
-function startOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
-}
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : '操作失败。';
-}
+function todayKey() { return toDateKey(new Date()); }
+function toDateKey(date: Date) { return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`; }
+function getTodoDateState(todo: TodoItem) { if (todo.is_completed) return ' completed-date'; if (!todo.due_date) return ' empty'; if (todo.due_date < todayKey()) return ' overdue'; if (todo.due_date === todayKey()) return ' today'; return ''; }
+function formatTodoDate(dueDate: string | null) { if (!dueDate) return ''; const diff = Math.round((new Date(`${dueDate}T00:00:00`).getTime() - startOfDay(new Date()).getTime()) / 86400000); if (diff === 0) return '今天'; if (diff === 1) return '明天'; if (diff < 0) return `逾期 ${Math.abs(diff)} 天`; return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit' }).format(new Date(`${dueDate}T00:00:00`)); }
+function formatCompletedAt(value: string | null) { return value ? `${new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))} 完成` : '已完成'; }
+function formatRelativeDate(date: string) { const diffDays = Math.round((startOfDay(new Date(`${date}T00:00:00`)).getTime() - startOfDay(new Date()).getTime()) / 86400000); if (diffDays === 0) return '今天'; if (diffDays === 1) return '明天'; return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(`${date}T00:00:00`)); }
+function formatEventTime(event: ScheduleEvent) { return event.start_time ? `${event.start_time.slice(0, 5)} ` : ''; }
+function startOfDay(date: Date) { const value = new Date(date); value.setHours(0, 0, 0, 0); return value; }
+function getErrorMessage(error: unknown) { return error instanceof Error ? error.message : '操作失败。'; }
