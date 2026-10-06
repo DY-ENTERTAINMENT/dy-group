@@ -15,10 +15,11 @@ import {
   type AttendanceEffectiveReplacementWorkChange,
   type AttendanceEmployee,
   type AttendanceRestDay,
+  type AttendancePeriodData,
   attendanceManagementService,
   getAttendancePeriodRange,
 } from '../services/attendanceManagement.service';
-import { isEmployeeActiveOnDate, resolveEffectiveAttendanceDay } from '../utils/attendance-effective-day';
+import { createEffectiveAttendanceDayResolver, isEmployeeActiveOnDate, resolveEffectiveAttendanceDay } from '../utils/attendance-effective-day';
 import type {
   AttendanceAbnormalReviewHistory,
   AttendanceAbnormalReviewStatus,
@@ -83,6 +84,7 @@ type AbnormalCenterTab = 'pending' | 'abnormal';
 type EmployeeStatusFilter = 'working-attendance' | 'all-working' | 'attendance-exempt' | 'left' | 'all';
 type AttendanceTab = 'today' | 'outgoing' | 'statistics';
 type TodayAttendanceStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out';
+type TodayQuickFilter = 'all' | TodayAttendanceStatus | 'abnormal' | 'late' | 'overtime_break' | 'abnormal_clock_out';
 
 type TodayAttendanceRow = {
   employee: AttendanceEmployee;
@@ -93,6 +95,19 @@ type TodayAttendanceRow = {
   clockOut: AttendanceRecord | null;
   status: TodayAttendanceStatus;
   notices: string[];
+  breakSessions: BreakSession[];
+  totalBreakMinutes: number;
+  requiresAttendance: boolean;
+  isLate: boolean;
+  hasOvertimeBreak: boolean;
+  hasAbnormalClockOut: boolean;
+};
+
+type BreakSession = {
+  start: AttendanceRecord;
+  end: AttendanceRecord | null;
+  durationMinutes: number | null;
+  outsideWorkHours: boolean;
 };
 
 const leaveTypeLabels: Record<LeaveType, string> = {
@@ -110,9 +125,12 @@ export function AttendanceManagementPage() {
   const [todayDate, setTodayDate] = useState(malaysiaDateKey(new Date()));
   const [todaySearch, setTodaySearch] = useState('');
   const [todayStatusFilter, setTodayStatusFilter] = useState<TodayAttendanceStatus | 'abnormal' | ''>('');
+  const [todayQuickFilter, setTodayQuickFilter] = useState<TodayQuickFilter>('all');
   const [todayEmployees, setTodayEmployees] = useState<AttendanceEmployee[]>([]);
   const [todayRecords, setTodayRecords] = useState<AttendanceRecord[]>([]);
   const [todayRecoveredClockOutIds, setTodayRecoveredClockOutIds] = useState<string[]>([]);
+  const [todayPeriodData, setTodayPeriodData] = useState<AttendancePeriodData | null>(null);
+  const [todayClock, setTodayClock] = useState(() => new Date());
   const [todayLoading, setTodayLoading] = useState(true);
   const [todayError, setTodayError] = useState('');
   const [todayDetailEmployeeId, setTodayDetailEmployeeId] = useState('');
@@ -162,9 +180,17 @@ export function AttendanceManagementPage() {
   const abnormalRecords = summaries.flatMap((summary) => summary.abnormalRecords);
   const pendingAbnormalRecords = abnormalRecords.filter((record) => record.reviewStatus === 'pending');
   const abnormalEmployeeCount = new Set(pendingAbnormalRecords.map((record) => record.employee.id)).size;
+  const todayEffectiveDayResolver = useMemo(() => todayPeriodData ? createEffectiveAttendanceDayResolver({
+    leaves: todayPeriodData.leaveRequests,
+    restDays: todayPeriodData.restDays,
+    holidays: todayPeriodData.publicHolidays,
+    activities: todayPeriodData.companyActivities,
+    replacementChanges: todayPeriodData.effectiveReplacementWorkChanges,
+    dates: [todayDate],
+  }) : null, [todayDate, todayPeriodData]);
   const todayRows = useMemo(
-    () => buildTodayAttendanceRows(todayEmployees, todayRecords, todayDate, malaysiaDateKey(new Date()), new Set(todayRecoveredClockOutIds)),
-    [todayDate, todayEmployees, todayRecords, todayRecoveredClockOutIds],
+    () => buildTodayAttendanceRows(todayEmployees, todayRecords, todayDate, malaysiaDateKey(todayClock), new Set(todayRecoveredClockOutIds), todayEffectiveDayResolver, todayPeriodData?.effectiveWorkTimes ?? [], todayPeriodData?.abnormalReviewHistory ?? [], todayClock),
+    [todayDate, todayEmployees, todayRecords, todayRecoveredClockOutIds, todayEffectiveDayResolver, todayPeriodData, todayClock],
   );
   const filteredTodayRows = useMemo(() => {
     const search = todaySearch.trim().toLowerCase();
@@ -173,9 +199,11 @@ export function AttendanceManagementPage() {
         .some((value) => value?.toLowerCase().includes(search));
       const matchesStatus = !todayStatusFilter
         || (todayStatusFilter === 'abnormal' ? row.notices.length > 0 : row.status === todayStatusFilter);
-      return matchesSearch && matchesStatus;
+      const matchesQuickFilter = todayQuickFilter === 'all'
+        || (todayQuickFilter === 'abnormal' ? row.notices.length > 0 : todayQuickFilter === 'late' ? row.isLate : todayQuickFilter === 'overtime_break' ? row.hasOvertimeBreak : todayQuickFilter === 'abnormal_clock_out' ? row.hasAbnormalClockOut : row.status === todayQuickFilter);
+      return matchesSearch && matchesStatus && matchesQuickFilter;
     });
-  }, [todayRows, todaySearch, todayStatusFilter]);
+  }, [todayRows, todaySearch, todayStatusFilter, todayQuickFilter]);
   const todayDetailRow = todayRows.find((row) => row.employee.id === todayDetailEmployeeId) ?? null;
 
   useEffect(() => {
@@ -185,6 +213,10 @@ export function AttendanceManagementPage() {
   useEffect(() => {
     void loadTodayAttendanceData();
   }, [todayDate, regionId]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayClock(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => outgoingPageMode === 'local-preview' ? outgoingLocalPreviewService.subscribe(() => setOutgoingRevision((value) => value + 1)) : undefined, [outgoingPageMode]);
 
   usePullToRefresh(loadAttendanceData, [month, regionId]);
@@ -236,6 +268,7 @@ export function AttendanceManagementPage() {
       setTodayEmployees(data.employees);
       setTodayRecords(data.attendanceRecords);
       setTodayRecoveredClockOutIds(data.recoveredClockOutRecordIds);
+      setTodayPeriodData(data);
       setTodayDetailEmployeeId('');
     } catch (loadError) {
       setTodayError(loadError instanceof Error ? loadError.message : '读取今日考勤数据失败。');
@@ -273,6 +306,7 @@ export function AttendanceManagementPage() {
           canSwitchRegion={canSwitchRegion}
           search={todaySearch}
           statusFilter={todayStatusFilter}
+          quickFilter={todayQuickFilter}
           rows={filteredTodayRows}
           allRows={todayRows}
           loading={todayLoading}
@@ -282,6 +316,7 @@ export function AttendanceManagementPage() {
           onRegionChange={setRegionId}
           onSearchChange={setTodaySearch}
           onStatusFilterChange={setTodayStatusFilter}
+          onQuickFilterChange={setTodayQuickFilter}
           onOpenDetail={(employeeId) => setTodayDetailEmployeeId(employeeId)}
         />
       ) : activeTab === 'outgoing' && outgoingPageMode === 'local-preview' ? <OutgoingManagementPreview
@@ -427,23 +462,27 @@ export function AttendanceManagementPage() {
 }
 
 function TodayAttendancePanel({
-  date, regionId, regions, canSwitchRegion, search, statusFilter, rows, allRows, loading, error,
-  canRequestOtherPhotos, onDateChange, onRegionChange, onSearchChange, onStatusFilterChange, onOpenDetail,
+  date, regionId, regions, canSwitchRegion, search, statusFilter, quickFilter, rows, allRows, loading, error,
+  canRequestOtherPhotos, onDateChange, onRegionChange, onSearchChange, onStatusFilterChange, onQuickFilterChange, onOpenDetail,
 }: {
   date: string; regionId: string; regions: Region[]; canSwitchRegion: boolean; search: string;
-  statusFilter: TodayAttendanceStatus | 'abnormal' | ''; rows: TodayAttendanceRow[]; allRows: TodayAttendanceRow[];
+  statusFilter: TodayAttendanceStatus | 'abnormal' | ''; quickFilter: TodayQuickFilter; rows: TodayAttendanceRow[]; allRows: TodayAttendanceRow[];
   loading: boolean; error: string; onDateChange: (value: string) => void; onRegionChange: (value: string) => void;
   onSearchChange: (value: string) => void; onStatusFilterChange: (value: TodayAttendanceStatus | 'abnormal' | '') => void;
+  onQuickFilterChange: (value: TodayQuickFilter) => void;
   onOpenDetail: (employeeId: string) => void; canRequestOtherPhotos: boolean;
 }) {
   const counts = {
-    total: rows.length,
-    working: rows.filter((row) => row.status === 'working').length,
-    onBreak: rows.filter((row) => row.status === 'on_break').length,
-    clockedOut: rows.filter((row) => row.status === 'clocked_out').length,
-    abnormal: rows.filter((row) => row.notices.length > 0).length,
+    total: allRows.length,
+    working: allRows.filter((row) => row.status === 'working').length,
+    onBreak: allRows.filter((row) => row.status === 'on_break').length,
+    clockedOut: allRows.filter((row) => row.status === 'clocked_out').length,
+    abnormal: allRows.filter((row) => row.notices.length > 0).length,
+    late: allRows.filter((row) => row.isLate).length,
+    overtimeBreak: allRows.filter((row) => row.hasOvertimeBreak).length,
+    abnormalClockOut: allRows.filter((row) => row.hasAbnormalClockOut).length,
   };
-  const hasFilters = Boolean(search || statusFilter);
+  const hasFilters = Boolean(search || statusFilter || quickFilter !== 'all');
 
   return <>
     <div className="attendance-filters today-attendance-filters">
@@ -453,27 +492,30 @@ function TodayAttendancePanel({
       <label className="form-field"><span>当前状态</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value as TodayAttendanceStatus | 'abnormal' | '')}><option value="">全部状态</option><option value="not_started">未上班</option><option value="working">工作中</option><option value="on_break">休息中</option><option value="clocked_out">已下班</option><option value="abnormal">考勤异常</option></select></label>
     </div>
     <div className="today-attendance-stats">
-      <TodayStat label="全部员工" value={counts.total} tone="neutral" /><TodayStat label="工作中" value={counts.working} tone="working" /><TodayStat label="休息中" value={counts.onBreak} tone="on_break" /><TodayStat label="已下班" value={counts.clockedOut} tone="clocked_out" /><TodayStat label="考勤异常" value={counts.abnormal} tone="abnormal" />
+      <TodayStat label="全部员工" value={counts.total} tone="neutral" active={quickFilter === 'all'} onClick={() => onQuickFilterChange('all')} /><TodayStat label="工作中" value={counts.working} tone="working" active={quickFilter === 'working'} onClick={() => onQuickFilterChange('working')} /><TodayStat label="休息中" value={counts.onBreak} tone="on_break" active={quickFilter === 'on_break'} onClick={() => onQuickFilterChange('on_break')} /><TodayStat label="已下班" value={counts.clockedOut} tone="clocked_out" active={quickFilter === 'clocked_out'} onClick={() => onQuickFilterChange('clocked_out')} /><TodayStat label="考勤异常" value={counts.abnormal} tone="abnormal" active={quickFilter === 'abnormal'} onClick={() => onQuickFilterChange('abnormal')} /><TodayStat label="当日迟到" value={counts.late} tone="late" active={quickFilter === 'late'} onClick={() => onQuickFilterChange('late')} /><TodayStat label="超过休息时间" value={counts.overtimeBreak} tone="overtime_break" active={quickFilter === 'overtime_break'} onClick={() => onQuickFilterChange('overtime_break')} /><TodayStat label="异常下班" value={counts.abnormalClockOut} tone="abnormal_clock_out" active={quickFilter === 'abnormal_clock_out'} onClick={() => onQuickFilterChange('abnormal_clock_out')} />
     </div>
     <div className="staff-list-panel">
       <div className="list-header"><div><span>今日考勤</span><h3>{date} · {allRows.length} 位员工</h3></div></div>
       {error ? <p className="form-alert table-alert">{error}</p> : null}
-      {loading ? <div className="table-state">正在读取今日考勤...</div> : rows.length === 0 ? <div className="table-state">{hasFilters ? '没有符合筛选条件的员工。' : '暂无可查看的员工。'}</div> : <div className="staff-table-wrap"><table className="staff-table today-attendance-table"><thead><tr><th>员工</th><th>区域</th><th>上班</th><th>休息</th><th>下班</th><th>当前状态</th><th>查看详情</th></tr></thead><tbody>{rows.map((row) => <tr key={row.employee.id}><td>{getEmployeeDisplayName(row.employee)}</td><td>{row.employee.region?.code ?? '-'}</td><td><PunchCell record={row.clockIn} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><BreakCell start={row.breakStart} end={row.breakEnd} isToday={date === malaysiaDateKey(new Date())} isOnBreak={row.status === 'on_break'} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><PunchCell record={row.clockOut} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /></td><td><span className={`today-status today-status-${row.status}`}>{todayStatusLabel(row.status)}</span>{row.notices.length ? <span className="today-notice">考勤异常</span> : null}</td><td><button className="secondary-button compact-button" type="button" onClick={() => onOpenDetail(row.employee.id)}><Eye size={16} /><span>查看详情</span></button></td></tr>)}</tbody></table></div>}
+      {loading ? <div className="table-state">正在读取今日考勤...</div> : rows.length === 0 ? <div className="table-state">{hasFilters ? '没有符合筛选条件的员工。' : '暂无可查看的员工。'}</div> : <div className="staff-table-wrap"><table className="staff-table today-attendance-table"><thead><tr><th>员工</th><th>区域</th><th>上班时间</th><th>开始休息</th><th>结束休息</th><th>下班时间</th><th>当前状态</th><th>查看详情</th></tr></thead><tbody>{rows.map((row) => <tr key={row.employee.id}><td>{getFormalEmployeeName(row.employee)}</td><td>{row.employee.region?.code ?? '-'}</td><td><PunchCell record={row.clockIn} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} abnormal={row.isLate} /></td><td><PunchCell record={row.breakStart} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} abnormal={row.hasOvertimeBreak} /></td><td><PunchCell record={row.breakEnd} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} abnormal={row.hasOvertimeBreak} /></td><td><PunchCell record={row.clockOut} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} abnormal={row.hasAbnormalClockOut} /></td><td><span className={`today-status today-status-${row.status}`}>{todayStatusLabel(row.status)}</span>{row.notices.length ? <span className="today-notice">考勤异常</span> : null}</td><td><button className="secondary-button compact-button" type="button" onClick={() => onOpenDetail(row.employee.id)}><Eye size={16} /><span>查看详情</span></button></td></tr>)}</tbody></table></div>}
     </div>
   </>;
 }
 
-function TodayStat({ label, value, tone }: { label: string; value: number; tone: 'neutral' | TodayAttendanceStatus | 'abnormal' }) {
-  return <div className={`today-attendance-stat today-attendance-stat-${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+function TodayStat({ label, value, tone, active, onClick }: { label: string; value: number; tone: 'neutral' | TodayAttendanceStatus | 'abnormal' | 'late' | 'overtime_break' | 'abnormal_clock_out'; active: boolean; onClick: () => void }) {
+  return <button className={`today-attendance-stat today-attendance-stat-${tone}${active ? ' active' : ''}`} type="button" onClick={onClick}><span>{label}</span><strong>{value}</strong></button>;
 }
 
-function PunchCell({ record, showDenied = true, canRequestOtherPhotos }: { record: AttendanceRecord | null; showDenied?: boolean; canRequestOtherPhotos: boolean }) {
-  return <span className="today-punch-cell">{record ? <><strong>{formatRecordTime(record)}</strong><AttendancePhotoThumbnail record={record} showDenied={showDenied} canRequestOtherPhotos={canRequestOtherPhotos} /></> : '—'}</span>;
+function PunchCell({ record, showDenied = true, canRequestOtherPhotos, abnormal = false }: { record: AttendanceRecord | null; showDenied?: boolean; canRequestOtherPhotos: boolean; abnormal?: boolean }) {
+  return <span className={`today-punch-cell${abnormal && record ? ' today-punch-cell-abnormal' : ''}`}>{record ? <><strong>{formatRecordTime(record)}</strong><AttendancePhotoThumbnail record={record} showDenied={showDenied} canRequestOtherPhotos={canRequestOtherPhotos} /></> : '—'}</span>;
 }
 
-function BreakCell({ start, end, isToday, isOnBreak, canRequestOtherPhotos }: { start: AttendanceRecord | null; end: AttendanceRecord | null; isToday: boolean; isOnBreak: boolean; canRequestOtherPhotos: boolean }) {
-  if (!start && !end) return <>—</>;
-  return <span className="today-break-cell"><PunchCell record={start} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /><span className="today-break-arrow">→</span>{end ? <PunchCell record={end} showDenied={false} canRequestOtherPhotos={canRequestOtherPhotos} /> : isToday && isOnBreak ? <span className="today-status today-status-on_break">休息中</span> : <span className="today-notice">未结束</span>}</span>;
+function BreakCell({ sessions, totalMinutes, isToday }: { sessions: BreakSession[]; totalMinutes: number; isToday: boolean }) {
+  if (!sessions.length) return <>—</>;
+  const activeSession = sessions.find((session) => !session.end);
+  if (activeSession && isToday) return <span className="today-break-summary today-break-summary-active">休息中 · {formatBreakMinutes(totalMinutes)}</span>;
+  if (activeSession) return <span className="today-break-summary today-break-summary-unfinished">未结束{totalMinutes ? ` · ${formatBreakMinutes(totalMinutes)}` : ''}</span>;
+  return <span className="today-break-summary">{sessions.length > 1 ? `${sessions.length} 次 · ` : ''}{formatBreakMinutes(totalMinutes)}</span>;
 }
 
 function AttendancePhotoThumbnail({ record, showDenied = true, canRequestOtherPhotos }: { record: AttendanceRecord; showDenied?: boolean; canRequestOtherPhotos: boolean }) {
@@ -503,6 +545,10 @@ function TodayAttendanceDetail({ row, canRequestOtherPhotos, onClose }: { row: T
   return <SystemModal title={getEmployeeDisplayName(row.employee)} subtitle="当天完整打卡时间线" ariaLabel="当天完整打卡时间线" onClose={onClose} footer={<button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>}>
     <div className="today-detail-head"><span>区域：{row.employee.region?.code ?? '-'}</span><span>状态：{todayStatusLabel(row.status)}</span></div>
     {row.notices.length ? <div className="today-detail-notices">{row.notices.map((notice) => <p key={notice}><AlertTriangle size={15} />{notice}</p>)}</div> : null}
+    <section className="today-break-records" aria-label="休息记录">
+      <div className="today-break-records-head"><h4>休息记录</h4>{row.requiresAttendance && !row.breakSessions.length ? <span className="today-break-status">未休息</span> : row.breakSessions.length ? <span className="today-break-total">累计休息：{formatBreakMinutes(row.totalBreakMinutes)}</span> : <span className="today-break-status">当天无需考勤</span>}</div>
+      {row.breakSessions.length ? <ol>{row.breakSessions.map((session, index) => <li key={session.start.id}><strong>第 {index + 1} 次休息</strong><span>开始：{formatRecordTime(session.start)}</span><span>结束：{session.end ? formatRecordTime(session.end) : '进行中'}</span><span>时长：{session.durationMinutes === null ? '—' : formatBreakMinutes(session.durationMinutes)}</span>{session.outsideWorkHours ? <em>非工作时段休息</em> : null}</li>)}</ol> : <p>{row.requiresAttendance ? '当天尚无开始休息记录。' : '该员工当天不属于有效考勤日，不作休息专项判断。'}</p>}
+    </section>
     {row.records.length === 0 ? <div className="table-state compact">当天没有打卡记录。</div> : <ol className="today-timeline">{row.records.map((record) => <li key={record.id}><div><strong>{formatPunchType(record.punch_type)}</strong><span>{formatRecordTime(record)}</span></div><AttendancePhotoThumbnail record={record} canRequestOtherPhotos={canRequestOtherPhotos} /></li>)}</ol>}
   </SystemModal>;
 }
@@ -949,6 +995,10 @@ function getEmployeeDisplayName(employee: Pick<AttendanceEmployee, 'full_name' |
   return employee.nickname?.trim() || employee.full_name;
 }
 
+function getFormalEmployeeName(employee: Pick<AttendanceEmployee, 'full_name' | 'nickname'>) {
+  return employee.full_name?.trim() || getEmployeeDisplayName(employee);
+}
+
 function buildSummaries(
   employees: AttendanceEmployee[],
   attendanceRecords: AttendanceRecord[],
@@ -1310,13 +1360,19 @@ function getDateRange(startDate: string, endDate: string) {
   return dates;
 }
 
-function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string, recoveredClockOutRecordIds: Set<string>): TodayAttendanceRow[] {
+function buildTodayAttendanceRows(
+  employees: AttendanceEmployee[], attendanceRecords: AttendanceRecord[], date: string, malaysiaToday: string,
+  recoveredClockOutRecordIds: Set<string>, effectiveDayResolver: ReturnType<typeof createEffectiveAttendanceDayResolver> | null,
+  effectiveWorkTimes: AttendanceEffectiveWorkTime[], abnormalReviewHistory: AttendanceAbnormalReviewHistory[], now: Date,
+): TodayAttendanceRow[] {
   const recordsByEmployee = new Map<string, AttendanceRecord[]>();
   attendanceRecords.forEach((record) => {
     if (!record.employee_id || malaysiaDateKey(new Date(record.punched_at)) !== date) return;
     recordsByEmployee.set(record.employee_id, [...(recordsByEmployee.get(record.employee_id) ?? []), record]);
   });
 
+  const workTimesByEmployee = new Map(effectiveWorkTimes.map((item) => [`${item.employee_id}:${item.work_date}`, item]));
+  const latestReviewByRecordId = getLatestReviewByRecordId(abnormalReviewHistory);
   return employees.map((employee) => {
     const records = [...(recordsByEmployee.get(employee.id) ?? [])].sort((a, b) => +new Date(a.punched_at) - +new Date(b.punched_at) || a.id.localeCompare(b.id));
     const clockIn = records.find((record) => record.punch_type === 'clock_in') ?? null;
@@ -1326,8 +1382,48 @@ function buildTodayAttendanceRows(employees: AttendanceEmployee[], attendanceRec
     const notices = deriveTodayNotices(records, clockIn, clockOut, date < malaysiaToday, recoveredClockOutRecordIds);
     const hasUnclosedBreak = hasUnclosedBreakAtEnd(records);
     const status: TodayAttendanceStatus = clockOut ? 'clocked_out' : hasUnclosedBreak ? 'on_break' : clockIn ? 'working' : 'not_started';
-    return { employee, records, clockIn, breakStart, breakEnd, clockOut, status, notices };
+    const workTime = workTimesByEmployee.get(`${employee.id}:${date}`);
+    const effectiveAttendanceDay = effectiveDayResolver?.(employee, date);
+    const effectiveStartTime = workTime?.effective_start_time ?? employee.start_work_time;
+    const breakSessions = pairBreakSessions(records, date === malaysiaToday, workTime?.effective_start_time ?? employee.start_work_time, workTime?.effective_end_time ?? employee.end_work_time, now);
+    const totalBreakMinutes = breakSessions.reduce((total, session) => total + (session.durationMinutes ?? 0), 0);
+    const isLate = Boolean(effectiveAttendanceDay?.requiresAttendance && clockIn && effectiveStartTime && isAfterWorkTime(clockIn.punched_at, effectiveStartTime));
+    const activeBreak = breakSessions.find((session) => !session.end) ?? null;
+    const hasCompletedOvertimeBreak = Boolean(breakStart && breakEnd && minutesBetween(breakStart.punched_at, breakEnd.punched_at) > 60);
+    const hasOpenOvertimeBreak = Boolean(activeBreak?.durationMinutes && activeBreak.durationMinutes > 60);
+    const hasOvertimeBreak = Boolean(employee.require_attendance && !effectiveAttendanceDay?.exemptFromRules && (hasCompletedOvertimeBreak || hasOpenOvertimeBreak));
+    const employeeRecords = attendanceRecords.filter((record) => record.employee_id === employee.id && shouldCountAttendanceDate(employee, malaysiaDateKey(new Date(record.punched_at))));
+    const expectedIp = mostFrequent(employeeRecords.map((record) => record.ip_address).filter(Boolean) as string[]);
+    const expectedDevice = mostFrequent(employeeRecords.map((record) => record.device_info).filter(Boolean));
+    const expectedGps = mostFrequent(employeeRecords.map((record) => gpsKey(record)).filter(Boolean));
+    const clockOutReview = clockOut ? latestReviewByRecordId.get(clockOut.id) : undefined;
+    const hasAbnormalClockOut = Boolean(clockOut && getDeviceAbnormalTypes(clockOut, expectedIp, expectedGps, expectedDevice).length && (clockOutReview?.reviewStatus ?? 'pending') !== 'normal');
+    return { employee, records, clockIn, breakStart, breakEnd, clockOut, status, notices, breakSessions, totalBreakMinutes, requiresAttendance: effectiveAttendanceDay?.requiresAttendance ?? false, isLate, hasOvertimeBreak, hasAbnormalClockOut };
   });
+}
+
+function pairBreakSessions(records: AttendanceRecord[], isToday: boolean, startWorkTime: string | null, endWorkTime: string | null, now: Date): BreakSession[] {
+  const sessions: BreakSession[] = [];
+  let openStart: AttendanceRecord | null = null;
+  records.forEach((record) => {
+    if (record.punch_type === 'break_start') {
+      if (!openStart) openStart = record;
+      return;
+    }
+    if (record.punch_type === 'break_end' && openStart) {
+      sessions.push(makeBreakSession(openStart, record, startWorkTime, endWorkTime));
+      openStart = null;
+    }
+  });
+  if (openStart) sessions.push(makeBreakSession(openStart, null, startWorkTime, endWorkTime, isToday ? now : null));
+  return sessions;
+}
+
+function makeBreakSession(start: AttendanceRecord, end: AttendanceRecord | null, startWorkTime: string | null, endWorkTime: string | null, elapsedAt: Date | null = null): BreakSession {
+  const durationMinutes = end ? minutesBetween(start.punched_at, end.punched_at) : elapsedAt ? minutesBetween(start.punched_at, elapsedAt.toISOString()) : null;
+  const startMinutes = malaysiaMinutesOfDay(start.punched_at);
+  const outsideWorkHours = Boolean(startWorkTime && endWorkTime && (startMinutes < minutesFromTime(startWorkTime) || startMinutes > minutesFromTime(endWorkTime)));
+  return { start, end, durationMinutes, outsideWorkHours };
 }
 
 function deriveTodayNotices(records: AttendanceRecord[], clockIn: AttendanceRecord | null, clockOut: AttendanceRecord | null, isHistoricalDate: boolean, recoveredClockOutRecordIds: Set<string>) {
@@ -1390,6 +1486,17 @@ function toDateKey(date: Date) {
 
 function minutesBetween(startValue: string, endValue: string) {
   return Math.max(0, Math.round((new Date(endValue).getTime() - new Date(startValue).getTime()) / 60000));
+}
+
+function formatBreakMinutes(minutes: number) {
+  return `${minutes} 分钟`;
+}
+
+function malaysiaMinutesOfDay(value: string) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  return Number(parts.find((part) => part.type === 'hour')?.value ?? 0) * 60 + Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
 }
 
 function isAfterWorkTime(value: string, workTime: string) {

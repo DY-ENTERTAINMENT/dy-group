@@ -3056,8 +3056,10 @@ a {
 .attendance-page-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
 .attendance-page-tabs button.active { border-bottom-color: var(--primary); color: var(--primary); }
 .today-attendance-filters { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
-.today-attendance-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.today-attendance-stat { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.today-attendance-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.today-attendance-stat { display: grid; gap: 5px; min-height: 88px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); font: inherit; text-align: center; cursor: pointer; }
+.today-attendance-stat:hover { border-color: color-mix(in srgb, var(--primary) 42%, var(--border)); }
+.today-attendance-stat.active { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 14%, transparent); }
 .today-attendance-stat span { color: var(--muted); font-size: 13px; font-weight: 700; }
 .today-attendance-stat strong { font-size: 22px; }
 .today-attendance-stat-working { border-color: #cce8d7; background: #fbfefc; }
@@ -3068,8 +3070,11 @@ a {
 .today-attendance-stat-clocked_out strong { color: #5274a6; }
 .today-attendance-stat-abnormal { border-color: #efcfd4; background: #fffafb; }
 .today-attendance-stat-abnormal strong { color: #a85c68; }
-.today-attendance-table th:nth-child(3), .today-attendance-table th:nth-child(4), .today-attendance-table th:nth-child(5) { min-width: 100px; }
-.today-punch-cell { display: inline-flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.today-attendance-stat-late, .today-attendance-stat-overtime_break, .today-attendance-stat-abnormal_clock_out { border-color: #efd8d8; background: #fffafa; }
+.today-attendance-stat-late strong, .today-attendance-stat-overtime_break strong, .today-attendance-stat-abnormal_clock_out strong { color: #ad6268; }
+.today-attendance-table th:nth-child(3), .today-attendance-table th:nth-child(4), .today-attendance-table th:nth-child(5), .today-attendance-table th:nth-child(6) { min-width: 100px; }
+.today-punch-cell { display: inline-flex; flex-direction: column; gap: 5px; align-items: flex-start; min-width: 60px; padding: 4px; border: 1px solid transparent; border-radius: 7px; }
+.today-punch-cell-abnormal { border-color: #f0ced0; background: #fff3f3; }
 .today-break-cell { display: inline-flex; align-items: center; gap: 7px; }
 .today-break-arrow { color: var(--muted); }
 .today-photo-thumbnail { display: block; width: 38px; height: 38px; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-soft); cursor: pointer; }
@@ -3087,10 +3092,30 @@ a {
 .today-detail-head { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .today-detail-notices { display: grid; gap: 6px; margin-bottom: 14px; }
 .today-detail-notices p { display: flex; align-items: center; gap: 6px; margin: 0; color: #a85c68; font-size: 13px; font-weight: 700; }
+.today-break-summary { display: inline-flex; color: #466c5a; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.today-break-summary-active { color: #9a741c; }
+.today-break-summary-unfinished { color: #a85c68; }
+.today-break-records { display: grid; gap: 10px; margin: 0 0 16px; padding: 14px; border: 1px solid #e8e4d7; border-radius: 10px; background: #fffdf8; }
+.today-break-records-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.today-break-records h4, .today-break-records p { margin: 0; }
+.today-break-records h4 { font-size: 15px; }
+.today-break-records p { color: var(--muted); font-size: 13px; }
+.today-break-total, .today-break-status { border-radius: 999px; padding: 4px 8px; color: #466c5a; background: #eef7f1; font-size: 12px; font-weight: 800; }
+.today-break-status { color: #69717a; background: #f0f2f4; }
+.today-break-records ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.today-break-records li { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 12px; padding: 10px; border-radius: 8px; background: rgba(255, 255, 255, .7); font-size: 13px; }
+.today-break-records li strong { grid-column: 1 / -1; }
+.today-break-records li span { color: var(--muted); }
+.today-break-records li em { grid-column: 1 / -1; color: #9a741c; font-size: 12px; font-style: normal; font-weight: 800; }
 .today-timeline { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .today-timeline li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
 .today-timeline li > div { display: grid; gap: 4px; }
 .today-timeline li span { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 720px) {
+  .today-attendance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .today-break-records li { grid-template-columns: 1fr; }
+}
 
 .employee-rest-management-page { display: grid; gap: 18px; }
 .employee-rest-management-page .rest-management-filters { grid-template-columns: repeat(4, minmax(180px, 1fr)); align-items: end; }

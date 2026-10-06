@@ -8,7 +8,6 @@ import { StaffPage } from '../pages/StaffPage';
 import { AttendancePage } from '../pages/AttendancePage';
 import { AttendanceLocationPage } from '../pages/AttendanceLocationPage';
 import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
-import { EmployeeRestManagementPage } from '../pages/EmployeeRestManagementPage';
 import { LeavePage } from '../pages/LeavePage';
 import { LeaveBalanceManagementPage } from '../pages/LeaveBalanceManagementPage';
 import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
@@ -106,12 +105,8 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: getMenuPath('employee-rest-management'),
-            element: (
-              <RequirePermission permissionKey="attendance-management">
-                <EmployeeRestManagementPage />
-              </RequirePermission>
-            ),
+            path: 'hr/employee-rest-management',
+            element: <Navigate to={getMenuPath('attendance-management')} replace />,
           },
           {
             path: getMenuPath('public-holidays'),
