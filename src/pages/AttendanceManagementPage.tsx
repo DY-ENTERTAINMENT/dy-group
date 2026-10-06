@@ -390,7 +390,7 @@ export function AttendanceManagementPage() {
             <table className="staff-table">
               <thead>
                 <tr>
-                  <th>昵称</th>
+                  <th>员工姓名</th>
                   <th>迟到</th>
                   <th>早退</th>
                   <th>旷工</th>
@@ -412,10 +412,10 @@ export function AttendanceManagementPage() {
                             setShowAbnormalCenter(false);
                           }}
                         >
-                          {getEmployeeDisplayName(summary.employee)}
+                          {getFormalEmployeeName(summary.employee)}
                         </button>
                       ) : (
-                        getEmployeeDisplayName(summary.employee)
+                        getFormalEmployeeName(summary.employee)
                       )}
                     </td>
                     <td>{summary.lateCount}</td>
@@ -556,7 +556,7 @@ function TodayAttendanceDetail({ row, canRequestOtherPhotos, onClose }: { row: T
 function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSummary; onClose: () => void }) {
   return (
     <SystemModal
-      title={getEmployeeDisplayName(summary.employee)}
+      title={getFormalEmployeeName(summary.employee)}
       subtitle="员工考勤详情"
       ariaLabel="员工考勤详情"
       onClose={onClose}
@@ -570,7 +570,7 @@ function EmployeeDetail({ summary, onClose }: { summary: EmployeeAttendanceSumma
         <section className="employee-detail-section">
           <h4>基础资料</h4>
           <div className="detail-list">
-            <div><span>昵称</span><strong>{getEmployeeDisplayName(summary.employee)}</strong></div>
+            <div><span>员工姓名</span><strong>{getFormalEmployeeName(summary.employee)}</strong></div>
             <div><span>员工编号</span><strong>{summary.employee.employee_code ?? '-'}</strong></div>
             <div><span>区域</span><strong>{summary.employee.region?.code ?? '-'}</strong></div>
           </div>
@@ -804,7 +804,7 @@ function AbnormalEmployeeCenterV2({
 
   return (
     <SystemModal
-      title={selected ? `${getEmployeeDisplayName(selected.employee)} 的异常记录` : `${tabRecords.length} 次异常`}
+      title={selected ? `${getFormalEmployeeName(selected.employee)} 的异常记录` : `${tabRecords.length} 次异常`}
       subtitle="异常打卡中心"
       ariaLabel="异常打卡中心"
       className="abnormal-center-modal"
@@ -844,7 +844,7 @@ function AbnormalEmployeeCenterV2({
           <div className="detail-list">
             <div>
               <span>异常员工</span>
-              <strong>{selected ? selected.employee.full_name : `${groupedEmployees.length} 位员工`}</strong>
+              <strong>{selected ? getFormalEmployeeName(selected.employee) : `${groupedEmployees.length} 位员工`}</strong>
             </div>
             <div>
               <span>异常次数</span>
@@ -931,7 +931,7 @@ function AbnormalEmployeeCenterV2({
                       ) : null}
                       {activeTab === 'abnormal' ? (
                         <td className="device-cell">
-                          员工：{getEmployeeDisplayName(record.employee)} / 原因：{record.reviewReason ?? '-'} / 审核人：
+                          员工：{getFormalEmployeeName(record.employee)} / 原因：{record.reviewReason ?? '-'} / 审核人：
                           {record.reviewedByName ?? '-'} / 审核时间：
                           {record.reviewedAt ? new Date(record.reviewedAt).toLocaleString('zh-CN') : '-'}
                         </td>
@@ -961,7 +961,7 @@ function AbnormalEmployeeCenterV2({
                 <tbody>
                   {groupedEmployees.map((item) => (
                     <tr key={item.employee.id}>
-                      <td><strong>{getEmployeeDisplayName(item.employee)}</strong></td>
+                      <td><strong>{getFormalEmployeeName(item.employee)}</strong></td>
                       <td>异常 {item.records.length} 次</td>
                       <td>
                         <button className="secondary-button compact-button" type="button" onClick={() => setSelectedEmployeeId(item.employee.id)}>
