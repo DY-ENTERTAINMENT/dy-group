@@ -177,6 +177,9 @@ const explicitHrPermissionItems: PermissionItem[] = [
   },
   { key: 'outgoing-settings', name: '外出设置', parentKey: 'hr', level: 1, explicitOnly: true },
 ];
+const explicitManagementPermissionItems: PermissionItem[] = [
+  { key: 'management-offline-live-room-schedule', name: '线下直播间直播时间', parentKey: 'management', level: 1, explicitOnly: true },
+];
 const agentSensitivePermissionItems: PermissionItem[] = [
   { key: 'agent-creator-management-settings', name: '编辑主播管理设置', parentKey: 'agent', level: 1 },
   { key: 'agent-creator-revenue-settings', name: '修改主播流水设置', parentKey: 'agent', level: 1 },
@@ -1415,7 +1418,7 @@ function buildPermissionItems(): PermissionItem[] {
     groups.set(groupKey, currentItems);
   });
 
-  explicitHrPermissionItems.forEach((item) => {
+  [...explicitHrPermissionItems, ...explicitManagementPermissionItems].forEach((item) => {
     const currentItems = groups.get(item.parentKey ?? '') ?? [];
     if (!currentItems.some((permissionItem) => permissionItem.key === item.key)) {
       currentItems.push({ ...item });

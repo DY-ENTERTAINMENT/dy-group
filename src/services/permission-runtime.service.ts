@@ -37,6 +37,11 @@ const parentPermissionKeys: Record<string, string> = {
 };
 
 export const permissionRuntimeService = {
+  async hasExplicitPermission(permissionKey: string, action: PermissionAction) {
+    const { data, error } = await db.rpc('current_user_has_explicit_permission', { p_permission_key: permissionKey, p_action: action });
+    if (error) throw error;
+    return Boolean(data);
+  },
   async getRuntimePermissions(profile: Profile | null): Promise<RuntimePermissions> {
     if (!profile) {
       return { role: null, permissions: {}, regionFeaturePermissions: {} };

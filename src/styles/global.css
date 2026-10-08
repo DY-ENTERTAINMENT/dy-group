@@ -14743,3 +14743,476 @@ button.leave-chip:disabled {
 @media (max-width: 390px) {
   .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) .outgoing-management-photos { grid-template-columns: minmax(0, 108px); }
 }
+
+/* Offline live-room schedule: presentation-only layer, isolated from revenue cards. */
+.offline-live-room-page .offline-live-room-filterbar { align-items: end; }
+.offline-live-room-page .offline-live-room-display-controls { display: inline-flex; min-height: 42px; align-items: center; gap: 4px; border: 1px solid #e1e6ef; border-radius: 11px; padding: 4px; background: #f7f9fc; }
+.offline-live-room-page .offline-live-room-display-controls label { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; border-radius: 8px; padding: 0 10px; color: #64748b; font-size: 13px; font-weight: 750; cursor: pointer; }
+.offline-live-room-page .offline-live-room-display-controls input { width: 15px; height: 15px; accent-color: #6656d7; }.offline-live-room-page .offline-live-room-display-controls input:checked + span { color: #332a78; }
+.offline-live-room-page .offline-live-room-schedule-date { display: grid; gap: 5px; color: #64748b; font-size: 12px; font-weight: 750; }.offline-live-room-page .offline-live-room-schedule-date-controls { display: inline-flex; min-height: 42px; align-items: center; gap: 5px; border: 1px solid #e1e6ef; border-radius: 10px; padding: 3px; background: #fff; }
+.offline-live-room-page .offline-live-room-schedule-date button { min-width: 34px; height: 34px; border: 0; border-radius: 7px; color: #516079; background: #f1f4f8; font: inherit; font-weight: 800; cursor: pointer; }.offline-live-room-page .offline-live-room-schedule-date button:last-child { padding-inline: 10px; color: #5544c4; background: #f0edff; font-size: 12px; }.offline-live-room-page .offline-live-room-schedule-date input { height: 34px; border: 0; padding: 0 5px; color: #334155; background: transparent; font: inherit; font-weight: 700; }
+.offline-live-room-page .offline-live-room-card .offline-live-room-schedule-section { display: grid; gap: 11px; margin-top: 15px; border-top: 1px solid #e9edf3; padding-top: 15px; }.offline-live-room-page .offline-live-room-schedule-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; }.offline-live-room-page .offline-live-room-schedule-heading > div { flex: 1 1 120px; min-width: 0; }.offline-live-room-page .offline-live-room-schedule-heading h4 { margin: 0; color: #334155; font-size: 15px; white-space: nowrap; }.offline-live-room-page .offline-live-room-schedule-heading > div > span { display: block; margin-top: 2px; color: #8a97a9; font-size: 11px; font-weight: 650; }.offline-live-room-page .offline-live-room-schedule-add { flex: 0 0 auto; min-height: 38px; border-color: #dcd5ff; color: #5140bf; background: #f5f2ff; }
+.offline-live-room-page .offline-live-room-schedule-list { display: grid; gap: 7px; }.offline-live-room-page .offline-live-room-schedule-item { display: grid; grid-template-columns: minmax(118px, .82fr) minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #e8edf4; border-radius: 10px; padding: 10px 11px; background: #fbfcfe; }.offline-live-room-page .offline-live-room-schedule-time { color: #26354d; font-size: 14px; font-weight: 850; letter-spacing: .01em; white-space: nowrap; }.offline-live-room-page .offline-live-room-schedule-creator { display: grid; gap: 2px; min-width: 0; }.offline-live-room-page .offline-live-room-schedule-creator strong { overflow: hidden; color: #334155; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.offline-live-room-page .offline-live-room-schedule-creator small { color: #8b98aa; font-size: 11px; font-weight: 650; }
+.offline-live-room-page .offline-live-room-schedule-badge { justify-self: end; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-style: normal; font-weight: 800; }.offline-live-room-page .offline-live-room-schedule-badge--fixed { color: #6434bf; background: #efe8ff; }.offline-live-room-page .offline-live-room-schedule-badge--temporary { color: #1769be; background: #e5f1ff; }.offline-live-room-page .offline-live-room-schedule-empty { display: grid; gap: 3px; border: 1px dashed #d8e0eb; border-radius: 10px; padding: 16px; color: #718096; background: #fafbfd; text-align: center; }.offline-live-room-page .offline-live-room-schedule-empty strong { color: #536277; font-size: 13px; }.offline-live-room-page .offline-live-room-schedule-empty span { font-size: 12px; }
+@media (max-width: 720px) { .offline-live-room-page .offline-live-room-filterbar { align-items: stretch; }.offline-live-room-page .offline-live-room-display-controls, .offline-live-room-page .offline-live-room-schedule-date-controls { width: 100%; }.offline-live-room-page .offline-live-room-display-controls label { flex: 1; justify-content: center; }.offline-live-room-page .offline-live-room-schedule-date { width: 100%; }.offline-live-room-page .offline-live-room-schedule-date input { flex: 1; min-width: 0; }.offline-live-room-page .offline-live-room-schedule-heading { align-items: flex-start; }.offline-live-room-page .offline-live-room-schedule-add { min-width: 112px; }.offline-live-room-page .offline-live-room-schedule-item { grid-template-columns: 1fr auto; gap: 7px 10px; }.offline-live-room-page .offline-live-room-schedule-time { grid-column: 1 / -1; padding-bottom: 6px; border-bottom: 1px solid #edf1f5; }.offline-live-room-page .offline-live-room-schedule-creator strong { white-space: normal; }.offline-live-room-page .offline-live-room-schedule-badge { align-self: center; }.offline-live-room-page .offline-live-room-card .offline-live-room-schedule-section { padding-top: 13px; } }
+@media (max-width: 390px) { .offline-live-room-page .offline-live-room-schedule-heading { display: grid; }.offline-live-room-page .offline-live-room-schedule-add { width: 100%; }.offline-live-room-page .offline-live-room-schedule-date-controls { gap: 3px; }.offline-live-room-page .offline-live-room-schedule-date button { min-width: 30px; } }
+
+/* Creator-level livestream time integration. Schedule records remain creator-level, not platform-level. */
+.offline-live-room-page .offline-live-room-creator {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #eee9fb;
+  background: #fff;
+}
+
+.offline-live-room-page .offline-live-room-creator-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.offline-live-room-page .offline-live-room-creator-header > strong {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offline-live-room-page .offline-live-room-platform-list {
+  display: grid;
+  gap: 7px;
+}
+
+.offline-live-room-page .offline-live-room-platform-line {
+  min-height: 38px;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0 9px;
+  background: #f7f2ff;
+}
+
+.offline-live-room-page .offline-live-room-platform-line--douyin {
+  background: #fff2f7;
+}
+
+.offline-live-room-page .offline-live-room-creator-schedule {
+  display: grid;
+  gap: 7px;
+  border-radius: 9px;
+  padding: 9px;
+  background: #edf7ff;
+}
+
+.offline-live-room-page .offline-live-room-creator-schedule > span,
+.offline-live-room-page .offline-live-room-temporary-heading {
+  color: #31719f;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.offline-live-room-page .offline-live-room-creator-schedule > small {
+  color: #7291a8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.offline-live-room-page .offline-live-room-creator-schedule-list,
+.offline-live-room-page .offline-live-room-temporary-schedules {
+  display: grid;
+  gap: 7px;
+}
+
+.offline-live-room-page .offline-live-room-schedule-item--time-only {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-color: #d8eaf8;
+  padding: 8px 9px;
+  background: #fff;
+}
+
+.offline-live-room-page .offline-live-room-temporary-schedules {
+  border-top: 1px solid #e9edf3;
+  padding-top: 12px;
+}
+
+.offline-live-room-page .offline-live-room-temporary-schedules .offline-live-room-schedule-item {
+  border-color: #d9eafa;
+  background: #f8fbff;
+}
+
+@media (max-width: 720px) {
+  .offline-live-room-page .offline-live-room-creator-header { align-items: flex-start; }
+  .offline-live-room-page .offline-live-room-platform-line { grid-template-columns: 64px minmax(0, 1fr) 36px; }
+  .offline-live-room-page .offline-live-room-schedule-item--time-only { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+/* Keep temporary livestream management on demand, without expanding every room card. */
+.offline-live-room-page .offline-live-room-card-footer > div {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.offline-live-room-page .offline-live-room-temporary-trigger {
+  min-height: 32px;
+  border-color: #cfe6f8;
+  border-radius: 8px;
+  padding-inline: 10px;
+  color: #23689a;
+  background: #edf7ff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.offline-live-room-temporary-modal-content {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.offline-live-room-temporary-modal-note {
+  margin: 0;
+  border: 1px dashed #d7e7f4;
+  border-radius: 10px;
+  padding: 12px;
+  color: #5d7d94;
+  background: #f8fbfe;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .offline-live-room-page .offline-live-room-card-footer { align-items: flex-start; gap: 10px; }
+  .offline-live-room-page .offline-live-room-card-footer > div { flex-wrap: wrap; }
+}
+
+/* Offline live-room card layout: compact, content-led, and responsive. */
+.offline-live-room-page .offline-live-room-grid {
+  align-items: start;
+  gap: 10px;
+}
+
+@media (min-width: 1280px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.offline-live-room-page .offline-live-room-card {
+  align-self: start;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  gap: 10px;
+  padding: 12px;
+}
+
+.offline-live-room-page .offline-live-room-card-head {
+  align-items: center;
+  gap: 8px;
+}
+
+.offline-live-room-page .offline-live-room-card-head > div,
+.offline-live-room-page .offline-live-room-card-footer,
+.offline-live-room-page .offline-live-room-card-footer > div {
+  min-width: 0;
+}
+
+.offline-live-room-page .offline-live-room-card-head h3 {
+  line-height: 1.25;
+}
+
+.offline-live-room-page .offline-live-room-creator-list {
+  flex: none;
+  gap: 8px;
+}
+
+.offline-live-room-page .offline-live-room-creator {
+  gap: 8px;
+  padding: 9px;
+}
+
+.offline-live-room-page .offline-live-room-creator-header {
+  align-items: center;
+  gap: 6px;
+}
+
+.offline-live-room-page .offline-live-room-platform-list {
+  gap: 6px;
+}
+
+.offline-live-room-page .offline-live-room-platform-line {
+  min-width: 0;
+  min-height: 34px;
+  gap: 6px;
+  padding: 7px 8px;
+}
+
+.offline-live-room-page .offline-live-room-platform-line b,
+.offline-live-room-page .offline-live-room-platform-line small,
+.offline-live-room-page .offline-live-room-creator-header strong,
+.offline-live-room-page .offline-live-room-creator-schedule__time {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.offline-live-room-page .offline-live-room-creator-schedule {
+  gap: 6px;
+  padding: 8px;
+}
+
+.offline-live-room-page .offline-live-room-card-total {
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.offline-live-room-page .offline-live-room-card-footer {
+  margin-top: 0;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.offline-live-room-page .offline-live-room-card-footer > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.offline-live-room-page .offline-live-room-card-footer > div {
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.offline-live-room-page .offline-live-room-temporary-trigger,
+.offline-live-room-page .offline-live-room-card-footer button {
+  min-height: 32px;
+}
+
+.offline-live-room-page .offline-live-room-filterbar {
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.offline-live-room-page .offline-live-room-filter-actions {
+  gap: 6px;
+}
+
+@media (max-width: 1279px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .offline-live-room-page .offline-live-room-filter-actions {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offline-live-room-page .offline-live-room-card-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .offline-live-room-page .offline-live-room-card-footer > div {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .offline-live-room-page .offline-live-room-filterbar,
+  .offline-live-room-page .offline-live-room-filter-actions {
+    width: 100%;
+  }
+
+  .offline-live-room-page .offline-live-room-filter-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+/* Final room-layout pass: use ordinary row-major grid placement so room
+ * numbers remain left-to-right (1–5, then 6–10) at desktop widths. */
+.offline-live-room-page .offline-live-room-filterbar {
+  align-items: flex-end;
+}
+
+.offline-live-room-page .offline-live-room-filter-group {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.offline-live-room-page .offline-live-room-filter-group--primary {
+  flex: 1 1 620px;
+}
+
+.offline-live-room-page .offline-live-room-filter-group--custom {
+  flex: 0 1 auto;
+}
+
+.offline-live-room-page .offline-live-room-filter-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.offline-live-room-page .offline-live-room-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.offline-live-room-page .offline-live-room-card {
+  display: flex;
+  width: auto;
+  margin: 0;
+  break-inside: auto;
+  page-break-inside: auto;
+  border-color: #ebe7f2;
+  box-shadow: 0 6px 18px rgba(52, 42, 92, 0.05);
+}
+
+.offline-live-room-page .offline-live-room-state {
+  grid-column: 1 / -1;
+}
+
+.offline-live-room-page .offline-live-room-creator-header > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.offline-live-room-page .offline-live-room-temporary-trigger {
+  flex: 0 0 104px;
+  width: 104px;
+  height: 36px;
+  min-height: 36px;
+  padding-inline: 8px;
+  font-size: 13px;
+}
+
+.offline-live-room-page .offline-live-room-card-footer .icon-button {
+  display: inline-flex;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.offline-live-room-page .offline-live-room-card-footer {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.offline-live-room-page .offline-live-room-card-footer > div {
+  display: flex;
+  width: 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+@media (max-width: 1279px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 950px) {
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .offline-live-room-page .offline-live-room-filter-group,
+  .offline-live-room-page .offline-live-room-filter-group--primary,
+  .offline-live-room-page .offline-live-room-filter-group--custom {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .offline-live-room-page .offline-live-room-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offline-live-room-page .offline-live-room-card {
+    margin: 0;
+  }
+}
+
+/* Room-card footer: metadata is its own row; actions stay anchored left/right. */
+.offline-live-room-page .offline-live-room-card-footer > .offline-live-room-card-actions {
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.offline-live-room-page .offline-live-room-card-icon-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.offline-live-room-page .offline-live-room-card-icon-actions .icon-button {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+@media (max-width: 390px) {
+  .offline-live-room-page .offline-live-room-card-footer > .offline-live-room-card-actions {
+    gap: 3px;
+  }
+
+  .offline-live-room-page .offline-live-room-card-icon-actions {
+    gap: 3px;
+  }
+}
+
+/* Keep the room-create label intact on narrow toolbars.  The action group
+ * wraps as a group before any button text is allowed to wrap. */
+@media (max-width: 820px) {
+  .offline-live-room-page .offline-live-room-filter-actions {
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .offline-live-room-page .offline-live-room-filter-actions .secondary-button {
+    flex: 1 1 108px;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .offline-live-room-page .offline-live-room-filter-actions .primary-button {
+    flex: 1 1 166px;
+    width: auto;
+    min-width: 166px;
+    white-space: nowrap;
+  }
+}

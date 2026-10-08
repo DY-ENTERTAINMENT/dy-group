@@ -6,6 +6,8 @@ import type { Region } from '../types/database';
 export type OfflineLiveRoomStatus = 'active' | 'inactive';
 export type OfflineLiveRoomCreatorStatus = 'active' | 'inactive';
 export type OfflineLiveRoomUpdateStatus = 'updated' | 'partial' | 'pending' | 'unconfigured';
+export type OfflineLiveRoomSchedule = { id: string; room_id: string; creator_entity_id: string; usage_type: 'fixed'|'temporary'; starts_at: string; ends_at: string; status: string; creator_display_name: string; creator_platforms: unknown[] };
+export type OfflineLiveRoomScheduleCreator = { creator_entity_id: string; display_name: string; region_id: string; platforms: unknown[] };
 
 export type OfflineLiveRoom = {
   id: string;
@@ -142,6 +144,11 @@ const creatorProfileSelect = `
 `;
 
 export const offlineLiveRoomService = {
+  async listSchedules(regionId: string, date: string): Promise<OfflineLiveRoomSchedule[]> { const { data, error } = await db.rpc('list_offline_live_room_schedules', { p_region_id: regionId, p_date: date }); if (error) throw error; return data ?? []; },
+  async searchScheduleCreators(regionId: string, query: string, limit = 20): Promise<OfflineLiveRoomScheduleCreator[]> { const { data, error } = await db.rpc('search_offline_live_room_schedule_creators', { p_region_id: regionId, p_query: query, p_limit: limit }); if (error) throw error; return data ?? []; },
+  async createSchedule(roomId: string, creatorEntityId: string, usageType: 'fixed'|'temporary', startsAt: string, endsAt: string) { const { data, error } = await db.rpc('create_offline_live_room_schedule', { p_room_id: roomId, p_creator_entity_id: creatorEntityId, p_usage_type: usageType, p_starts_at: startsAt, p_ends_at: endsAt }); if (error) throw error; return data as string; },
+  async updateSchedule(id: string, startsAt: string, endsAt: string) { const { error } = await db.rpc('update_offline_live_room_schedule', { p_schedule_id: id, p_starts_at: startsAt, p_ends_at: endsAt }); if (error) throw error; },
+  async cancelSchedule(id: string, reason: string) { const { error } = await db.rpc('cancel_offline_live_room_schedule', { p_schedule_id: id, p_cancel_reason: reason }); if (error) throw error; },
   async listRegions(): Promise<Region[]> {
     const { data, error } = await db
       .from('regions')
