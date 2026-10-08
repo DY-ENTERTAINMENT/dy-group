@@ -19,11 +19,13 @@ import {
   type OfflineLiveRoomPeriodRange,
   type OfflineLiveRoomUpdateStatus,
   type OfflineLiveRoomSchedule,
+  type OfflineLiveRoomScheduleCreator,
 } from '../services/offline-live-room.service';
 import type { RevenuePeriodSetting } from '../services/agent.service';
 import type { Region } from '../types/database';
 
 type QuickRange = 'week' | 'month' | 'custom';
+type OfflineLiveRoomScheduleUsageType = OfflineLiveRoomSchedule['usage_type'];
 
 type DateRange = {
   startIso: string;
@@ -143,7 +145,6 @@ export function OfflineLiveRoomManagementPage() {
     if (!regionId || !showSchedule || !scheduleView) return;
     const requestId = ++scheduleRequestIdRef.current;
     setScheduleLoadState('loading');
-    setSchedules([]);
     try {
       const nextSchedules = await offlineLiveRoomService.listSchedules(regionId, scheduleDate);
       if (requestId === scheduleRequestIdRef.current) {
@@ -391,6 +392,9 @@ export function OfflineLiveRoomManagementPage() {
             showSchedule={showSchedule}
             scheduleUse={scheduleUse}
             scheduleLoadState={scheduleLoadState}
+            regionId={regionId}
+            scheduleDate={scheduleDate}
+            onSchedulesChanged={loadSchedules}
           />
         )) : null}
       </section>
@@ -518,7 +522,7 @@ function PlatformMetric({ platform, value, unit, total = false }: { platform: 't
   );
 }
 
-function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCreators, schedules, showSchedule, scheduleUse, scheduleLoadState }: {
+function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCreators, schedules, showSchedule, scheduleUse, scheduleLoadState, regionId, scheduleDate, onSchedulesChanged }: {
   item: OfflineLiveRoomDashboardRoom;
   canUse: boolean;
   showRevenue: boolean;
@@ -529,8 +533,12 @@ function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCre
   showSchedule: boolean;
   scheduleUse: boolean;
   scheduleLoadState: 'idle' | 'loading' | 'ready' | 'error';
+  regionId: string;
+  scheduleDate: string;
+  onSchedulesChanged: () => Promise<void>;
 }) {
   const [temporaryLiveOpen, setTemporaryLiveOpen] = useState(false);
+  const [scheduleModal, setScheduleModal] = useState<{ mode: 'create' | 'edit' | 'cancel' | 'view'; schedule?: OfflineLiveRoomSchedule; usageType: OfflineLiveRoomScheduleUsageType; creatorId?: string; creatorName?: string } | null>(null);
   const temporarySchedules = schedules.filter((schedule) => schedule.usage_type === 'temporary');
   return (
     <article className={`offline-live-room-card offline-live-room-card--${item.status}`}>
@@ -547,9 +555,27 @@ function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCre
         {item.creators.length === 0 ? <p className="offline-live-room-empty-line">未配置主播</p> : null}
         {item.creators.map((creator) => {
           const creatorSchedules = schedules.filter((schedule) => schedule.usage_type === 'fixed' && schedule.creator_entity_id === creator.entityId);
+          const creatorPlatformNames = creator.profiles
+            .map(({ profile }) => ({
+              id: profile.id,
+              platform: profile.platform,
+              name: profile.creator_name || profile.platform_account || profile.platform_user_id,
+            }))
+            .filter((profile): profile is { id: string; platform: 'tiktok' | 'douyin'; name: string } => Boolean(profile.name))
+            .sort((left, right) => (left.platform === 'tiktok' ? 0 : 1) - (right.platform === 'tiktok' ? 0 : 1));
           return (
           <div className="offline-live-room-creator" key={creator.entityId}>
-            <div className="offline-live-room-creator-header"><strong title={creator.displayName}>{creator.displayName}</strong><em className="offline-live-room-schedule-badge offline-live-room-schedule-badge--fixed">固定主播</em></div>
+            <div className="offline-live-room-creator-header">
+              <div className="offline-live-room-creator-names">
+                {creatorPlatformNames.length ? creatorPlatformNames.map(({ id, platform, name }) => (
+                  <strong className="offline-live-room-creator-name-line" key={id} title={name}>
+                    <small>{platformLabels[platform]}</small>
+                    <span>{name}</span>
+                  </strong>
+                )) : <strong className="offline-live-room-creator-name-line" title={creator.displayName}><span>{creator.displayName}</span></strong>}
+              </div>
+              <em className="offline-live-room-schedule-badge offline-live-room-schedule-badge--fixed">固定主播</em>
+            </div>
             {showRevenue ? <div className="offline-live-room-platform-list">
               {creator.profiles.map(({ profile, record, total }) => (
                 <span key={profile.id} className={`offline-live-room-platform-line offline-live-room-platform-line--${profile.platform}`}>
@@ -559,7 +585,7 @@ function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCre
                 </span>
               ))}
             </div> : null}
-            {showSchedule ? <div className="offline-live-room-creator-schedule"><span>直播时间</span>{scheduleLoadState === 'loading' ? <small>正在读取...</small> : scheduleLoadState === 'error' ? <small>读取失败</small> : creatorSchedules.length ? <div className="offline-live-room-creator-schedule-list">{creatorSchedules.map((schedule) => <ScheduleTime key={schedule.id} schedule={schedule} scheduleUse={scheduleUse} />)}</div> : <small>未安排</small>}</div> : null}
+            {showSchedule ? <div className="offline-live-room-creator-schedule"><div className="offline-live-room-creator-schedule-heading"><span>直播时间</span>{creatorSchedules.length > 0 && scheduleUse ? <button type="button" onClick={() => setScheduleModal({ mode: 'create', usageType: 'fixed', creatorId: creator.entityId, creatorName: creator.displayName })}>新增时段</button> : null}</div>{scheduleLoadState === 'loading' ? <small>正在读取...</small> : scheduleLoadState === 'error' ? <small>读取失败</small> : creatorSchedules.length ? <div className="offline-live-room-creator-schedule-list">{creatorSchedules.map((schedule) => <ScheduleTime key={schedule.id} schedule={schedule} scheduleUse={scheduleUse} onOpen={() => setScheduleModal({ mode: scheduleUse ? 'edit' : 'view', schedule, usageType: 'fixed', creatorId: creator.entityId, creatorName: creator.displayName })} />)}</div> : scheduleUse ? <button className="offline-live-room-schedule-empty-trigger" type="button" onClick={() => setScheduleModal({ mode: 'create', usageType: 'fixed', creatorId: creator.entityId, creatorName: creator.displayName })}>未安排</button> : <small>未安排</small>}</div> : null}
           </div>
           );
         })}
@@ -586,37 +612,105 @@ function RoomCard({ item, canUse, showRevenue, onEdit, onDeactivate, onManageCre
           </div>
         </div>
       </footer>
-      {temporaryLiveOpen ? <TemporaryLiveModal roomName={`${item.room.room_number}号直播间`} schedules={temporarySchedules} scheduleLoadState={scheduleLoadState} scheduleUse={scheduleUse} onClose={() => setTemporaryLiveOpen(false)} /> : null}
+      {temporaryLiveOpen ? <TemporaryLiveModal roomName={`${item.room.room_number}号直播间`} schedules={temporarySchedules} scheduleLoadState={scheduleLoadState} scheduleUse={scheduleUse} onCreate={() => setScheduleModal({ mode: 'create', usageType: 'temporary' })} onEdit={(schedule) => setScheduleModal({ mode: 'edit', schedule, usageType: 'temporary' })} onCancel={(schedule) => setScheduleModal({ mode: 'cancel', schedule, usageType: 'temporary' })} onClose={() => setTemporaryLiveOpen(false)} /> : null}
+      {scheduleModal ? <ScheduleModal mode={scheduleModal.mode} schedule={scheduleModal.schedule} room={item.room} regionId={regionId} date={scheduleDate} usageType={scheduleModal.usageType} lockedCreatorId={scheduleModal.creatorId} lockedCreatorName={scheduleModal.creatorName} onClose={() => setScheduleModal(null)} onSaved={async () => { await onSchedulesChanged(); setScheduleModal(null); }} /> : null}
     </article>
   );
 }
 
-function TemporaryLiveModal({ roomName, schedules, scheduleLoadState, scheduleUse, onClose }: {
+function TemporaryLiveModal({ roomName, schedules, scheduleLoadState, scheduleUse, onCreate, onEdit, onCancel, onClose }: {
   roomName: string;
   schedules: OfflineLiveRoomSchedule[];
   scheduleLoadState: 'idle' | 'loading' | 'ready' | 'error';
   scheduleUse: boolean;
+  onCreate: () => void;
+  onEdit: (schedule: OfflineLiveRoomSchedule) => void;
+  onCancel: (schedule: OfflineLiveRoomSchedule) => void;
   onClose: () => void;
 }) {
-  return <SystemModal title="临时直播" subtitle={`${roomName} · MYT 当日安排`} ariaLabel="临时直播时间" onClose={onClose} footer={<button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>}>
+  return <SystemModal title="临时直播" subtitle={`${roomName} · MYT 当日安排`} ariaLabel="临时直播时间" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>关闭</button>{scheduleUse ? <button className="primary-button compact-button" type="button" onClick={onCreate}><Plus size={16} /> 安排临时主播</button> : null}</>}>
     <div className="offline-live-room-temporary-modal-content">
       {scheduleLoadState === 'loading' ? <p className="offline-live-room-temporary-modal-note">正在读取临时直播时间...</p> : null}
       {scheduleLoadState === 'error' ? <p className="form-alert">临时直播时间读取失败，请刷新后重试。</p> : null}
       {scheduleLoadState === 'ready' && schedules.length === 0 ? <p className="offline-live-room-temporary-modal-note">当天暂无临时直播时间</p> : null}
-      {scheduleLoadState === 'ready' && schedules.length > 0 ? <div className="offline-live-room-schedule-list">{schedules.map((schedule) => <ScheduleTime key={schedule.id} schedule={schedule} scheduleUse={scheduleUse} showCreator />)}</div> : null}
-      {scheduleUse ? <p className="offline-live-room-temporary-modal-note">当前账号具有临时直播管理权限。</p> : null}
+      {scheduleLoadState === 'ready' && schedules.length > 0 ? <div className="offline-live-room-schedule-list">{schedules.map((schedule) => <ScheduleTime key={schedule.id} schedule={schedule} scheduleUse={scheduleUse} showCreator onEdit={() => onEdit(schedule)} onCancel={() => onCancel(schedule)} />)}</div> : null}
     </div>
   </SystemModal>;
 }
 
-function ScheduleTime({ schedule, scheduleUse, showCreator = false }: { schedule: OfflineLiveRoomSchedule; scheduleUse: boolean; showCreator?: boolean }) {
+function ScheduleTime({ schedule, scheduleUse, showCreator = false, onEdit, onCancel, onOpen }: { schedule: OfflineLiveRoomSchedule; scheduleUse: boolean; showCreator?: boolean; onEdit?: () => void; onCancel?: () => void; onOpen?: () => void }) {
+  if (onOpen) return <button className="offline-live-room-schedule-item offline-live-room-schedule-item--time-only offline-live-room-schedule-item--interactive" type="button" onClick={onOpen}><span className="offline-live-room-schedule-time">{formatScheduleTime(schedule.starts_at, schedule.ends_at)}</span><em className={`offline-live-room-schedule-badge offline-live-room-schedule-badge--${schedule.usage_type}`}>{schedule.usage_type === 'fixed' ? '固定主播' : '临时主播'}</em></button>;
   return (
     <div className={`offline-live-room-schedule-item${showCreator ? '' : ' offline-live-room-schedule-item--time-only'}`}>
       <span className="offline-live-room-schedule-time">{formatScheduleTime(schedule.starts_at, schedule.ends_at)}</span>
-      {showCreator ? <div className="offline-live-room-schedule-creator"><strong>{schedule.creator_display_name}</strong>{scheduleUse ? <small>可编辑 / 取消</small> : null}</div> : null}
+      {showCreator ? <div className="offline-live-room-schedule-creator"><strong>{schedule.creator_display_name}</strong></div> : null}
       <em className={`offline-live-room-schedule-badge offline-live-room-schedule-badge--${schedule.usage_type}`}>{schedule.usage_type === 'fixed' ? '固定主播' : '临时主播'}</em>
+      {scheduleUse && onEdit && onCancel ? <div className="offline-live-room-schedule-actions"><button className="secondary-button compact-button" type="button" onClick={onEdit}>编辑</button><button className="danger-button compact-button" type="button" onClick={onCancel}>取消</button></div> : null}
     </div>
   );
+}
+
+function ScheduleModal({ mode, schedule, room, regionId, date, usageType, lockedCreatorId, lockedCreatorName, onClose, onSaved }: { mode: 'create' | 'edit' | 'cancel' | 'view'; schedule?: OfflineLiveRoomSchedule; room: OfflineLiveRoom; regionId: string; date: string; usageType: OfflineLiveRoomScheduleUsageType; lockedCreatorId?: string; lockedCreatorName?: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [creatorId, setCreatorId] = useState(schedule?.creator_entity_id ?? lockedCreatorId ?? '');
+  const [creatorName, setCreatorName] = useState(schedule?.creator_display_name ?? lockedCreatorName ?? '');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<OfflineLiveRoomScheduleCreator[]>([]);
+  const [startTime, setStartTime] = useState(schedule ? malaysiaTimeInput(schedule.starts_at) : '10:00');
+  const [endTime, setEndTime] = useState(schedule ? malaysiaTimeInput(schedule.ends_at) : '12:00');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'create' || usageType !== 'temporary' || query.trim().length < 1) { setResults([]); return; }
+    const timer = window.setTimeout(() => {
+      offlineLiveRoomService.searchScheduleCreators(regionId, query)
+        .then(setResults)
+        .catch((searchError) => setError(friendlyScheduleError(searchError)));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [mode, query, regionId, usageType]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    if (mode === 'cancel') {
+      if (!reason.trim()) { setError('请填写取消原因'); return; }
+      setSaving(true);
+      try { await offlineLiveRoomService.cancelSchedule(schedule!.id, reason.trim()); await onSaved(); }
+      catch (saveError) { setError(friendlyScheduleError(saveError)); }
+      finally { setSaving(false); }
+      return;
+    }
+    const range = scheduleTimeRange(date, startTime, endTime);
+    if (range.error) { setError(range.error); return; }
+    if (mode === 'create' && !creatorId) { setError(`请选择${usageType === 'fixed' ? '固定' : '临时'}主播`); return; }
+    setSaving(true);
+    try {
+      if (mode === 'create') await offlineLiveRoomService.createSchedule(room.id, creatorId, usageType, range.startsAt!, range.endsAt!);
+      else await offlineLiveRoomService.updateSchedule(schedule!.id, range.startsAt!, range.endsAt!);
+      await onSaved();
+    } catch (saveError) { setError(friendlyScheduleError(saveError)); }
+    finally { setSaving(false); }
+  }
+
+  const typeLabel = usageType === 'fixed' ? '固定主播' : '临时主播';
+  const title = mode === 'create' ? `安排${typeLabel}` : mode === 'edit' ? `编辑${typeLabel}直播时间` : mode === 'view' ? `${typeLabel}直播时间` : `取消${typeLabel}直播`;
+  return <SystemModal title={title} subtitle={`${formatRoomLabel(room)} · ${date} · MYT`} ariaLabel={title} onClose={() => { if (!saving) onClose(); }} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={saving}>关闭</button>{mode !== 'view' ? <button className={mode === 'cancel' ? 'danger-button compact-button' : 'primary-button compact-button'} type="submit" form="temporary-live-schedule-form" disabled={saving}>{saving ? '处理中...' : mode === 'cancel' ? '确认取消' : '保存'}</button> : null}</>}>
+    <form id="temporary-live-schedule-form" className="offline-live-room-schedule-modal" onSubmit={submit}>
+      {error ? <p className="form-alert">{error}</p> : null}
+      {mode === 'cancel' ? <><p>取消后将保留排期历史，不能恢复。</p><label className="form-field"><span>取消原因</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></label></> : <>
+        <div className="offline-live-room-schedule-readonly"><p>直播间：{formatRoomLabel(room)}</p><p>类型：{typeLabel}</p>{(mode !== 'create' || usageType === 'fixed') ? <p>主播：{creatorName || schedule?.creator_display_name}</p> : null}</div>
+        {mode === 'create' && usageType === 'temporary' ? <div className="offline-live-room-creator-search"><label className="form-field"><span>搜索现有主播</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="姓名、账号或平台 ID" autoFocus /></label>{creatorId ? <p className="offline-live-room-selected-creator">已选择：{creatorName}</p> : null}<div className="offline-live-room-creator-results" aria-live="polite">{!query.trim() ? <p>输入姓名、账号或平台 ID 搜索现有主播。</p> : results.length === 0 ? <p>未找到符合条件的主播</p> : results.map((creator) => <button className={creator.creator_entity_id === creatorId ? 'selected' : ''} type="button" key={creator.creator_entity_id} aria-pressed={creator.creator_entity_id === creatorId} onClick={() => { setCreatorId(creator.creator_entity_id); setCreatorName(creator.display_name); }}><strong>{creator.display_name}</strong><span>{formatSchedulePlatforms(creator.platforms) || '暂无平台账号信息'}</span></button>)}</div></div> : null}
+        {mode === 'view' ? <div className="offline-live-room-schedule-readonly"><p>开始时间：{formatScheduleTime(schedule!.starts_at, schedule!.ends_at)}</p></div> : <div className="offline-live-room-schedule-times"><TimePicker label="开始时间（24小时制）" value={startTime} onChange={setStartTime} /><TimePicker label="结束时间（可至次日）" value={endTime} onChange={setEndTime} /><p className="offline-live-room-overnight-hint">结束时间早于或等于开始时间时，系统会安排至次日。</p></div>}
+      </>}
+    </form>
+  </SystemModal>;
+}
+
+function TimePicker({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [hour = '00', minute = '00'] = value.split(':');
+  return <label className="form-field offline-live-room-time-picker"><span>{label}</span><div><select aria-label={`${label}小时`} value={hour} onChange={(event) => onChange(`${event.target.value}:${minute}`)}>{Array.from({ length: 24 }, (_, item) => String(item).padStart(2, '0')).map((item) => <option key={item} value={item}>{item}</option>)}</select><b>:</b><select aria-label={`${label}分钟`} value={minute} onChange={(event) => onChange(`${hour}:${event.target.value}`)}>{Array.from({ length: 60 }, (_, item) => String(item).padStart(2, '0')).map((item) => <option key={item} value={item}>{item}</option>)}</select></div></label>;
 }
 
 function StatusBadge({ status }: { status: OfflineLiveRoomUpdateStatus }) {
@@ -941,7 +1035,16 @@ function formatDateTime(value: string) {
 }
 
 function shiftIsoDate(value: string, amount: number) { const date = parseIsoDate(value); date.setDate(date.getDate() + amount); return formatLocalDate(date); }
-function formatScheduleTime(start: string, end: string) { const a = new Date(start); const b = new Date(end); const time = (d: Date) => d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false }); return `${time(a)}–${b.getUTCDate() !== a.getUTCDate() ? '次日 ' : ''}${time(b)}`; }
+function formatScheduleTime(start: string, end: string) {
+  const a = new Date(start);
+  const b = new Date(end);
+  const time = (date: Date) => date.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${time(a)}–${formatMalaysiaDate(b) !== formatMalaysiaDate(a) ? '次日 ' : ''}${time(b)}`;
+}
+function malaysiaTimeInput(value: string) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value)); }
+function formatRoomLabel(room: Pick<OfflineLiveRoom, 'room_number' | 'name'>) { return room.name.trim() || `${room.room_number}号直播间`; }
+function scheduleTimeRange(date: string, start: string, end: string) { if (!date || !start || !end) return { error: '请完整填写必填项' }; if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end)) return { error: '请输入有效的 24 小时时间' }; const startAt = new Date(`${date}T${start}:00+08:00`); let endAt = new Date(`${date}T${end}:00+08:00`); if (endAt <= startAt) endAt = new Date(endAt.getTime() + 24 * 60 * 60 * 1000); const duration = endAt.getTime() - startAt.getTime(); if (duration <= 0) return { error: '结束时间必须晚于开始时间' }; if (duration > 24 * 60 * 60 * 1000) return { error: '单次直播时间不能超过24小时' }; return { startsAt: startAt.toISOString(), endsAt: endAt.toISOString() }; }
+function formatSchedulePlatforms(platforms: unknown[]) { return platforms.map((platform: any) => platform.platform_account || platform.platform_user_id || platform.creator_name || platform.platform).filter(Boolean).join(' · '); }
 function friendlyScheduleError(error: unknown) { const message = getErrorMessage(error); if (/room schedule conflicts/i.test(message)) return '该直播间此时间已有直播时间安排'; if (/creator schedule conflicts/i.test(message)) return '该主播此时间已有其他直播时间安排'; if (/fixed schedule creator/i.test(message)) return '该主播目前不是此直播间的固定主播'; if (/room region/i.test(message)) return '该主播不属于此直播间区域'; if (/permission|access denied/i.test(message)) return '你没有此直播时间操作权限'; if (/24 hours/i.test(message)) return '单次直播时间不能超过24小时'; if (/chronological|end/i.test(message)) return '结束时间必须晚于开始时间'; return message; }
 
 function getErrorMessage(error: unknown) {
