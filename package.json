@@ -15,7 +15,8 @@
     "test:outgoing-permission-settings": "node scripts/test-outgoing-permission-settings.mjs",
     "test:outgoing-feature-gate": "node scripts/test-outgoing-feature-gate.mjs",
     "test:outgoing-event-relation": "node --experimental-strip-types scripts/test-outgoing-event-relation.mjs",
-    "test:outgoing-local-preview": "node --experimental-strip-types scripts/test-outgoing-local-preview.mjs"
+    "test:outgoing-local-preview": "node --experimental-strip-types scripts/test-outgoing-local-preview.mjs",
+    "test:outgoing-evidence": "node scripts/test-outgoing-evidence.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

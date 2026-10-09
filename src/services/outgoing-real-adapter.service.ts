@@ -1,4 +1,4 @@
-import type { OutgoingEvent, OutgoingRequest, OutgoingRequestReviewHistory, OutgoingType } from '../types/database';
+import type { OutgoingEvent, OutgoingRequest, OutgoingRequestEvidence, OutgoingRequestReviewHistory, OutgoingType } from '../types/database';
 import { assertOutgoingRealServiceEnabled } from './outgoing-feature.service';
 import { notifyOutgoingRealDataChanged } from './outgoing-notification.service';
 import {
@@ -61,6 +61,21 @@ export const outgoingRealAdapter = {
     return outgoingService.listReviewHistory(requestId);
   },
 
+  async loadMyEvidence(requestId: string): Promise<OutgoingRequestEvidence[]> {
+    assertOutgoingRealServiceEnabled();
+    return outgoingService.listMyEvidence(requestId);
+  },
+  async loadManagedEvidence(requestId: string): Promise<OutgoingRequestEvidence[]> {
+    assertOutgoingRealServiceEnabled();
+    return outgoingService.listManagedEvidence(requestId);
+  },
+  async uploadEvidence(requestId: string, file: File) {
+    assertOutgoingRealServiceEnabled();
+    const evidence = await outgoingService.uploadEvidence(requestId, file);
+    notifyOutgoingRealDataChanged();
+    return evidence;
+  },
+
   async startOutgoing(values: OutgoingCaptureValues) {
     assertOutgoingRealServiceEnabled();
     const result = await outgoingService.startOutgoing(values);
@@ -110,6 +125,10 @@ export const outgoingRealAdapter = {
   async getPhotoSignedUrl(photoPath: string, expiresIn = 60) {
     assertOutgoingRealServiceEnabled();
     return outgoingService.getPhotoSignedUrl(photoPath, expiresIn);
+  },
+  async getEvidenceSignedUrl(photoPath: string, expiresIn = 60) {
+    assertOutgoingRealServiceEnabled();
+    return outgoingService.getEvidenceSignedUrl(photoPath, expiresIn);
   },
 };
 
@@ -202,4 +221,4 @@ function countByLifecycle(requests: OutgoingRequestWithEvent[]) {
   );
 }
 
-export type { OutgoingCaptureValues, OutgoingManagementFilters, OutgoingRequestFormValues, OutgoingRequestWithEvent, OutgoingRequest, OutgoingEvent, OutgoingType };
+export type { OutgoingCaptureValues, OutgoingManagementFilters, OutgoingRequestFormValues, OutgoingRequestWithEvent, OutgoingRequest, OutgoingEvent, OutgoingRequestEvidence, OutgoingType };

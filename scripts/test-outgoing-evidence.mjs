@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const migration = await readFile(new URL('../supabase/migrations/202610080001_outgoing_request_evidence.sql', import.meta.url), 'utf8');
+const service = await readFile(new URL('../src/services/outgoing.service.ts', import.meta.url), 'utf8');
+const panels = await readFile(new URL('../src/components/OutgoingRealPanels.tsx', import.meta.url), 'utf8');
+
+assert.match(migration, /create table public\.outgoing_request_evidence/i);
+assert.match(migration, /on delete restrict/gi);
+assert.match(migration, /'outgoing-evidence'[\s\S]*false[\s\S]*5242880[\s\S]*image\/jpeg[\s\S]*image\/png[\s\S]*image\/webp/i);
+assert.match(migration, /event_row\.started_at is not null/);
+assert.match(migration, /request_row\.profile_id <> auth\.uid\(\)/);
+assert.match(migration, /path_parts\[3\] <> 'evidence'/);
+assert.match(migration, /bucket_id = 'outgoing-evidence'/);
+assert.match(migration, /current_user_has_permission\('outgoing-management', 'view'\)/);
+assert.match(migration, /current_user_has_explicit_permission\('outgoing-photos', 'view'\)/);
+assert.match(migration, /list_my_outgoing_request_evidence/);
+assert.match(migration, /evidence\.profile_id = auth\.uid\(\)/);
+assert.match(migration, /list_managed_outgoing_request_evidence/);
+assert.match(migration, /revoke all on function public\.create_outgoing_request_evidence/i);
+assert.match(migration, /grant execute on function public\.create_outgoing_request_evidence/i);
+assert.doesNotMatch(migration, /update public\.(outgoing_requests|outgoing_events|attendance_records)/i);
+assert.doesNotMatch(migration, /delete from/i);
+assert.match(service, /EVIDENCE_MAX_BYTES = 5 \* 1024 \* 1024/);
+assert.match(service, /image\/jpeg.*image\/png.*image\/webp/s);
+assert.match(service, /upsert: false/);
+assert.match(service, /create_outgoing_request_evidence/);
+assert.match(service, /createSignedUrl/);
+assert.match(panels, /type="file" accept="image\/jpeg,image\/png,image\/webp" multiple/);
+assert.match(panels, /mode === 'employee' \? await outgoingRealAdapter\.loadMyEvidence/);
+assert.match(panels, /if \(!canViewImages \|\| !evidence\.length\) return/);
+assert.match(panels, /event\?\.started_at \? <OutgoingEvidenceSection/);
+assert.match(panels, /event\.status === 'in_progress' \? '上传外出证明' : '补传外出证明'/);
+console.log('outgoing evidence static safety checks passed');

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { OutgoingEvent, OutgoingRequest, OutgoingRequestReviewHistory, OutgoingType } from '../types/database';
+import type { OutgoingEvent, OutgoingRequest, OutgoingRequestEvidence, OutgoingRequestReviewHistory, OutgoingType } from '../types/database';
 import { assertOutgoingRealServiceEnabled } from './outgoing-feature.service';
 import { getOutgoingEvent, type OutgoingEventRelation } from './outgoing-event-relation';
 
@@ -44,6 +44,13 @@ export type OutgoingManagementFilters = {
 };
 
 const requestWithEventSelect = '*, outgoing_events(*)';
+const EVIDENCE_BUCKET = 'outgoing-evidence';
+const EVIDENCE_MAX_BYTES = 5 * 1024 * 1024;
+const evidenceExtensions: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 
 /**
  * Phase 3 RPC facade. The methods are intentionally not called by the current
@@ -145,6 +152,36 @@ export const outgoingService = {
     return (data ?? []) as OutgoingRequestReviewHistory[];
   },
 
+  async listMyEvidence(requestId: string) {
+    assertOutgoingRealServiceEnabled();
+    const { data, error } = await supabase.rpc('list_my_outgoing_request_evidence', { p_request_id: requestId });
+    if (error) throw error;
+    return (data ?? []) as OutgoingRequestEvidence[];
+  },
+
+  async listManagedEvidence(requestId: string) {
+    assertOutgoingRealServiceEnabled();
+    const { data, error } = await supabase.rpc('list_managed_outgoing_request_evidence', { p_request_id: requestId });
+    if (error) throw error;
+    return (data ?? []) as OutgoingRequestEvidence[];
+  },
+
+  async uploadEvidence(requestId: string, file: File) {
+    assertOutgoingRealServiceEnabled();
+    validateEvidenceFile(file);
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    const profileId = authData.user?.id;
+    if (!profileId) throw new Error('当前登录会话无效。');
+    if (typeof crypto?.randomUUID !== 'function') throw new Error('当前浏览器不支持安全的文件名。');
+    const path = `${profileId}/${requestId}/evidence/${crypto.randomUUID()}.${evidenceExtensions[file.type]}`;
+    const { error: uploadError } = await supabase.storage.from(EVIDENCE_BUCKET).upload(path, file, { cacheControl: '3600', contentType: file.type, upsert: false });
+    if (uploadError) throw uploadError;
+    const { data, error } = await supabase.rpc('create_outgoing_request_evidence', { p_request_id: requestId, p_photo_path: path });
+    if (error) throw error;
+    return data as OutgoingRequestEvidence;
+  },
+
   async getPendingApprovalCount() {
     assertOutgoingRealServiceEnabled();
     const { data, error } = await supabase.rpc('get_my_outgoing_approval_pending_count');
@@ -201,7 +238,19 @@ export const outgoingService = {
     if (error) throw error;
     return data.signedUrl;
   },
+
+  async getEvidenceSignedUrl(photoPath: string, expiresIn = 60) {
+    assertOutgoingRealServiceEnabled();
+    const { data, error } = await supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(photoPath, expiresIn);
+    if (error) throw error;
+    return data.signedUrl;
+  },
 };
+
+function validateEvidenceFile(file: File) {
+  if (!(file.type in evidenceExtensions)) throw new Error('外出证明仅支持 JPG、JPEG、PNG 或 WebP 图片。');
+  if (file.size <= 0 || file.size > EVIDENCE_MAX_BYTES) throw new Error('外出证明图片大小必须大于 0 且不超过 5MB。');
+}
 
 /** Normalize the embedded relation once at the PostgREST boundary. */
 function normalizeOutgoingRequests(data: unknown): OutgoingRequestWithEvent[] {

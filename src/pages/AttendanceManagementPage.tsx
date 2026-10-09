@@ -326,7 +326,7 @@ export function AttendanceManagementPage() {
         canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')}
         reviewerName={profile?.nickname || profile?.full_name || profile?.email || '当前 HR'}
         onChanged={() => setOutgoingRevision((value) => value + 1)}
-      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : <>
+      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} canViewOutgoingPhotos={isSuperAdmin || permissions.canUse('outgoing-photos')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : <>
       {canUseAttendance ? (
         <button className="abnormal-banner" type="button" onClick={() => setShowAbnormalCenter(true)}>
           <AlertTriangle size={20} />

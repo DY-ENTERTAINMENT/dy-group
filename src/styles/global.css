@@ -4052,6 +4052,84 @@ button.leave-chip:disabled {
   cursor: default;
 }
 
+.outgoing-evidence {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.outgoing-evidence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.outgoing-evidence-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.outgoing-evidence-grid figure {
+  margin: 0;
+  width: 88px;
+}
+
+.outgoing-evidence-thumbnail {
+  display: block;
+  width: 88px;
+  height: 70px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-muted, #f4f4f5);
+  cursor: pointer;
+}
+
+.outgoing-evidence-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.outgoing-evidence-grid figcaption {
+  margin-top: 3px;
+  color: var(--text-muted, #6b7280);
+  font-size: 12px;
+}
+
+.outgoing-management-evidence {
+  margin: 12px 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, #e5e7eb);
+}
+
+@media (max-width: 640px) {
+  .outgoing-management-evidence .outgoing-evidence-grid figure {
+    width: calc(50% - 4px);
+  }
+
+  .outgoing-management-evidence .outgoing-evidence-thumbnail {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (max-width: 360px) {
+  .outgoing-management-evidence .outgoing-evidence-grid figure {
+    width: 100%;
+  }
+}
+
+.outgoing-evidence-more {
+  color: var(--text-muted, #64748b);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .leave-type-annual {
   color: #17603a;
   background: #e8f7ee;
@@ -15268,4 +15346,183 @@ button.leave-chip:disabled {
   flex: 0 0 auto;
   align-self: flex-start;
   white-space: nowrap;
+}
+
+/* Keep management evidence in the desktop gap between request details and punch photos. */
+@media (min-width: 721px) {
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) {
+    grid-template-columns: minmax(0, 1fr) minmax(176px, .64fr) max-content;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) > .outgoing-management-card-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .outgoing-management-preview .outgoing-management-evidence {
+    display: grid;
+    align-content: center;
+    min-width: 0;
+    margin: 0;
+    padding: 14px 16px;
+    border-top: 0;
+    border-left: 1px solid rgba(100, 116, 139, .13);
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .outgoing-management-preview .outgoing-management-card:not(.outgoing-management-preview-card) > .outgoing-management-card-actions {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: stretch;
+  }
+
+  .outgoing-management-preview .outgoing-management-evidence .outgoing-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .outgoing-management-preview .outgoing-management-evidence .outgoing-evidence-grid figure,
+  .outgoing-management-preview .outgoing-management-evidence .outgoing-evidence-thumbnail {
+    width: 100%;
+  }
+
+  .outgoing-management-preview .outgoing-management-evidence .outgoing-evidence-thumbnail {
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (max-width: 720px) {
+  .outgoing-management-preview .outgoing-management-evidence {
+    order: 2;
+    margin: 0;
+    padding: 14px 16px;
+    border-top: 1px solid rgba(100, 116, 139, .13);
+    border-left: 0;
+  }
+
+  .outgoing-management-preview .outgoing-management-card-actions {
+    order: 3;
+  }
+}
+
+/* Final employee evidence presentation overrides. */
+.employee-outgoing-preview .outgoing-evidence-heading {
+  flex-wrap: nowrap;
+}
+
+.employee-outgoing-preview .outgoing-evidence-heading > strong {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.employee-outgoing-preview .outgoing-evidence-heading > label {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}
+
+.employee-outgoing-preview .outgoing-evidence-empty {
+  color: var(--text-muted, #6b7280);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .employee-outgoing-preview .outgoing-evidence-heading {
+    flex-wrap: wrap;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-heading > label {
+    width: 100%;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-grid figure {
+    width: calc(50% - 4px);
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-thumbnail {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (max-width: 360px) {
+  .employee-outgoing-preview .outgoing-evidence-grid figure {
+    width: 100%;
+  }
+}
+
+/* Mobile employee evidence: a deliberate vertical reading order. */
+@media (max-width: 640px) {
+  .employee-outgoing-preview .outgoing-preview-card-head {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .employee-outgoing-preview .outgoing-preview-card-head > .outgoing-status {
+    flex: 0 0 auto;
+    align-self: flex-start;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-heading {
+    display: contents;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-heading > strong {
+    order: 1;
+    width: 100%;
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence > .outgoing-evidence-empty,
+  .employee-outgoing-preview .outgoing-evidence > .today-photo-denied,
+  .employee-outgoing-preview .outgoing-evidence > .today-photo-loading,
+  .employee-outgoing-preview .outgoing-evidence > .outgoing-evidence-grid {
+    order: 2;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-heading > label {
+    order: 3;
+    width: 100%;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .employee-outgoing-preview .outgoing-evidence-grid figure {
+    width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .employee-outgoing-preview .outgoing-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Evidence upload is intentionally distinct from the red finish-outgoing action. */
+.employee-outgoing-preview .outgoing-evidence-heading > label.secondary-button {
+  border-color: #c7d2fe;
+  color: #fff;
+  background: #6366f1;
+}
+
+.employee-outgoing-preview .outgoing-evidence-heading > label.secondary-button:hover:not(:disabled) {
+  border-color: #4f46e5;
+  background: #4f46e5;
 }

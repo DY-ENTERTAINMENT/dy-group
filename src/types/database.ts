@@ -222,6 +222,7 @@ export type OutgoingEventStatus = 'in_progress' | 'completed' | 'exception';
 export type OutgoingEventAuditAction = 'started' | 'completed' | 'exception_detected' | 'exception_handled' | 'clock_out_recovered';
 export type OutgoingEvent = { id: string; request_id: string; profile_id: string; employee_id: string; region_id: string; status: OutgoingEventStatus; started_at: string; start_photo_path: string; start_latitude: number; start_longitude: number; start_accuracy: number | null; start_attendance_location_id: string; start_distance_meters: number; start_idempotency_key: string; ended_at: string | null; end_photo_path: string | null; end_latitude: number | null; end_longitude: number | null; end_accuracy: number | null; end_attendance_location_id: string | null; end_distance_meters: number | null; end_idempotency_key: string | null; exception_reason: string | null; exception_detected_at: string | null; exception_handled_by: string | null; exception_handled_at: string | null; created_at: string; updated_at: string; };
 export type OutgoingEventAuditHistory = { id: string; event_id: string; request_id: string; action: OutgoingEventAuditAction; actor_profile_id: string | null; actor_name: string; note: string | null; created_at: string; };
+export type OutgoingRequestEvidence = { id: string; outgoing_request_id: string; profile_id: string; photo_path: string; created_at: string; };
 
 export type Shift = {
   id: string;
@@ -768,6 +769,12 @@ export type Database = {
         Row: OutgoingEventAuditHistory;
         Insert: Pick<OutgoingEventAuditHistory, 'event_id' | 'request_id' | 'action' | 'actor_name'> & Partial<Pick<OutgoingEventAuditHistory, 'id' | 'actor_profile_id' | 'note' | 'created_at'>>;
         Update: Partial<Omit<OutgoingEventAuditHistory, 'id' | 'event_id' | 'request_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      outgoing_request_evidence: {
+        Row: OutgoingRequestEvidence;
+        Insert: Pick<OutgoingRequestEvidence, 'outgoing_request_id' | 'profile_id' | 'photo_path'> & Partial<Pick<OutgoingRequestEvidence, 'id' | 'created_at'>>;
+        Update: Partial<Omit<OutgoingRequestEvidence, 'id' | 'outgoing_request_id' | 'profile_id' | 'photo_path' | 'created_at'>>;
         Relationships: [];
       };
       shifts: {
@@ -1410,6 +1417,9 @@ export type Database = {
       review_outgoing_request: { Args: { p_request_id: string; p_decision: 'approved' | 'rejected'; p_note?: string | null }; Returns: undefined };
       list_my_outgoing_requests: { Args: Record<string, never>; Returns: OutgoingRequest[] };
       list_my_outgoing_request_review_history: { Args: { p_request_id: string }; Returns: OutgoingRequestReviewHistory[] };
+      create_outgoing_request_evidence: { Args: { p_request_id: string; p_photo_path: string }; Returns: OutgoingRequestEvidence };
+      list_my_outgoing_request_evidence: { Args: { p_request_id: string }; Returns: OutgoingRequestEvidence[] };
+      list_managed_outgoing_request_evidence: { Args: { p_request_id: string }; Returns: OutgoingRequestEvidence[] };
       get_my_outgoing_approval_pending_count: { Args: Record<string, never>; Returns: number };
       get_outgoing_feature_admissions_enabled: { Args: Record<string, never>; Returns: boolean };
       set_outgoing_feature_admissions_enabled: { Args: { p_enabled: boolean }; Returns: undefined };
