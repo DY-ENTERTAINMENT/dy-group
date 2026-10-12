@@ -78,6 +78,7 @@ jobs:
     with:
       approved_commit_sha: ${{ needs.resolve-expected-migrations.outputs.approved_commit_sha }}
       expected_migrations: ${{ needs.resolve-expected-migrations.outputs.expected_migrations }}
+      allow_deployed_history: ${{ github.event_name == 'push' }}
     secrets: inherit
 
   deploy:

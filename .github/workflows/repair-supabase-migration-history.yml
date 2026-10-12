@@ -22,6 +22,11 @@ on:
         description: "Expected pending migration filenames, one per line"
         required: true
         type: string
+      allow_deployed_history:
+        description: "Allow an empty pending plan only when every expected migration is in Production history"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha || github.sha }}
+      ALLOW_DEPLOYED_HISTORY: ${{ inputs.allow_deployed_history }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -105,7 +111,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase migration list --linked
+          if ! migration_history_output="$(supabase migration list --linked 2>&1)"; then
+            printf '%s\n' "$migration_history_output"
+            exit 1
+          fi
+          printf '%s\n' "$migration_history_output"
+          printf '%s\n' "$migration_history_output" \
+            | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//' \
+            > "$RUNNER_TEMP/production_migration_history"
 
       - name: Dry-run and assert exact pending migrations
         shell: bash
@@ -163,9 +176,14 @@ jobs:
             }
             END {
               if (dry_run_markers != 1) fail = "missing or repeated dry-run marker"
-              if (up_to_date_markers != 0) fail = "empty pending plan is not an approved deployment"
-              if (push_markers != 1) fail = "missing or repeated pending migration marker"
-              if (state != "ended") fail = "pending migration plan has no recognized end marker"
+              if (up_to_date_markers > 0) {
+                if (up_to_date_markers != 1) fail = "repeated up-to-date marker"
+                if (push_markers != 0) fail = "up-to-date output also contains a pending migration marker"
+                if (state != "before") fail = "up-to-date output contains a pending migration plan"
+              } else {
+                if (push_markers != 1) fail = "missing or repeated pending migration marker"
+                if (state != "ended") fail = "pending migration plan has no recognized end marker"
+              }
               if (fail) {
                 print "Unable to parse Supabase CLI dry-run migration plan: " fail > "/dev/stderr"
                 exit 1
@@ -180,4 +198,23 @@ jobs:
           cat "$RUNNER_TEMP/expected_migrations"
           echo "Actual pending migrations:"
           cat "$RUNNER_TEMP/actual_pending_migrations"
+
+          if [[ ! -s "$RUNNER_TEMP/actual_pending_migrations" ]]; then
+            [[ "$ALLOW_DEPLOYED_HISTORY" == "true" ]] || {
+              echo "Empty pending plan is not an approved manual deployment"
+              exit 1
+            }
+
+            while IFS= read -r migration; do
+              migration_version="${migration%%_*}"
+              if ! grep -Eq "^[[:space:]]*[^|]*\\|[[:space:]]*${migration_version}[[:space:]]*\\|" "$RUNNER_TEMP/production_migration_history"; then
+                echo "Production migration history does not record expected migration: $migration"
+                exit 1
+              fi
+            done < "$RUNNER_TEMP/expected_migrations"
+
+            echo "Empty pending plan accepted: every expected migration is recorded in Production history."
+            exit 0
+          fi
+
           diff -u "$RUNNER_TEMP/expected_migrations" "$RUNNER_TEMP/actual_pending_migrations"
