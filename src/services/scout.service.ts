@@ -943,9 +943,15 @@ export const scoutService = {
 
   async upgradeLegacyCreatorProfileToEntity(creatorProfileId: string): Promise<LegacyCreatorEntityUpgradeResult> {
     const { data, error } = await db.rpc('upgrade_legacy_creator_profile_to_entity', { p_creator_profile_id: creatorProfileId });
-    if (error) throw error;
-    if (!data?.creator_entity_id || data.creator_profile_id !== creatorProfileId) throw new Error('旧主播资料升级返回无效，请刷新后重试。');
-    return data as LegacyCreatorEntityUpgradeResult;
+    if (error) throw new Error(`无法确认旧主播资料升级结果：${error.message ?? '请求失败'}。请刷新服务器资料后重试；重复确认会沿用已建立的实体。`);
+    if (!Array.isArray(data) || data.length !== 1) throw new Error('旧主播资料升级返回行数异常，无法确认结果。请刷新服务器资料后重试。');
+    const result = data[0];
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!result || typeof result.creator_entity_id !== 'string' || !uuid.test(result.creator_entity_id)
+      || result.creator_profile_id !== creatorProfileId || typeof result.created !== 'boolean') {
+      throw new Error('旧主播资料升级返回结构无效，无法确认结果。请刷新服务器资料后重试。');
+    }
+    return result as LegacyCreatorEntityUpgradeResult;
   },
 
   async addCreatorEntityPlatformProfile(creatorEntityId: string, platform: CreatorPlatform, values: CreatorAdditionalPlatformFormValues) {
