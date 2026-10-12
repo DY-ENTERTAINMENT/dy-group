@@ -3,12 +3,21 @@ name: Validate Supabase Migration Release
 on:
   workflow_dispatch:
     inputs:
+      approved_commit_sha:
+        description: "Approved full 40-character commit SHA"
+        required: true
+        type: string
       expected_migrations:
         description: "Expected pending migration filenames, one per line"
         required: true
         type: string
   workflow_call:
     inputs:
+      approved_commit_sha:
+        description: "Approved SHA; existing callers default to the triggering commit"
+        required: false
+        type: string
+        default: ""
       expected_migrations:
         description: "Expected pending migration filenames, one per line"
         required: true
@@ -22,6 +31,7 @@ jobs:
     name: Validate pending Supabase Production migrations
     runs-on: ubuntu-latest
     env:
+      APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha || github.sha }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -29,6 +39,15 @@ jobs:
     steps:
       - name: Checkout selected ref
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.approved_commit_sha || github.sha }}
+
+      - name: Verify approved commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(git rev-parse HEAD)" == "$APPROVED_COMMIT_SHA" ]] || exit 1
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
@@ -68,6 +87,7 @@ jobs:
               echo "Invalid migration filename: $migration"
               exit 1
             }
+            test -f "supabase/migrations/$migration" || { echo "Expected migration absent from approved commit"; exit 1; }
           done < "$RUNNER_TEMP/expected_migrations"
 
           test "$(sort "$RUNNER_TEMP/expected_migrations" | uniq | wc -l)" -eq "$(wc -l < "$RUNNER_TEMP/expected_migrations")" || {
@@ -143,7 +163,7 @@ jobs:
             }
             END {
               if (dry_run_markers != 1) fail = "missing or repeated dry-run marker"
-              if (push_markers == 0 && up_to_date_markers == 1 && !fail) exit 0
+              if (up_to_date_markers != 0) fail = "empty pending plan is not an approved deployment"
               if (push_markers != 1) fail = "missing or repeated pending migration marker"
               if (state != "ended") fail = "pending migration plan has no recognized end marker"
               if (fail) {

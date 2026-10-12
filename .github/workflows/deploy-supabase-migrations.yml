@@ -3,6 +3,10 @@ name: Deploy Supabase Migrations
 on:
   workflow_dispatch:
     inputs:
+      approved_commit_sha:
+        description: "Approved full 40-character commit SHA"
+        required: true
+        type: string
       expected_migrations:
         description: "Expected pending migration filenames, one per line"
         required: true
@@ -25,6 +29,7 @@ jobs:
     name: Resolve expected migration filenames
     runs-on: ubuntu-latest
     outputs:
+      approved_commit_sha: ${{ steps.resolve.outputs.approved_commit_sha }}
       expected_migrations: ${{ steps.resolve.outputs.expected_migrations }}
 
     steps:
@@ -41,8 +46,17 @@ jobs:
           EXPECTED_MIGRATIONS: ${{ inputs.expected_migrations }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
+          APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha }}
         run: |
           set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$APPROVED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            approved_commit_sha="$APPROVED_COMMIT_SHA"
+          else
+            approved_commit_sha="$PUSH_AFTER"
+          fi
+          echo "approved_commit_sha=$approved_commit_sha" >> "$GITHUB_OUTPUT"
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             expected_migrations="$EXPECTED_MIGRATIONS"
@@ -62,15 +76,18 @@ jobs:
     needs: resolve-expected-migrations
     uses: ./.github/workflows/repair-supabase-migration-history.yml
     with:
+      approved_commit_sha: ${{ needs.resolve-expected-migrations.outputs.approved_commit_sha }}
       expected_migrations: ${{ needs.resolve-expected-migrations.outputs.expected_migrations }}
     secrets: inherit
 
   deploy:
     name: Deploy migrations to Supabase Production
-    needs: validate-release
+    needs: [validate-release, resolve-expected-migrations]
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
+      APPROVED_COMMIT_SHA: ${{ needs.resolve-expected-migrations.outputs.approved_commit_sha }}
+      EXPECTED_MIGRATIONS: ${{ needs.resolve-expected-migrations.outputs.expected_migrations }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -78,6 +95,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-expected-migrations.outputs.approved_commit_sha }}
+
+      - name: Verify approved commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(git rev-parse HEAD)" == "$APPROVED_COMMIT_SHA" ]] || exit 1
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
@@ -106,4 +132,96 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$APPROVED_COMMIT_SHA" ]] || exit 1
+          # workflow_dispatch text inputs may be entered as a space-separated
+          # line or one filename per line. Split only on whitespace: valid
+          # migration filenames cannot contain whitespace, then keep that
+          # caller-supplied order for the exact dry-run comparison below.
+          printf '%s\n' "$EXPECTED_MIGRATIONS" \
+            | tr '\r\n\t' '   ' \
+            | awk '{ for (field_idx = 1; field_idx <= NF; field_idx++) print $field_idx }' \
+            > "$RUNNER_TEMP/expected_migrations"
+          test -s "$RUNNER_TEMP/expected_migrations" || {
+            echo "expected_migrations must contain at least one filename"
+            exit 1
+          }
+          while IFS= read -r migration; do
+            [[ "$migration" =~ ^[0-9]{12}_[A-Za-z0-9_.-]+\.sql$ ]] || {
+              echo "Invalid migration filename: $migration"
+              exit 1
+            }
+            test -f "supabase/migrations/$migration" || { echo "Expected migration absent from approved commit"; exit 1; }
+          done < "$RUNNER_TEMP/expected_migrations"
+          test "$(sort "$RUNNER_TEMP/expected_migrations" | uniq | wc -l)" -eq "$(wc -l < "$RUNNER_TEMP/expected_migrations")" || {
+            echo "Duplicate expected migration filename"
+            exit 1
+          }
+          if ! dry_run_output="$(supabase db push --dry-run --linked 2>&1)"; then
+            printf '%s\n' "$dry_run_output"
+            exit 1
+          fi
+          printf '%s\n' "$dry_run_output"
+          normalized_output="$(printf '%s\n' "$dry_run_output" | sed -E 's/\x1B\[[0-?]*[ -/]*[@-~]//g; s/\r$//')"
+          if ! printf '%s\n' "$normalized_output" | awk '
+            BEGIN {
+              dry_run_marker = "DRY RUN: migrations will *not* be pushed to the database."
+              push_marker = "Would push these migrations:"
+              up_to_date_marker = "Remote database is up to date."
+              finished_marker = "Finished supabase db push."
+              state = "before"
+            }
+            $0 == dry_run_marker {
+              dry_run_markers++
+              next
+            }
+            $0 == push_marker {
+              push_markers++
+              if (state != "before") fail = "unexpected migration plan marker"
+              state = "migrations"
+              next
+            }
+            $0 == up_to_date_marker {
+              up_to_date_markers++
+              next
+            }
+            state == "migrations" && $0 == "Would seed these files:" {
+              state = "ended"
+              next
+            }
+            state == "migrations" && $0 == finished_marker {
+              state = "ended"
+              next
+            }
+            state == "migrations" {
+              if ($0 ~ /^[[:space:]]*•[[:space:]]*[0-9]{12}_[A-Za-z0-9_.-]+\.sql[[:space:]]*$/) {
+                filename = $0
+                sub(/^[[:space:]]*•[[:space:]]*/, "", filename)
+                sub(/[[:space:]]*$/, "", filename)
+                if (seen[filename]++) fail = "duplicate migration in pending plan: " filename
+                else print filename
+                next
+              }
+              fail = "unexpected or truncated pending migration plan"
+              next
+            }
+            END {
+              if (dry_run_markers != 1) fail = "missing or repeated dry-run marker"
+              if (up_to_date_markers != 0) fail = "empty pending plan is not an approved deployment"
+              if (push_markers != 1) fail = "missing or repeated pending migration marker"
+              if (state != "ended") fail = "pending migration plan has no recognized end marker"
+              if (fail) {
+                print "Unable to parse Supabase CLI dry-run migration plan: " fail > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' > "$RUNNER_TEMP/actual_pending_migrations"; then
+            echo "Unable to safely determine pending migrations from Supabase CLI dry-run output"
+            exit 1
+          fi
+          echo "Expected pending migrations:"
+          cat "$RUNNER_TEMP/expected_migrations"
+          echo "Actual pending migrations:"
+          cat "$RUNNER_TEMP/actual_pending_migrations"
+          diff -u "$RUNNER_TEMP/expected_migrations" "$RUNNER_TEMP/actual_pending_migrations"
           supabase db push --password "$SUPABASE_DB_PASSWORD"
