@@ -261,6 +261,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
   const [creatorEntitySharedForm, setCreatorEntitySharedForm] = useState<CreatorEntitySharedFormValues>(emptyCreatorEntitySharedForm);
   const [editingCreator, setEditingCreator] = useState<CreatorProfile | null>(null);
   const [editingCreatorEntityId, setEditingCreatorEntityId] = useState<string | null>(null);
+  const [legacyCreatorUpgrade, setLegacyCreatorUpgrade] = useState<CreatorProfile | null>(null);
   const [creatorEntityCollaborators, setCreatorEntityCollaborators] = useState<CreatorEntityCollaborator[]>([]);
   const [addingCreatorPlatform, setAddingCreatorPlatform] = useState<{ creatorEntityId: string; platform: CreatorPlatform } | null>(null);
   const [creatorAdditionalPlatformForm, setCreatorAdditionalPlatformForm] = useState<CreatorAdditionalPlatformFormValues>(emptyCreatorAdditionalPlatformForm);
@@ -514,15 +515,18 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setSaving(true);
     setError('');
     setMessage('');
+    const completedSteps: string[] = [];
 
     try {
       if (editingCreatorEntityId) {
         if (canManageCreators) {
           await scoutService.saveCreatorEntitySharedData(editingCreatorEntityId, creatorEntitySharedForm);
+          completedSteps.push('共同资料');
           await scoutService.updateCreatorEntityPlatformProfiles(editingCreatorEntityId, creatorEntitySharedForm.platforms);
+          completedSteps.push('平台资料');
         }
-        if (canEditCreatorManagementSettings) await scoutService.saveCreatorEntityManagementSettings(editingCreatorEntityId, creatorEntitySharedForm);
-        if (canEditCreatorRevenueSettings) await scoutService.saveCreatorEntityRevenueSettings(editingCreatorEntityId, creatorEntitySharedForm);
+        if (canEditCreatorManagementSettings) { await scoutService.saveCreatorEntityManagementSettings(editingCreatorEntityId, creatorEntitySharedForm); completedSteps.push('主播管理设置'); }
+        if (canEditCreatorRevenueSettings) { await scoutService.saveCreatorEntityRevenueSettings(editingCreatorEntityId, creatorEntitySharedForm); completedSteps.push('流水设置'); }
         setMessage('主播共同资料已更新。');
       } else if (editingCreator) {
         await scoutService.updateCreator(editingCreator.id, creatorForm);
@@ -534,7 +538,12 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       closeCreatorModal();
       await loadData();
     } catch (saveError) {
-      setError(`保存主播资料失败：${getErrorMessage(saveError)}`);
+      if (editingCreatorEntityId) {
+        const entityId = editingCreatorEntityId;
+        const saveState = completedSteps.length > 0 ? `已保存：${completedSteps.join('、')}` : '未完成任何保存步骤';
+        try { const refreshedCreators = await loadData(); const refreshedProfile = refreshedCreators?.find((creator) => creator.creator_entity_id === entityId); if (refreshedProfile) await openCreatorEntityEdit(refreshedProfile, entityId); setError(`保存主播资料失败：${getErrorMessage(saveError)}。${saveState}，已重新读取服务器资料。`); }
+        catch (refreshError) { setError(`保存主播资料失败：${getErrorMessage(saveError)}。服务器资料重新读取失败：${getErrorMessage(refreshError)}`); }
+      } else setError(`保存主播资料失败：${getErrorMessage(saveError)}`);
     } finally {
       setSaving(false);
     }
@@ -697,7 +706,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorModalOpen(true);
   }
 
-  async function openCreatorEdit(creator: CreatorProfile) {
+  async function openLegacyCreatorEdit(creator: CreatorProfile) {
     if (creator.creator_entity_id) {
       setError('');
       try {
@@ -760,6 +769,16 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorModalOpen(true);
   }
 
+  async function openCreatorEntityEdit(creator: CreatorProfile, creatorEntityId = creator.creator_entity_id) {
+    if (!creatorEntityId) throw new Error('主播共同资料不存在，请先完成资料升级。');
+    const [collaborators, entityProfiles, birthday, managementSettings] = await Promise.all([scoutService.getCreatorEntityCollaborators(creatorEntityId), scoutService.listCreatorEntityActivePlatformProfiles(creatorEntityId), scoutService.getCreatorEntityBirthday(creatorEntityId), scoutService.getCreatorEntityManagementSettings(creatorEntityId)]);
+    setCreatorEntityCollaborators(collaborators); setEditingCreator(null); setEditingCreatorEntityId(creatorEntityId);
+    setCreatorEntitySharedForm({ display_name: creator.creator_name, birthday: birthday ?? '', registration_type: creator.registration_type ?? 'existing_creator', guild_joined_date: creator.guild_joined_date ?? creator.joined_date, region_id: creator.region_id ?? '', scout_employee_id: creator.scout_employee_id ?? '', manager_employee_id: creator.manager_employee_id ?? '', bank_account_name: creator.bank_account_name ?? '', bank_name: creator.bank_name ?? '', bank_account: creator.bank_account ?? '', secondary_scout_employee_id: collaborators.find((c) => c.assignment_type === 'scout')?.employee_id ?? '', secondary_manager_employee_id: collaborators.find((c) => c.assignment_type === 'manager')?.employee_id ?? '', is_priority: managementSettings[0]?.is_priority ?? false, operation_status: managementSettings[0]?.operation_status ?? 'normal', operation_status_reason: managementSettings[0]?.operation_status_reason ?? '', platforms: entityProfiles.map((platform) => { const setting = managementSettings.find((item) => item.creator_profile_id === platform.id); return { ...platform, revenue_cycle: setting?.revenue_cycle ?? platform.revenue_cycle ?? 'weekly', revenue_input_mode: setting?.revenue_input_mode ?? platform.revenue_input_mode ?? 'direct' }; }) });
+    setCreatorModalOpen(true);
+  }
+  async function openCreatorEdit(creator: CreatorProfile) { setError(''); if (!creator.creator_entity_id) { setLegacyCreatorUpgrade(creator); return; } try { await openCreatorEntityEdit(creator); } catch (loadError) { setError(`读取主播共同资料失败：${getErrorMessage(loadError)}`); } }
+  async function confirmLegacyCreatorUpgrade() { if (!legacyCreatorUpgrade) return; setSaving(true); setError(''); try { const result = await scoutService.upgradeLegacyCreatorProfileToEntity(legacyCreatorUpgrade.id); const refreshedCreators = await loadData(); const upgradedProfile = refreshedCreators?.find((creator) => creator.id === legacyCreatorUpgrade.id); if (!upgradedProfile || upgradedProfile.creator_entity_id !== result.creator_entity_id) throw new Error('资料升级已完成，但无法重新读取主播资料，请刷新后重试。'); setLegacyCreatorUpgrade(null); await openCreatorEntityEdit(upgradedProfile, result.creator_entity_id); } catch (upgradeError) { setError(`升级旧主播资料失败：${getErrorMessage(upgradeError)}`); } finally { setSaving(false); } }
+
   function closeCreatorModal() {
     setCreatorModalOpen(false);
     setEditingCreator(null);
@@ -768,6 +787,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
     setCreatorEntityForm(emptyCreatorEntityForm);
     setCreatorEntitySharedForm(emptyCreatorEntitySharedForm);
     setCreatorEntityCollaborators([]);
+    setLegacyCreatorUpgrade(null);
     setAssociationCurrentEntityId(null);
     setAssociationCurrentProfile(null);
   }
@@ -1022,6 +1042,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         />
       ) : null}
 
+      {legacyCreatorUpgrade ? <SystemModal title="升级旧主播资料" subtitle="总主播统计" ariaLabel="升级旧主播资料" onClose={() => setLegacyCreatorUpgrade(null)} footer={<><button className="secondary-button compact-button" type="button" disabled={saving} onClick={() => setLegacyCreatorUpgrade(null)}>取消</button><button className="primary-button compact-button" type="button" disabled={saving} onClick={() => void confirmLegacyCreatorUpgrade()}>{saving ? '升级中...' : '确认升级并编辑'}</button></>}><p>此资料为旧版单平台主播资料。确认后会为该主播建立共同资料实体，并保留原平台资料、原 Profile ID 与历史流水；不会创建另一平台账号，也不会合并其他主播。</p></SystemModal> : null}
       {creatorModalOpen ? (
         editingCreatorEntityId ? (
           <CreatorEntitySharedModal

@@ -174,6 +174,8 @@ export type CreatorEntityCollaborator = {
   display_name: string;
   employee_status: EmployeeStatus;
 };
+
+export type LegacyCreatorEntityUpgradeResult = { creator_entity_id: string; creator_profile_id: string; created: boolean; };
 export type CreatorEntityManagementSettings = { is_priority: boolean; operation_status: CreatorEntitySharedFormValues['operation_status']; operation_status_reason: string | null; creator_profile_id: string; revenue_cycle: 'weekly' | 'monthly' | 'none'; revenue_input_mode: 'direct' | 'cumulative' };
 
 export type CreatorAdditionalPlatformFormValues = {
@@ -859,7 +861,7 @@ export const scoutService = {
   async saveCreatorEntityRevenueSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
     const { error } = await db.rpc('save_creator_entity_revenue_settings', {
       p_creator_entity_id: creatorEntityId,
-      p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: 'direct' })),
+      p_profile_settings: values.platforms.map((p) => ({ id: p.id, revenue_cycle: p.revenue_cycle ?? 'weekly', revenue_input_mode: p.revenue_input_mode ?? 'direct' })),
     });
     if (error) throw error;
   },
@@ -915,7 +917,7 @@ export const scoutService = {
   async listCreatorEntityActivePlatformProfiles(creatorEntityId: string): Promise<CreatorEntityPlatformEditValues[]> {
     const { data, error } = await db
       .from('creator_profiles')
-      .select('id, platform, joined_date, platform_user_id, platform_account, platform_public_id, creator_type')
+      .select('id, platform, joined_date, platform_user_id, platform_account, platform_public_id, creator_type, revenue_cycle, revenue_input_mode, pending_revenue_input_mode, revenue_input_mode_effective_date')
       .eq('creator_entity_id', creatorEntityId)
       .eq('status', 'active')
       .eq('membership_status', 'active');
@@ -931,8 +933,25 @@ export const scoutService = {
         platform_account: profile.platform_account,
         platform_public_id: profile.platform_public_id ?? '',
         creator_type: profile.creator_type as CreatorType,
+        revenue_cycle: profile.revenue_cycle ?? 'weekly',
+        revenue_input_mode: profile.revenue_input_mode ?? 'direct',
+        pending_revenue_input_mode: profile.pending_revenue_input_mode ?? null,
+        revenue_input_mode_effective_date: profile.revenue_input_mode_effective_date ?? null,
       }))
       .sort((first: CreatorEntityPlatformEditValues, second: CreatorEntityPlatformEditValues) => platformOrder[first.platform] - platformOrder[second.platform]);
+  },
+
+  async upgradeLegacyCreatorProfileToEntity(creatorProfileId: string): Promise<LegacyCreatorEntityUpgradeResult> {
+    const { data, error } = await db.rpc('upgrade_legacy_creator_profile_to_entity', { p_creator_profile_id: creatorProfileId });
+    if (error) throw new Error(`无法确认旧主播资料升级结果：${error.message ?? '请求失败'}。请刷新服务器资料后重试；重复确认会沿用已建立的实体。`);
+    if (!Array.isArray(data) || data.length !== 1) throw new Error('旧主播资料升级返回行数异常，无法确认结果。请刷新服务器资料后重试。');
+    const result = data[0];
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!result || typeof result.creator_entity_id !== 'string' || !uuid.test(result.creator_entity_id)
+      || result.creator_profile_id !== creatorProfileId || typeof result.created !== 'boolean') {
+      throw new Error('旧主播资料升级返回结构无效，无法确认结果。请刷新服务器资料后重试。');
+    }
+    return result as LegacyCreatorEntityUpgradeResult;
   },
 
   async addCreatorEntityPlatformProfile(creatorEntityId: string, platform: CreatorPlatform, values: CreatorAdditionalPlatformFormValues) {
