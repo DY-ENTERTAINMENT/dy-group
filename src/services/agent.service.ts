@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { getEmployeeName, platformLabels, creatorTypeLabels, type CreatorPlatform, type CreatorProfile, type CreatorType } from './scout.service';
 import type { Employee, Region } from '../types/database';
 
@@ -175,6 +175,10 @@ export type WeeklyRevenueRecord = {
 export type ManagementRevenueStatusFilter = '' | 'pending' | 'confirmed';
 
 export type ManagementRevenueRecord = WeeklyRevenueRecord & {
+  has_revenue_record: boolean;
+  record_kind?: 'weekly' | 'monthly' | 'none';
+  revenue_month?: string;
+  cycle_source?: string;
   creator: CreatorProfile | null;
   submittedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
   confirmedBy: Pick<Employee, 'id' | 'full_name' | 'nickname' | 'email'> | null;
@@ -191,6 +195,7 @@ export type ManagementRevenueFilters = {
   platform?: '' | CreatorPlatform;
   creatorType?: '' | '5+1' | 'non_5_1';
   regionId?: string;
+  revenueCycle?: '' | 'weekly' | 'monthly' | 'none';
   status?: ManagementRevenueStatusFilter;
 };
 
@@ -450,19 +455,16 @@ export const agentService = {
     return (data ?? []) as ManagementRevenueManagerOption[];
   },
 
-  async listManagementRevenueRepresentativeOptions(input: { startDate: string; endDate: string; platform?: '' | CreatorPlatform; creatorType?: '' | '5+1' | 'non_5_1'; status?: ManagementRevenueStatusFilter; regionId?: string }): Promise<RevenueRepresentativeOption[]> {
-    const { data, error } = await db.rpc('list_management_revenue_representative_options', {
-      p_start_date: input.startDate,
-      p_end_date: input.endDate,
-      p_platform: input.platform || null,
-      p_creator_type: input.creatorType || null,
-      p_region_id: input.regionId || null,
-      p_status: input.status || null,
-    });
-    if (error) throw error;
-    return (data ?? []) as RevenueRepresentativeOption[];
+  async listManagementRevenueRepresentativeOptions(input: { startDate: string; endDate: string; platform?: '' | CreatorPlatform; creatorType?: '' | '5+1' | 'non_5_1'; status?: ManagementRevenueStatusFilter; regionId?: string; revenueCycle?: '' | 'weekly' | 'monthly' | 'none' }): Promise<RevenueRepresentativeOption[]> {
+    const records: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await db.rpc('list_management_revenue_records_e', { p_start_date: input.startDate, p_end_date: input.endDate, p_platform: input.platform || null, p_creator_type: input.creatorType || null, p_region_id: input.regionId || null, p_status: input.status || null, p_revenue_cycle: input.revenueCycle || null, p_limit: 500, p_offset: offset });
+      if (error) throw error;
+      records.push(...(data ?? []).map((row: any) => row.record));
+      if ((data ?? []).length < 500) break;
+    }
+    return [...new Map(records.filter(row => row.reporting_manager_employee_id).map(row => [row.reporting_manager_employee_id, { id: row.reporting_manager_employee_id, full_name: row.reporting_manager_full_name, nickname: row.reporting_manager_nickname }])).values()] as RevenueRepresentativeOption[];
   },
-
   async listCurrentRevenueRepresentativeOptions(regionId?: string): Promise<RevenueRepresentativeOption[]> {
     const { data, error } = await db.rpc('list_current_revenue_representative_options', {
       p_region_id: regionId || null,
@@ -512,7 +514,9 @@ export const agentService = {
   },
 
   async listPersonalManagerWeeklyRevenueProfiles(filters: { month?: string; platform?: string; regionId?: string } = {}): Promise<PersonalManagerCreatorProfile[]> {
-    const { data, error } = await db.rpc('list_personal_manager_weekly_revenue_profiles');
+    const pages: any[] = [];
+    for (let offset = 0; ; offset += 500) { const { data, error } = await db.rpc('list_agent_revenue_profiles_e', { p_limit: 500, p_offset: offset }); if (error) throw error; pages.push(...(data ?? []).map((row: any) => row.profile)); if ((data ?? []).length < 500) break; }
+    const data = pages, error = null;
     if (error) throw error;
     const rows = (data ?? []) as WeeklyRevenueProfileRpcRow[];
     return rows
@@ -582,7 +586,7 @@ export const agentService = {
     const pageSize = 500;
     const rows: unknown[] = [];
     for (let offset = 0; ; offset += pageSize) {
-      const { data, error } = await db.rpc('list_management_revenue_canonical_records', {
+      const { data, error } = await db.rpc('list_management_revenue_records_e', {
         p_start_date: normalizedRange.startIso,
         p_end_date: normalizedRange.endIso,
         p_manager_employee_id: filters.managerEmployeeId || null,
@@ -590,12 +594,13 @@ export const agentService = {
         p_creator_type: filters.creatorType || null,
         p_region_id: filters.regionId || null,
         p_status: filters.status || null,
+        p_revenue_cycle: filters.revenueCycle || null,
         p_limit: pageSize,
         p_offset: offset,
       });
       if (error) throw error;
       const page = data ?? [];
-      rows.push(...page);
+      rows.push(...page.map((row: any) => row.record));
       if (page.length < pageSize) break;
     }
     return rows
@@ -978,6 +983,18 @@ function mapRevenuePeriodSettingRow(row: any): RevenuePeriodSetting {
 function mapCanonicalManagementRevenueRow(row: any): ManagementRevenueRecord {
   return {
     ...mapWeeklyRevenueRow(row),
+    id: row.id ?? `empty:${row.creator_profile_id}:${row.revenue_month ?? ''}`,
+    week_start_date: row.week_start_date ?? '',
+    week_end_date: row.week_end_date ?? '',
+    revenue_amount: Number(row.revenue_amount ?? 0),
+    revenue_unit: !row.has_revenue_record && row.revenue_unit == null
+      ? (row.creator_platform === 'douyin' ? 'yinlang' : 'diamond')
+      : (row.revenue_unit === 'yinlang' ? 'yinlang' : 'diamond'),
+    source: row.source === 'csv' || row.source === 'api' ? row.source : 'manual',
+    status: row.status === 'confirmed' ? 'confirmed' : 'submitted',
+    created_at: row.created_at ?? row.creator_created_at,
+    updated_at: row.updated_at ?? row.creator_updated_at,
+    has_revenue_record: Boolean(row.has_revenue_record), record_kind: row.record_kind, revenue_month: row.revenue_month, cycle_source: row.cycle_source,
     creator: mapCreatorRow({
       id: row.creator_profile_id,
       creator_entity_id: row.creator_current_entity_id,

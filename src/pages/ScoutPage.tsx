@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+﻿import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, ChevronRight, Edit3, Layers, MessageSquarePlus, Plus, RefreshCw, Search, UsersRound, X } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
@@ -2351,7 +2351,7 @@ function CreatorDetailDrawer({
             </div>
           </DrawerSection>
 
-          <DrawerSection title="平台流水设置">
+          <DrawerSection title="平台流水设置"><p className="field-help">流水周期保存成功后立即生效；同月仅统计当前有效周期，历史记录保留。旧档案须先完成周期基线核验。</p>
             <div className="creator-platform-revenue-settings">
               {sortCreatorProfiles(group.profiles).map((creator) => {
                 const cycle = creator.revenue_cycle ?? 'weekly';
