@@ -207,7 +207,16 @@ jobs:
 
             while IFS= read -r migration; do
               migration_version="${migration%%_*}"
-              if ! grep -Eq "^[[:space:]]*[^|]*\\|[[:space:]]*${migration_version}[[:space:]]*\\|" "$RUNNER_TEMP/production_migration_history"; then
+              # Supabase CLI quotes cells with backticks; inspect only Remote (column 2).
+              if ! awk -F '|' -v version="$migration_version" '
+                NF == 3 {
+                  remote = $2
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "", remote)
+                  if (remote ~ /^`[0-9]{12}`$/) remote = substr(remote, 2, length(remote) - 2)
+                  if (remote ~ /^[0-9]{12}$/ && ("v" remote) == ("v" version)) found = 1
+                }
+                END { exit (found ? 0 : 1) }
+              ' "$RUNNER_TEMP/production_migration_history"; then
                 echo "Production migration history does not record expected migration: $migration"
                 exit 1
               fi
