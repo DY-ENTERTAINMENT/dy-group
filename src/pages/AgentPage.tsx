@@ -2,6 +2,8 @@
 import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Eye, FileWarning, Leaf, Layers3, Plus, RefreshCw, Search, Send, Settings, Trash2, UserRound, X } from 'lucide-react';
 import { useRef } from 'react';
 import { revenueCycleService, type RevenueMonthContext, type MonthlyRevenueRecord } from '../services/revenue-cycle.service';
+import { rosterCycle, canWriteMonthly, isVerifiedMonthly, malaysiaMonth } from '../services/revenue-cycle-display';
+import { MonthlyRevenueBaseline } from '../components/MonthlyRevenueBaseline';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { AgentDesignerRequests } from '../components/DesignerRequestWorkflow';
@@ -814,6 +816,7 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
           row={selectedCreatorRow}
           filters={filters}
           onClose={() => setSelectedCreatorRow(null)}
+          onVerified={() => { setSelectedCreatorRow(null); void loadRecords(); }}
         />
       ) : null}
     </div>
@@ -1107,10 +1110,12 @@ function ManagementRevenueDetailModal({
   row,
   filters,
   onClose,
+  onVerified,
 }: {
   row: ManagementCreatorRevenueRow;
   filters: ManagementRevenuePanelFilters;
   onClose: () => void;
+  onVerified: () => void;
 }) {
   return (
     <SystemModal
@@ -1133,6 +1138,10 @@ function ManagementRevenueDetailModal({
         <DrawerField label="TikTok 总钻石" value={`${formatRevenueAmount(row.tiktokTotal)} 钻石`} />
         <DrawerField label="抖音总音浪" value={`${formatRevenueAmount(row.douyinTotal)} 音浪`} />
       </div>
+      {[...new Map(row.records.filter(record => record.creator?.revenue_cycle === 'monthly' && record.cycle_source === 'LEGACY_UNKNOWN').map(record => [record.creator_profile_id, record])).values()].map(record => <div key={record.creator_profile_id}>
+        <p>{record.creator?.creator_name} · 当前资料设置：月流水；所选月份周期待核验，只读。</p>
+        <MonthlyRevenueBaseline profileId={record.creator_profile_id} creatorName={record.creator?.creator_name || record.creator_profile_id} month={malaysiaMonth()} onVerified={onVerified} />
+      </div>)}
       <div className="management-revenue-weekly-table-wrap">
         <table className="staff-table agent-table management-revenue-weekly-table">
           <thead>
@@ -2311,7 +2320,7 @@ function DesignModal({ values, saving, onChange, onClose, onSubmit }: { values: 
   return <SystemModal title="添加新申请" ariaLabel="美工申请" onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose}>取消</button><button className="primary-button compact-button" type="submit" form="design-form" disabled={saving}>提交</button></>}><form id="design-form" onSubmit={onSubmit}><div className="form-grid"><SelectField label="申请类型" value={values.request_type} onChange={(value) => onChange({ ...values, request_type: value as DesignRequestType })}>{designTypes.map((type) => <option key={type} value={type}>{designTypeLabels[type]}</option>)}</SelectField>{!isSpecial ? <><SelectField label="平台" value={values.platform} onChange={(value) => onChange({ ...values, platform: value as CreatorPlatform })}><option value="tiktok">TikTok</option><option value="douyin">抖音</option></SelectField><TextField label={values.platform === 'tiktok' ? 'TikTok User ID' : '抖音 User ID'} value={values.platform_user_id} onChange={(value) => onChange({ ...values, platform_user_id: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 名字' : '抖音名字'} value={values.creator_name} onChange={(value) => onChange({ ...values, creator_name: value })} /><TextField label={values.platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={values.platform_account} onChange={(value) => onChange({ ...values, platform_account: value })} /></> : null}{!isSpecial && !isPoster ? <><TextField label="粉丝昵称" value={values.fan_nickname} onChange={(value) => onChange({ ...values, fan_nickname: value })} /><TextField label="粉丝灯牌等级 / 财富等级" value={values.fan_level} onChange={(value) => onChange({ ...values, fan_level: value })} /><SelectField label="打印方式" value={values.print_method} onChange={(value) => onChange({ ...values, print_method: value as DesignFormValues['print_method'] })}>{Object.entries(printMethodLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</SelectField></> : null}{!isSpecial ? <TextField label={isPoster ? '海报内容' : '设计内容'} value={values.design_content} onChange={(value) => onChange({ ...values, design_content: value })} /> : null}{isPoster ? <TextField label="设计元素" value={values.design_elements} onChange={(value) => onChange({ ...values, design_elements: value })} /> : null}{isSpecial ? <label className="form-field form-field-wide"><span>自由需求说明</span><textarea value={values.special_content} onChange={(event) => onChange({ ...values, special_content: event.target.value })} /></label> : null}<label className="form-field form-field-wide"><span>参考图片链接（每行一个，未来可接文件上传）</span><textarea value={values.reference_urls} onChange={(event) => onChange({ ...values, reference_urls: event.target.value })} /></label></div></form></SystemModal>;
 }
 
-type OperationStatus = 'missing' | 'filled';
+type OperationStatus = 'missing' | 'filled' | 'unverified';
 type OperationCellStatus = OperationStatus | 'future';
 type OperationPlatformFilter = '' | CreatorPlatform | 'dual_platform';
 type OperationQuickRange = 'previous' | 'month' | 'last30' | 'custom' | 'year';
@@ -2452,9 +2461,10 @@ function AgentPeriodRevenuePanel(props: {
   const sortedCreators = useMemo(() => {
     if (contextKey !== expectedContextKey) return [];
     const contexts = new Map(monthContexts.map(context => [context.creator_profile_id, context]));
-    return sortOperationCreators(props.creators.filter((creator: PersonalManagerCreatorProfile) => creator.membership_status === 'active' && contexts.has(creator.id)).map(creator => ({ ...creator, revenue_cycle: contexts.get(creator.id)?.effective_cycle ?? undefined, revenueMonthContext: contexts.get(creator.id) })));
+    return sortOperationCreators(props.creators.filter((creator: PersonalManagerCreatorProfile) => creator.membership_status === 'active' && contexts.has(creator.id)).map(creator => ({ ...creator, current_revenue_cycle: creator.revenue_cycle, revenue_cycle: rosterCycle(creator.revenue_cycle, contexts.get(creator.id)!), revenueMonthContext: contexts.get(creator.id) })));
   }, [props.creators, monthContexts, contextKey, expectedContextKey]);
-  function updateMonthlyRecord(record: MonthlyRevenueRecord) {
+  function updateMonthlyRecord(record: MonthlyRevenueRecord | null) {
+    if (!record) { refreshContexts(value => value + 1); return; }
     if (record.revenue_month.slice(0, 7) !== props.month) return;
     setMonthContexts(contexts => contexts.map(context => context.creator_profile_id === record.creator_profile_id ? { ...context, monthly_record: record } : context));
   }
@@ -2902,7 +2912,7 @@ function SearchableRevenueManagerFilter({ value, options, onChange }: { value: s
 }
 
 function CurrentOperationTable(props: {
-  month: string; onMonthlySaved: (record: MonthlyRevenueRecord) => void;
+  month: string; onMonthlySaved: (record: MonthlyRevenueRecord | null) => void;
   loading: boolean;
   rows: OperationStreamerRow[];
   allRows: OperationStreamerRow[];
@@ -2955,7 +2965,7 @@ function CurrentOperationTable(props: {
   );
 }
 
-function OperationTableRow({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void; month: string; onMonthlySaved: (record: MonthlyRevenueRecord) => void }) {
+function OperationTableRow({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void; month: string; onMonthlySaved: (record: MonthlyRevenueRecord | null) => void }) {
   const groups = splitEffectiveCycleRows(row);
   return <>{groups.map((part, index) => {
     const weekly = part.profiles.every(profile => profile.revenue_cycle === 'weekly');
@@ -2963,18 +2973,18 @@ function OperationTableRow({ row, selectedPeriodStart, onOpen, month, onMonthlyS
       {index === 0 ? <><td rowSpan={groups.length}><OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} /></td><td rowSpan={groups.length}><OperationPlatformList profiles={row.profiles} /></td><td rowSpan={groups.length}><OperationTypeList profiles={row.profiles} /></td></> : null}
       {weekly ? part.periods.map(cell => <PeriodRevenueCell key={cell.period.startIso} cell={cell} selected={cell.period.startIso === selectedPeriodStart} onOpen={onOpen} />) : <td className="agent-period-cell" colSpan={Math.max(1,row.periods.length)}><div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 8 }}><EffectiveCycleArea profiles={part.profiles} month={month} onSaved={onMonthlySaved} periods={part.periods} /></div></td>}
       <td>{weekly ? <OperationMonthSummary entries={summarizeOperationMonth(part.periods)} /> : part.profiles.filter(profile => profile.revenue_cycle === 'monthly').map(profile => { const record = (profile as CycleAwareProfile).revenueMonthContext?.monthly_record; return <div key={profile.id}>{platformLabels[profile.platform]} {record ? formatRevenueAmount(record.revenue_amount) : '—'} {getCreatorRevenueUnitLabel(profile.platform)}</div>; })}</td>
-      <td>{weekly ? <OperationRowStatusBadge status={part.status} /> : part.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写' : part.profiles.every(profile => profile.revenue_cycle === 'monthly') ? <OperationRowStatusBadge status={part.profiles.every(profile => Boolean((profile as CycleAwareProfile).revenueMonthContext?.monthly_record)) ? 'filled' : 'missing'} /> : '历史待核验'}</td>
+      <td>{weekly ? <OperationRowStatusBadge status={part.status} /> : part.profiles.every(profile => (profile as CycleAwareProfile).revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN') ? '周期待核验' : part.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写' : part.profiles.every(profile => profile.revenue_cycle === 'monthly') ? <OperationRowStatusBadge status={part.profiles.every(profile => Boolean((profile as CycleAwareProfile).revenueMonthContext?.monthly_record)) ? 'filled' : 'missing'} /> : '历史待核验'}</td>
       <td className="agent-period-note">{part.profiles.map(profile => (profile as CycleAwareProfile).revenueMonthContext?.monthly_record?.agent_note).filter(Boolean).join(' / ') || row.latestNote || '-'}</td>
     </tr>;
   })}</>;
 }
 
-function OperationMobileCard({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { month: string; onMonthlySaved: (record: MonthlyRevenueRecord) => void; row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
+function OperationMobileCard({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { month: string; onMonthlySaved: (record: MonthlyRevenueRecord | null) => void; row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
   return (
     <article className="agent-operation-mobile-card agent-period-mobile-card">
       <div className="agent-operation-mobile-head">
         <OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} />
-        {row.profiles.every((profile) => !isWeeklyRevenuePendingEligible(profile)) ? <span>{row.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写流水' : row.profiles.some(profile => profile.revenue_cycle === 'monthly') ? (row.status === 'filled' ? '已填写' : '未填写') : '历史待核验'}</span> : <OperationStatusBadge status={row.status} />}
+        {row.profiles.every((profile) => !isWeeklyRevenuePendingEligible(profile)) ? <span>{row.status === 'unverified' ? '周期待核验' : row.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写流水' : row.profiles.some(profile => profile.revenue_cycle === 'monthly') ? (row.status === 'filled' ? '已填写' : '未填写') : '历史待核验'}</span> : <OperationStatusBadge status={row.status} />}
       </div>
       <div className="agent-period-mobile-meta">
         <OperationPlatformList profiles={row.profiles} />
@@ -3300,12 +3310,12 @@ function PlatformPill({ platform }: { platform: CreatorPlatform }) {
 }
 
 function OperationStatusBadge({ status }: { status: OperationCellStatus }) {
-  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始' };
+  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始', unverified: '周期待核验' };
   return <span className={`agent-weekly-status-badge agent-weekly-status-badge--${status}`}>{labels[status]}</span>;
 }
 
 function OperationRowStatusBadge({ status }: { status: OperationStatus }) {
-  const labels: Record<OperationStatus, string> = { missing: '未完成', filled: '已完成' };
+  const labels: Record<OperationStatus, string> = { missing: '未完成', filled: '已完成', unverified: '周期待核验' };
   return <span className={`agent-weekly-status-badge agent-weekly-status-badge--${status}`}>{labels[status]}</span>;
 }
 
@@ -3697,7 +3707,7 @@ function buildOperationStreamerRows(
     const rowPeriods = periods.map((period) => {
       const isFuture = isRevenuePeriodFuture(period, todayIso);
       const cellProfiles = visibleProfiles.map((creator) => {
-        const record = creator.revenue_cycle === 'weekly' || !creator.revenue_cycle ? recordsByPeriod[period.startIso]?.[creator.id] ?? null : null;
+        const record = creator.revenue_cycle === 'weekly' || !creator.revenue_cycle || (creator as CycleAwareProfile).revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN' ? recordsByPeriod[period.startIso]?.[creator.id] ?? null : null;
         const status: OperationCellStatus = record ? 'filled' : !isWeeklyRevenuePendingEligible(creator) || isFuture ? 'future' : 'missing';
         return { creator, record, status, period };
       });
@@ -3707,7 +3717,7 @@ function buildOperationStreamerRows(
         status: getOperationCellStatus(cellProfiles),
       };
     });
-    const rowStatus: OperationStatus = rowPeriods.some((period) => period.profiles.some((profile) => profile.status === 'missing')) || visibleProfiles.some(profile => profile.revenue_cycle === 'monthly' && !(profile as CycleAwareProfile).revenueMonthContext?.monthly_record) ? 'missing' : 'filled';
+    const rowStatus: OperationStatus = visibleProfiles.every(profile => (profile as CycleAwareProfile).revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN') ? 'unverified' : rowPeriods.some((period) => period.profiles.some((profile) => profile.status === 'missing')) || visibleProfiles.some(profile => isVerifiedMonthly((profile as CycleAwareProfile).revenueMonthContext) && !(profile as CycleAwareProfile).revenueMonthContext?.monthly_record) ? 'missing' : 'filled';
     const revenueSort = getOperationRevenueSort(rowPeriods, filters.platform);
     return [{
       id: getOperationGroupKey(visibleProfiles[0]),
@@ -3758,7 +3768,7 @@ function getOperationCellStatus(profiles: OperationCellProfile[]): OperationCell
 }
 
 function getOperationCellStatusLabel(status: OperationCellStatus) {
-  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始' };
+  const labels: Record<OperationCellStatus, string> = { missing: '未填写', filled: '已填写', future: '未开始', unverified: '周期待核验' };
   return labels[status];
 }
 
@@ -4028,8 +4038,8 @@ function isAmbiguousRevenueRequest(error: unknown) {
 }
 
 
-type CycleAwareProfile = CreatorProfile & { revenueMonthContext?: RevenueMonthContext };
-function MonthlyRevenueEntry({ creator, month, onSaved }: { creator: CycleAwareProfile; month: string; onSaved: (record: MonthlyRevenueRecord) => void }) {
+type CycleAwareProfile = CreatorProfile & { current_revenue_cycle?: CreatorProfile['revenue_cycle']; revenueMonthContext?: RevenueMonthContext };
+function MonthlyRevenueEntry({ creator, month, onSaved }: { creator: CycleAwareProfile; month: string; onSaved: (record: MonthlyRevenueRecord | null) => void }) {
   const context = creator.revenueMonthContext;
   const record = context?.monthly_record ?? null;
   const [open, setOpen] = useState(false);
@@ -4044,12 +4054,13 @@ function MonthlyRevenueEntry({ creator, month, onSaved }: { creator: CycleAwareP
   useEffect(() => { setOpen(false); setRequestId(null); }, [month, creator.id]);
   const row: OperationCellProfile = { creator, record: record ? { ...record, week_start_date: `${month}-01`, week_end_date: `${month}-01` } as unknown as WeeklyRevenueRecord : null, status: record ? 'filled' : 'missing', period: { startIso: `${month}-01`, endIso: `${month}-01`, label: month, shortLabel: month, periodNo: 1 } };
   function begin() {
+    if (!canWriteMonthly(context)) return;
     snapshot.current = record;
     setAmount(record ? String(record.revenue_amount) : ''); setNote(record?.agent_note ?? ''); setError(''); setRequestId(null); setOpen(true);
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || !canWriteMonthly(context)) return;
     const parsed = parseWeeklyAmount(amount);
     if (parsed.error) { setError(parsed.error); return; }
     const id = requestId ?? createUuidV4(); setRequestId(id); setSaving(true); setError('');
@@ -4062,8 +4073,8 @@ function MonthlyRevenueEntry({ creator, month, onSaved }: { creator: CycleAwareP
     } finally { if (mounted.current) setSaving(false); }
   }
   return <>
-    <RevenueValueEntry item={row} onOpen={begin} disabled={!context?.can_write} />
-    {open ? <SystemModal title={record ? '编辑月流水' : '填写月流水'} ariaLabel="月流水" onClose={() => { if (!saving) setOpen(false); }} footer={<><button className="secondary-button compact-button" disabled={saving} onClick={() => setOpen(false)}>关闭</button><button className="primary-button compact-button" type="submit" form={`monthly-revenue-${creator.id}`} disabled={saving}>保存</button></>}>
+    <RevenueValueEntry item={row} onOpen={begin} disabled={!canWriteMonthly(context)} />
+    {open ? <SystemModal title={record ? '编辑月流水' : '填写月流水'} ariaLabel="月流水" onClose={() => { if (!saving) setOpen(false); }} footer={<><button className="secondary-button compact-button" disabled={saving} onClick={() => setOpen(false)}>关闭</button><button className="primary-button compact-button" type="submit" form={`monthly-revenue-${creator.id}`} disabled={saving || !canWriteMonthly(context)}>保存</button></>}>
       <form id={`monthly-revenue-${creator.id}`} className="weekly-operation-form" onSubmit={save}>
         <div className="agent-operation-modal-head"><PlatformPill platform={creator.platform} /><OperationStatusBadge status={record ? 'filled' : 'missing'} /></div>
         <div className="agent-operation-detail-grid"><DrawerField label="主播" value={creator.creator_name || '-'} /><DrawerField label="平台" value={platformLabels[creator.platform]} /><DrawerField label="UID" value={creator.platform_user_id} /><DrawerField label="平台账号" value={creator.platform_account || '-'} /><DrawerField label="月份" value={month} /><DrawerField label="单位" value={getCreatorRevenueUnitLabel(creator.platform)} /></div>
@@ -4083,8 +4094,15 @@ function getMonthlyRevenueError(failure: unknown) {
   if (code === '22023') return '月份或流水数值无效。';
   return '保存月流水失败，请检查连接后重试。';
 }
-function EffectiveCycleArea({ profiles, month, onSaved, periods = [] }: { profiles: CycleAwareProfile[]; month: string; onSaved: (record: MonthlyRevenueRecord) => void; periods?: OperationPeriodCell[] }) {
-  if (profiles.every(profile => profile.revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN')) return <div><span>历史周期待核验（只读）</span>{periods.flatMap(cell => cell.profiles).filter(item => item.record && profiles.some(profile => profile.id === item.creator.id)).map(item => <div key={item.creator.id + ':' + item.period.startIso}><small>{getWeekLabel(item.period.startIso, item.period.endIso)}</small><RevenueValueEntry item={item} onOpen={() => {}} disabled /></div>)}</div>;
+function EffectiveCycleArea({ profiles, month, onSaved, periods = [] }: { profiles: CycleAwareProfile[]; month: string; onSaved: (record: MonthlyRevenueRecord | null) => void; periods?: OperationPeriodCell[] }) {
+  const unknown = profiles.filter(profile => profile.revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN');
+  if (unknown.length) return <div>
+    {unknown.map(profile => <div key={profile.id}><p>{profile.creator_name} · 当前资料设置：{profile.current_revenue_cycle === 'monthly' ? '月流水' : '待确认'}；所选月周期待核验（只读）</p>
+      {profile.current_revenue_cycle === 'monthly' ? <MonthlyRevenueBaseline profileId={profile.id} creatorName={profile.creator_name || profile.platform_user_id} month={month} onVerified={() => onSaved(null)} /> : null}
+    </div>)}
+    {periods.flatMap(cell => cell.profiles).filter(item => item.record && unknown.some(profile => profile.id === item.creator.id)).map(item => <div key={item.creator.id + ':' + item.period.startIso}><small>{getWeekLabel(item.period.startIso, item.period.endIso)}</small><RevenueValueEntry item={item} onOpen={() => {}} disabled /></div>)}
+    {profiles.filter(profile => profile.revenueMonthContext?.cycle_source !== 'LEGACY_UNKNOWN' && profile.revenue_cycle === 'monthly').map(profile => <MonthlyRevenueEntry key={profile.id} creator={profile} month={month} onSaved={onSaved} />)}
+  </div>;
   if (profiles.every(profile => profile.revenue_cycle === 'none')) return <span>无需填写流水</span>;
   return <div className="agent-period-cell-stack" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>{profiles.filter(profile => profile.revenue_cycle === 'monthly').map(profile => <MonthlyRevenueEntry key={`${profile.id}:${month}`} creator={profile} month={month} onSaved={onSaved} />)}</div>;
 }
@@ -4098,7 +4116,7 @@ function summarizeEffectiveRevenueRows(rows: OperationStreamerRow[]) {
   const summary = summarizeOperationStreamerRows(rows);
   const seen = new Set<string>();
   rows.forEach(row => row.profiles.forEach(profile => {
-    if (profile.revenue_cycle !== 'monthly' || seen.has(profile.id)) return;
+    if (profile.revenue_cycle !== 'monthly' || (profile as CycleAwareProfile).revenueMonthContext?.cycle_source !== 'VERIFIED' || seen.has(profile.id)) return;
     seen.add(profile.id);
     const record = (profile as CycleAwareProfile).revenueMonthContext?.monthly_record;
     if (!record) { summary.missing += 1; return; }

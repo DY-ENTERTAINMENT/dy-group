@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { baselineInput } from './revenue-cycle-display';
 export type RevenueCycle = 'weekly' | 'monthly' | 'none';
 export type MonthlyRevenueRecord = {
   id: string; creator_profile_id: string; revenue_month: string; platform: 'tiktok' | 'douyin';
@@ -10,6 +11,10 @@ export type RevenueMonthContext = {
 };
 const rpc = supabase as any;
 export const revenueCycleService = {
+  async initializeCurrentMonthlyBaseline(input: { profileId: string; month: string; evidence: string; confirmed: boolean }) {
+    const { error } = await rpc.rpc('initialize_creator_revenue_cycle_baseline', baselineInput(input.profileId, input.month, input.evidence, input.confirmed));
+    if (error) throw error;
+  },
   async monthContext(ids: string[], month: string): Promise<RevenueMonthContext[]> {
     const result: RevenueMonthContext[] = [];
     for (let offset = 0; offset < ids.length; offset += 500) {
