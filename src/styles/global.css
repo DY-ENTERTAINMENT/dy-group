@@ -13239,15 +13239,6 @@ button.leave-chip:disabled {
 .management-platform-revenue-card--tiktok .management-revenue-section-head h3 { color: #1982c4; }
 .management-platform-revenue-card--douyin .management-revenue-section-head h3 { color: #d6336c; }
 
-.management-platform-kpi-note {
-  min-height: 32px;
-  margin: 2px 0 8px;
-  color: #667085;
-  font-size: 11px;
-  line-height: 1.4;
-  text-align: center;
-}
-
 .management-agent-kpi-grid .offline-kpi-table { width: 100%; }
 .management-agent-kpi-grid .offline-kpi-row { grid-template-columns: minmax(0, 1.2fr) minmax(0, .75fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
 

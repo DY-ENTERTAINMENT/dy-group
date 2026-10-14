@@ -965,7 +965,6 @@ function ManagementPlatformRevenueCard({ title, unit, rows, loading, error, mont
   return (
     <section className={`management-revenue-card management-platform-revenue-card management-platform-revenue-card--${platform}`}>
       <ManagementRevenueSectionHead title={title} detail={`${formatMonthLabel(month)} · ${unit}`} />
-      <p className="management-platform-kpi-note">管理主播按当前负责人；已完成流水按记录时负责人归属。</p>
       {loading ? <div className="table-state management-revenue-state">正在读取平台经纪人 KPI...</div> : null}
       {error ? <p className="offline-kpi-error">{error}</p> : null}
       {!loading && !error && rows.length === 0 ? <div className="table-state management-revenue-state">暂无经纪人数据</div> : null}
