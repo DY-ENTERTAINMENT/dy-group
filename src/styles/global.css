@@ -13214,6 +13214,60 @@ button.leave-chip:disabled {
   font-size: 15px;
 }
 
+.management-agent-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.management-agent-kpi-grid .management-revenue-card {
+  min-width: 0;
+}
+
+.management-agent-kpi-grid .management-revenue-section-head {
+  display: grid;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.management-agent-kpi-grid .management-revenue-section-head h3 {
+  font-size: 15px;
+}
+
+.management-platform-revenue-card--tiktok .management-revenue-section-head h3 { color: #1982c4; }
+.management-platform-revenue-card--douyin .management-revenue-section-head h3 { color: #d6336c; }
+
+.management-platform-kpi-note {
+  min-height: 32px;
+  margin: 2px 0 8px;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.management-agent-kpi-grid .offline-kpi-table { width: 100%; }
+.management-agent-kpi-grid .offline-kpi-row { grid-template-columns: minmax(0, 1.2fr) minmax(0, .75fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
+
+.management-agent-kpi-grid .offline-kpi-row > strong,
+.management-agent-kpi-grid .offline-kpi-row > span,
+.management-agent-kpi-grid .offline-kpi-row > b,
+.management-agent-kpi-grid .offline-kpi-value {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.management-agent-kpi-grid .offline-kpi-value,
+.management-agent-kpi-grid .offline-kpi-input {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
 .offline-kpi-error {
   margin: 0;
   color: #b42318;
@@ -13894,6 +13948,14 @@ button.leave-chip:disabled {
 }
 
 @media (max-width: 1180px) {
+  .management-agent-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-agent-kpi-grid .management-offline-revenue-card {
+    grid-column: 1 / -1;
+  }
+
   .management-revenue-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
@@ -13926,6 +13988,7 @@ button.leave-chip:disabled {
   }
 
   .management-revenue-kpi-grid,
+  .management-agent-kpi-grid,
   .management-revenue-filters,
   .management-revenue-chart-grid,
   .management-revenue-split-ranking,
@@ -15558,4 +15621,15 @@ button.leave-chip:disabled {
   .outgoing-management-preview .outgoing-management-evidence .outgoing-evidence-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.management-agent-kpi-grid .management-platform-kpi-risk {
+  display: block;
+  margin-top: 4px;
+  color: #9a6700;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

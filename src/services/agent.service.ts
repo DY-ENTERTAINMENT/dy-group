@@ -211,6 +211,12 @@ export type AgentOfflineRevenueKpiSummary = {
   completed_amount: number;
 };
 
+export type AgentPlatformRevenueKpiSummary = AgentOfflineRevenueKpiSummary & {
+  unverified_amount: number;
+  unverified_record_count: number;
+  cycle_sources: string[];
+};
+
 export type WeeklyRevenueSaveInput = {
   creatorProfileId: string;
   weekStartDate: string;
@@ -410,6 +416,35 @@ export const printMethodLabels: Record<PrintMethod, string> = {
 };
 
 export const agentService = {
+  async listAgentPlatformRevenueKpiSummary(month: string, platform: CreatorPlatform): Promise<AgentPlatformRevenueKpiSummary[]> {
+    const { data, error } = await db.rpc('get_agent_platform_revenue_kpi_summary', { p_month: `${month}-01`, p_platform: platform });
+    if (error) throw error;
+    if ((data ?? []).some((row: any) => row.unverified_amount == null || row.unverified_record_count == null || !Array.isArray(row.cycle_sources))) {
+      throw new Error('平台 KPI 数据库契约尚未更新，无法确认历史未核验流水风险');
+    }
+    return (data ?? []).map((row: any) => ({
+      agent_employee_id: row.agent_employee_id,
+      agent_name: row.agent_name,
+      job_title: row.job_title,
+      managed_creator_count: Number(row.managed_creator_count) || 0,
+      kpi_amount: row.kpi_amount === null || row.kpi_amount === undefined ? null : Number(row.kpi_amount),
+      completed_amount: Number(row.completed_amount) || 0,
+      unverified_amount: Number(row.unverified_amount),
+      unverified_record_count: Number(row.unverified_record_count),
+      cycle_sources: row.cycle_sources,
+    }));
+  },
+
+  async upsertAgentPlatformRevenueKpi(agentEmployeeId: string, month: string, platform: CreatorPlatform, kpiAmount: number): Promise<void> {
+    const { error } = await db.rpc('upsert_agent_platform_revenue_kpi', {
+      p_agent_employee_id: agentEmployeeId,
+      p_month: `${month}-01`,
+      p_platform: platform,
+      p_kpi_amount: kpiAmount,
+    });
+    if (error) throw error;
+  },
+
   async listAgentOfflineRevenueKpiSummary(month: string): Promise<AgentOfflineRevenueKpiSummary[]> {
     const { data, error } = await db.rpc('get_agent_offline_revenue_kpi_summary', { p_month: `${month}-01` });
     if (error) throw error;

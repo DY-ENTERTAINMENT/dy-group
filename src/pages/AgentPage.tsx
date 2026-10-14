@@ -28,6 +28,7 @@ import {
   type AdjustmentTargetEmployee,
   type AdjustmentType,
   type AgentOptions,
+  type AgentPlatformRevenueKpiSummary,
   type AgentOfflineRevenueKpiSummary,
   type DesignFormValues,
   type DesignRequest,
@@ -499,6 +500,15 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
   const [recordsError, setRecordsError] = useState('');
   const recordsRequestSequence = useRef(0);
   const recordsPanelMounted = useRef(false);
+  const [platformKpiRows, setPlatformKpiRows] = useState<Record<CreatorPlatform, AgentPlatformRevenueKpiSummary[]>>({ tiktok: [], douyin: [] });
+  const [platformKpiLoading, setPlatformKpiLoading] = useState<Record<CreatorPlatform, boolean>>({ tiktok: false, douyin: false });
+  const [platformKpiError, setPlatformKpiError] = useState<Record<CreatorPlatform, string>>({ tiktok: '', douyin: '' });
+  const [platformKpiSavingId, setPlatformKpiSavingId] = useState('');
+  const platformKpiSaveInFlightRef = useRef(false);
+  const platformKpiScopeRef = useRef({ month: filters.endMonth, active: true });
+  if (platformKpiScopeRef.current.month !== filters.endMonth) {
+    platformKpiScopeRef.current = { month: filters.endMonth, active: true };
+  }
   const [offlineRows, setOfflineRows] = useState<AgentOfflineRevenueKpiSummary[]>([]);
   const [offlineLoading, setOfflineLoading] = useState(false);
   const [offlineError, setOfflineError] = useState('');
@@ -537,6 +547,13 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         return first.agent_employee_id.localeCompare(second.agent_employee_id);
       });
   }, [filters.regionId, offlineManagerEmployees, offlineRows]);
+  const visiblePlatformKpiRows = useMemo(() => {
+    const employeeRegions = new Map(offlineManagerEmployees.map((employee) => [employee.id, employee.region_id]));
+    const sortRows = (rows: AgentPlatformRevenueKpiSummary[]) => rows
+      .filter((row) => !filters.regionId || employeeRegions.get(row.agent_employee_id) === filters.regionId)
+      .sort((first, second) => Number(second.completed_amount ?? 0) - Number(first.completed_amount ?? 0) || (first.agent_name ?? '').localeCompare(second.agent_name ?? '') || first.agent_employee_id.localeCompare(second.agent_employee_id));
+    return { tiktok: sortRows(platformKpiRows.tiktok), douyin: sortRows(platformKpiRows.douyin) };
+  }, [filters.regionId, offlineManagerEmployees, platformKpiRows]);
   const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
   const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
@@ -607,6 +624,22 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       .catch(() => { if (active) { setOfflineRows([]); setOfflineError('读取线下直播间流水失败'); } })
       .finally(() => { if (active) setOfflineLoading(false); });
     return () => { active = false; };
+  }, [filters.endMonth]);
+
+  useEffect(() => {
+    const scope = platformKpiScopeRef.current;
+    let active = true;
+    scope.active = true;
+    for (const platform of ['tiktok', 'douyin'] as const) {
+      setPlatformKpiLoading((current) => ({ ...current, [platform]: true }));
+      setPlatformKpiError((current) => ({ ...current, [platform]: '' }));
+      setPlatformKpiRows((current) => ({ ...current, [platform]: [] }));
+      agentService.listAgentPlatformRevenueKpiSummary(filters.endMonth, platform)
+        .then((rows) => { if (active && scope.active && platformKpiScopeRef.current === scope) setPlatformKpiRows((current) => ({ ...current, [platform]: rows })); })
+        .catch(() => { if (active && scope.active && platformKpiScopeRef.current === scope) setPlatformKpiError((current) => ({ ...current, [platform]: '读取平台经纪人流水 KPI 失败' })); })
+        .finally(() => { if (active && scope.active && platformKpiScopeRef.current === scope) setPlatformKpiLoading((current) => ({ ...current, [platform]: false })); });
+    }
+    return () => { active = false; scope.active = false; };
   }, [filters.endMonth]);
 
   const managerOptions = useMemo(() => {
@@ -699,6 +732,29 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       regionId: '',
       revenueCycle: '',
     });
+  }
+
+  async function savePlatformKpi(platform: CreatorPlatform, agentEmployeeId: string, amount: number) {
+    if (platformKpiSaveInFlightRef.current) throw new Error('正在保存目标流水，请稍后重试');
+    const scope = platformKpiScopeRef.current;
+    const savingKey = `${platform}:${agentEmployeeId}`;
+    platformKpiSaveInFlightRef.current = true;
+    setPlatformKpiSavingId(savingKey);
+    setPlatformKpiError((current) => ({ ...current, [platform]: '' }));
+    try {
+      await agentService.upsertAgentPlatformRevenueKpi(agentEmployeeId, scope.month, platform, amount);
+      if (scope.active && platformKpiScopeRef.current === scope) {
+        setPlatformKpiRows((rows) => ({ ...rows, [platform]: rows[platform].map((row) => row.agent_employee_id === agentEmployeeId ? { ...row, kpi_amount: amount } : row) }));
+      }
+    } catch (saveError) {
+      if (scope.active && platformKpiScopeRef.current === scope) {
+        setPlatformKpiError((current) => ({ ...current, [platform]: `保存目标流水失败：${getErrorMessage(saveError)}` }));
+      }
+      throw saveError;
+    } finally {
+      platformKpiSaveInFlightRef.current = false;
+      setPlatformKpiSavingId('');
+    }
   }
 
   async function saveOfflineKpi(agentEmployeeId: string, amount: number) {
@@ -799,7 +855,11 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
         <ManagementCreatorRankingChart records={records} view={creatorRankingView} onView={setCreatorRankingView} />
       </div>
 
-      <ManagementOfflineRevenueCard rows={visibleOfflineRows} loading={offlineLoading} error={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
+      <div className="management-agent-kpi-grid">
+        <ManagementPlatformRevenueCard title="TikTok 经纪人 KPI" unit="钻石" rows={visiblePlatformKpiRows.tiktok} loading={platformKpiLoading.tiktok} error={platformKpiError.tiktok} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={platformKpiSavingId} platform="tiktok" onSaveKpi={savePlatformKpi} />
+        <ManagementPlatformRevenueCard title="抖音经纪人 KPI" unit="音浪" rows={visiblePlatformKpiRows.douyin} loading={platformKpiLoading.douyin} error={platformKpiError.douyin} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={platformKpiSavingId} platform="douyin" onSaveKpi={savePlatformKpi} />
+        <ManagementOfflineRevenueCard rows={visibleOfflineRows} loading={offlineLoading} error={offlineError} month={filters.endMonth} canEditKpi={canEditOfflineKpi} savingId={offlineSavingId} onSaveKpi={saveOfflineKpi} />
+      </div>
 
       <ManagementRevenueRecordsSection
         loading={props.loading || recordsLoading}
@@ -894,6 +954,30 @@ function ManagementOfflineRevenueCard({ rows, loading, error, month, canEditKpi,
             <strong title={row.agent_name}>{row.agent_name}</strong><span className="offline-kpi-managed-count">{row.managed_creator_count}</span>
             <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === row.agent_employee_id} onSave={(amount) => onSaveKpi(row.agent_employee_id, amount)} />
             <b className={row.completed_amount > 0 ? 'offline-kpi-completed-positive' : 'offline-kpi-completed-zero'}>{formatRevenueAmount(row.completed_amount)}</b>
+          </div>)}
+        </div>
+      </div> : null}
+    </section>
+  );
+}
+
+function ManagementPlatformRevenueCard({ title, unit, rows, loading, error, month, canEditKpi, savingId, platform, onSaveKpi }: { title: string; unit: string; rows: AgentPlatformRevenueKpiSummary[]; loading: boolean; error: string; month: string; canEditKpi: boolean; savingId: string; platform: CreatorPlatform; onSaveKpi: (platform: CreatorPlatform, id: string, amount: number) => Promise<void> }) {
+  return (
+    <section className={`management-revenue-card management-platform-revenue-card management-platform-revenue-card--${platform}`}>
+      <ManagementRevenueSectionHead title={title} detail={`${formatMonthLabel(month)} · ${unit}`} />
+      <p className="management-platform-kpi-note">管理主播按当前负责人；已完成流水按记录时负责人归属。</p>
+      {loading ? <div className="table-state management-revenue-state">正在读取平台经纪人 KPI...</div> : null}
+      {error ? <p className="offline-kpi-error">{error}</p> : null}
+      {!loading && !error && rows.length === 0 ? <div className="table-state management-revenue-state">暂无经纪人数据</div> : null}
+      {!loading && rows.length > 0 ? <div className="offline-kpi-table" role="table" aria-label={title}>
+        <div className="offline-kpi-row offline-kpi-head" role="row"><span>经纪人</span><span>管理主播数量</span><span>目标流水</span><span>已完成流水</span></div>
+        <div className="offline-kpi-body">
+          {rows.map((row) => <div className="offline-kpi-row" role="row" key={row.agent_employee_id}>
+            <strong title={row.agent_name}>{row.agent_name}</strong><span className="offline-kpi-managed-count">{row.managed_creator_count}</span>
+            <InlineOfflineKpi value={row.kpi_amount} editable={canEditKpi} saving={savingId === `${platform}:${row.agent_employee_id}`} onSave={(amount) => onSaveKpi(platform, row.agent_employee_id, amount)} />
+            <b className={row.completed_amount > 0 ? 'offline-kpi-completed-positive' : 'offline-kpi-completed-zero'}>{formatRevenueAmount(row.completed_amount)}
+              {row.unverified_record_count > 0 ? <small className="management-platform-kpi-risk">包含未核验流水<br />{formatRevenueAmount(row.unverified_amount)} {unit} · {row.unverified_record_count} 条</small> : null}
+            </b>
           </div>)}
         </div>
       </div> : null}
