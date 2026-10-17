@@ -4125,9 +4125,19 @@ button.leave-chip:disabled {
 }
 
 .outgoing-evidence-more {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-muted, #64748b);
   font-size: 12px;
   font-weight: 800;
+  cursor: pointer;
+}
+
+.outgoing-evidence-more:hover,
+.outgoing-evidence-more:focus-visible {
+  color: var(--primary, #4f46e5);
+  text-decoration: underline;
 }
 
 .leave-type-annual {
