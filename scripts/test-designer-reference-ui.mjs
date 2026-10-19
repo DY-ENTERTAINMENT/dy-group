@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { canRemoveDesignerReference, designerReferenceUploadsEnabled } from '../src/services/designer-reference-feature.ts';
+
+assert.equal(designerReferenceUploadsEnabled, true);
+assert.equal(canRemoveDesignerReference('unclaimed', true), true);
+assert.equal(canRemoveDesignerReference('scheduled', true), false);
+assert.equal(canRemoveDesignerReference('unclaimed', false), false);
+
+const workflow = await readFile(new URL('../src/components/DesignerRequestWorkflow.tsx', import.meta.url), 'utf8');
+const service = await readFile(new URL('../src/services/designer-request.service.ts', import.meta.url), 'utf8');
+const feature = await readFile(new URL('../src/services/designer-reference-feature.ts', import.meta.url), 'utf8');
+const styles = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
+assert.doesNotMatch(feature, /VITE_DESIGNER_REFERENCE_UPLOAD_ENABLED|import\.meta\.env/);
+assert.match(workflow, /window\.confirm\(`确定移除/);
+assert.match(workflow, /onDeleteAttachment=\{allowRemove\?removeAttachment:undefined\}/);
+assert.match(workflow, /designer-reference-thumbnail/);
+assert.match(workflow, /预览 PDF/);
+assert.match(styles, /designer-reference-dropzone[^}]*min-height:0[^}]*padding:9px 16px 12px/);
+assert.match(styles, /designer-reference-thumbnail[^}]*width:60px[^}]*height:60px/);
+assert.match(styles, /designer-reference-upload \.designer-request-field textarea[^}]*min-height:80px/);
+assert.match(styles, /designer-request-modal \.modal-body[^}]*min-height:0[^}]*overflow-y:auto/);
+assert.match(workflow, /if\(cleanupPaths\[file\.id\]\)await designerRequestService\.retryReferenceStorageCleanup/);
+assert.match(workflow, /reason instanceof ReferenceStorageCleanupError/);
+assert.match(workflow, /移除失败：\$\{errorMessage\(reason\)\}。文件可能仍在安全存储中，请重试移除操作；若持续失败，请联系管理员。/);
+assert.match(workflow, /designerReferenceUploadsEnabled\?<fieldset/);
+assert.match(service, /async deleteReference\(id:string\)\{if\(!designerReferenceUploadsEnabled\)throw new Error\('参考资料功能尚未启用。'\)/);
+assert.match(service, /designerReferenceUploadsEnabled\?',reference_attachments:/);
+assert.match(service, /async uploadReference\([^]*?\{if\(!designerReferenceUploadsEnabled\)throw new Error\([^]*?\);validateDesignerReferenceFile\(file\);const \{data:\{user\}/);
+assert.match(service, /async getReferenceSignedUrl\([^]*?\{if\(!designerReferenceUploadsEnabled\)throw new Error\([^]*?\);const \{data,error\}=await supabase\.storage/);
+assert.match(service, /async updateReferenceNote\([^]*?\{if\(!designerReferenceUploadsEnabled\)return;const \{error\}=await db\.rpc/);
+console.log('designer reference removal UI and activation contract: passed');

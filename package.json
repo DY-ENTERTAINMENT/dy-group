@@ -17,6 +17,10 @@
     "test:outgoing-event-relation": "node --experimental-strip-types scripts/test-outgoing-event-relation.mjs",
     "test:outgoing-local-preview": "node --experimental-strip-types scripts/test-outgoing-local-preview.mjs",
     "test:outgoing-evidence": "node scripts/test-outgoing-evidence.mjs",
+    "test:designer-reference-files": "node --experimental-strip-types scripts/test-designer-reference-files.mjs",
+    "test:designer-reference-upload": "node --experimental-strip-types scripts/test-designer-reference-upload.mjs",
+    "test:designer-reference-migration": "node scripts/test-designer-reference-migration.mjs",
+    "test:designer-reference-ui": "node --experimental-strip-types scripts/test-designer-reference-ui.mjs",
     "test:creator-editor-unification": "node scripts/test-creator-editor-unification.mjs"
   },
   "dependencies": {
