@@ -11,7 +11,6 @@ import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
 import { LeavePage } from '../pages/LeavePage';
 import { LeaveBalanceManagementPage } from '../pages/LeaveBalanceManagementPage';
 import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
-import { LeaveReviewPage } from '../pages/LeaveReviewPage';
 import { WorkTimeAdjustmentReviewPage } from '../pages/WorkTimeAdjustmentReviewPage';
 import { RestPlanningPage } from '../pages/RestPlanningPage';
 import { PublicHolidayPage } from '../pages/PublicHolidayPage';
@@ -73,20 +72,16 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: getMenuPath('leave-review'),
+            path: 'hr/leave-reviews',
             element: (
               <RequirePermission permissionKey="leave-review">
-                <LeaveReviewPage />
+                <Navigate to="/hr/leave-balances?tab=leave" replace />
               </RequirePermission>
             ),
           },
           {
-            path: getMenuPath('leave-balance-management'),
-            element: (
-              <RequirePermission permissionKey="leave-balance-management">
-                <LeaveBalanceManagementPage />
-              </RequirePermission>
-            ),
+            path: 'hr/leave-balances',
+            element: <LeaveBalanceManagementPage />,
           },
           {
             path: 'hr/work-time-adjustments',

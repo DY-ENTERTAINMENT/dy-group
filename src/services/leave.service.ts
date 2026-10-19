@@ -40,6 +40,16 @@ export type LeaveBalance = {
   medicalRemaining: number;
 };
 
+export type LeaveReviewHistoryItem = {
+  id: string; employee_name: string; employee_code: string | null; region_id: string | null; region_code: string | null;
+  leave_type: LeaveType; start_date: string; end_date: string; reason: string; status: Extract<LeaveRequestStatus, 'approved' | 'rejected'>;
+  reviewer_name: string | null; reviewed_at: string | null; created_at: string; has_medical_attachment: boolean; total_count: number;
+};
+
+export type LeaveReviewHistoryFilters = {
+  year: number; month: number; leaveType?: string; regionId?: string; status?: string; search?: string; page: number; pageSize: number;
+};
+
 type MyLeaveBalanceRow = {
   leave_type: 'annual' | 'medical';
   remaining_days: number;
@@ -99,6 +109,15 @@ export const leaveService = {
     }
 
     return ((data ?? []) as unknown as LeaveRequestRowWithEmployee[]).map(mapLeaveRequestRow);
+  },
+
+  async listReviewHistory(filters: LeaveReviewHistoryFilters) {
+    const { data, error } = await (supabase as any).rpc('list_leave_review_history', {
+      p_year: filters.year, p_month: filters.month, p_leave_type: filters.leaveType || null, p_region_id: filters.regionId || null,
+      p_status: filters.status || null, p_search: filters.search?.trim() || null, p_page: filters.page, p_page_size: filters.pageSize,
+    });
+    if (error) throw error;
+    return (data ?? []) as LeaveReviewHistoryItem[];
   },
 
   async createLeaveRequest(profileId: string, values: LeaveFormValues) {

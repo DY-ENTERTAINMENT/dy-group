@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { History, PlusCircle, RefreshCw, Search } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
@@ -9,9 +11,23 @@ import {
   type ManagementLeaveBalanceRow,
 } from '../services/leave-balance-management.service';
 import type { LeaveType, Region } from '../types/database';
+import { LeaveReviewPage } from './LeaveReviewPage';
+import { leaveService } from '../services/leave.service';
+import { replacementWorkChangeService } from '../services/replacement-work-change.service';
 
 type ManagedLeaveType = Extract<LeaveType, 'annual' | 'medical'>;
 type AdjustmentMode = 'increase' | 'decrease';
+
+type ActionMenuPosition = {
+  right: number;
+  top?: number;
+  bottom?: number;
+};
+
+type OpenActionMenu = {
+  row: ManagementLeaveBalanceRow;
+  position: ActionMenuPosition;
+};
 
 type AdjustmentFormValues = {
   leaveType: ManagedLeaveType;
@@ -43,7 +59,14 @@ const emptyAdjustmentForm: AdjustmentFormValues = {
 
 export function LeaveBalanceManagementPage() {
   const permissions = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab = requestedTab === 'replacement' || requestedTab === 'balance'
+    ? requestedTab
+    : permissions.canView('leave-review') ? 'leave' : 'balance';
   const canAdjust = permissions.canUse('leave-balance-management');
+  const canViewBalances = permissions.canView('leave-balance-management');
+  const canViewReviews = permissions.canView('leave-review');
   const [year, setYear] = useState(new Date().getFullYear());
   const [regionId, setRegionId] = useState('');
   const [employeeStatus, setEmployeeStatus] = useState<LeaveBalanceManagementStatusFilter>('working');
@@ -59,6 +82,10 @@ export function LeaveBalanceManagementPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingCounts, setPendingCounts] = useState({ leave: 0, replacement: 0 });
+  const [openActionMenu, setOpenActionMenu] = useState<OpenActionMenu | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const canSwitchRegion = regions.length > 1;
   const adjustmentPreview = useMemo(() => {
@@ -76,12 +103,90 @@ export function LeaveBalanceManagementPage() {
   }, [adjustmentForm, adjustmentTarget]);
 
   useEffect(() => {
+    if (activeTab !== 'balance' || !canViewBalances) return;
     void loadRegions();
-  }, []);
+  }, [activeTab, canViewBalances]);
 
   useEffect(() => {
+    if (activeTab !== 'balance' || !canViewBalances) return;
     void loadBalances();
-  }, [year, regionId, employeeStatus, search]);
+  }, [activeTab, canViewBalances, year, regionId, employeeStatus, search]);
+
+  useEffect(() => {
+    if (!canViewReviews) return;
+    void Promise.all([leaveService.listPendingLeaveRequests(), replacementWorkChangeService.listPending()])
+      .then(([leave, replacement]) => setPendingCounts({ leave: leave.length, replacement: replacement.length }))
+      .catch(() => setPendingCounts({ leave: 0, replacement: 0 }));
+  }, [canViewReviews]);
+
+  useEffect(() => {
+    if (!openActionMenu) return;
+
+    function closeMenu(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!actionMenuRef.current?.contains(target) && !actionMenuTriggerRef.current?.contains(target)) {
+        setOpenActionMenu(null);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpenActionMenu(null);
+    }
+
+    function closeOnViewportChange() {
+      setOpenActionMenu(null);
+    }
+
+    document.addEventListener('mousedown', closeMenu);
+    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('resize', closeOnViewportChange);
+    window.addEventListener('scroll', closeOnViewportChange, true);
+    return () => {
+      document.removeEventListener('mousedown', closeMenu);
+      document.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('resize', closeOnViewportChange);
+      window.removeEventListener('scroll', closeOnViewportChange, true);
+    };
+  }, [openActionMenu]);
+
+  function selectTab(tab: 'leave' | 'replacement' | 'balance') {
+    setSearchParams({ tab });
+  }
+
+  function toggleActionMenu(row: ManagementLeaveBalanceRow, trigger: HTMLButtonElement) {
+    if (openActionMenu?.row.employee_id === row.employee_id) {
+      setOpenActionMenu(null);
+      return;
+    }
+
+    const rect = trigger.getBoundingClientRect();
+    const menuHeight = canAdjust ? 118 : 48;
+    const right = Math.max(12, window.innerWidth - rect.right);
+    const fitsBelow = window.innerHeight - rect.bottom >= menuHeight + 12;
+    setOpenActionMenu({
+      row,
+      position: fitsBelow
+        ? { top: rect.bottom + 6, right }
+        : { bottom: Math.max(12, window.innerHeight - rect.top + 6), right },
+    });
+  }
+
+  function renderActionTrigger(row: ManagementLeaveBalanceRow) {
+    const isOpen = openActionMenu?.row.employee_id === row.employee_id;
+    return (
+      <button
+        ref={isOpen ? actionMenuTriggerRef : undefined}
+        className="secondary-button compact-button leave-balance-action-trigger"
+        type="button"
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-controls={isOpen ? `leave-balance-actions-${row.employee_id}` : undefined}
+        onClick={(event) => toggleActionMenu(row, event.currentTarget)}
+      >
+        操作 <span aria-hidden="true">⌄</span>
+      </button>
+    );
+  }
 
   async function loadRegions() {
     try {
@@ -182,6 +287,14 @@ export function LeaveBalanceManagementPage() {
 
   return (
     <section className="leave-balance-management-page">
+      <div className="holiday-management-tabs" role="tablist" aria-label="假期管理功能">
+        <button className={`holiday-management-tab leave${activeTab === 'leave' ? ' active' : ''}`} type="button" role="tab" aria-selected={activeTab === 'leave'} onClick={() => selectTab('leave')} disabled={!canViewReviews}>请假审批 <b>{pendingCounts.leave}</b></button>
+        <button className={`holiday-management-tab replacement${activeTab === 'replacement' ? ' active' : ''}`} type="button" role="tab" aria-selected={activeTab === 'replacement'} onClick={() => selectTab('replacement')} disabled={!canViewReviews}>调休审批 <b>{pendingCounts.replacement}</b></button>
+        <button className={`holiday-management-tab balance${activeTab === 'balance' ? ' active' : ''}`} type="button" role="tab" aria-selected={activeTab === 'balance'} onClick={() => selectTab('balance')} disabled={!canViewBalances}>假期额度</button>
+      </div>
+      {activeTab === 'leave' || activeTab === 'replacement' ? (
+        canViewReviews ? <LeaveReviewPage initialSection={activeTab} embedded /> : <div className="staff-list-panel"><div className="table-state compact">您没有查看审批资料的权限。</div></div>
+      ) : !canViewBalances ? <div className="staff-list-panel"><div className="table-state compact">您没有查看假期额度的权限。</div></div> : <>
       {error && !adjustmentTarget && !historyTarget ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
 
@@ -240,7 +353,7 @@ export function LeaveBalanceManagementPage() {
             <Search size={16} />
             <input
               type="search"
-              placeholder="搜索员工、工号、职称"
+              placeholder="搜索员工或工号"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -252,70 +365,82 @@ export function LeaveBalanceManagementPage() {
         ) : balances.length === 0 ? (
           <div className="table-state">暂无假期额度数据。</div>
         ) : (
+          <>
           <div className="staff-table-wrap leave-balance-management-table-wrap">
             <table className="staff-table leave-balance-management-table">
               <thead>
                 <tr>
-                  <th>员工</th>
-                  <th>员工编号</th>
-                  <th>区域</th>
-                  <th>职称</th>
-                  <th>年假年度额度</th>
-                  <th>年假已使用</th>
-                  <th>年假剩余</th>
-                  <th>病假年度额度</th>
-                  <th>病假已使用</th>
-                  <th>病假剩余</th>
-                  <th>操作</th>
+                  <th className="leave-balance-column-employee">员工</th>
+                  <th className="leave-balance-column-code">员工编号</th>
+                  <th className="leave-balance-column-region">区域</th>
+                  <th className="leave-balance-column-annual-entitlement leave-balance-annual-heading leave-balance-group-start">年假年度额度</th>
+                  <th className="leave-balance-column-annual-used leave-balance-annual-heading">年假已使用</th>
+                  <th className="leave-balance-column-annual-remaining leave-balance-annual-heading leave-balance-group-end">年假剩余</th>
+                  <th className="leave-balance-column-medical-entitlement leave-balance-medical-heading leave-balance-group-start">病假年度额度</th>
+                  <th className="leave-balance-column-medical-used leave-balance-medical-heading">病假已使用</th>
+                  <th className="leave-balance-column-medical-remaining leave-balance-medical-heading leave-balance-group-end">病假剩余</th>
+                  <th className="leave-balance-column-actions">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {balances.map((row) => (
                   <tr key={row.employee_id}>
-                    <td>
+                    <td className="leave-balance-column-employee">
                       <strong>{row.employee_name}</strong>
                       <span>{employeeStatusLabels[row.employee_status] ?? row.employee_status}</span>
                     </td>
-                    <td>{row.employee_code || '-'}</td>
-                    <td>{row.region_code || '-'}</td>
-                    <td>{row.job_title || '-'}</td>
-                    <BalanceTableCell value={row.annual_effective_entitlement} adjustment={row.annual_adjustment_total} />
-                    <td>{formatDays(row.annual_used_days)}</td>
-                    <td className={row.annual_remaining_days < 0 ? 'leave-balance-negative' : undefined}>
-                      {formatDays(row.annual_remaining_days)}
+                    <td className="leave-balance-column-code">{row.employee_code || '-'}</td>
+                    <td className="leave-balance-column-region">{row.region_code || '-'}</td>
+                    <BalanceTableCell value={row.annual_effective_entitlement} adjustment={row.annual_adjustment_total} type="annual" />
+                    <td className="leave-balance-column-annual-used leave-balance-used"><strong className="leave-balance-value-pill">{formatDays(row.annual_used_days)}</strong></td>
+                    <td className={`leave-balance-column-annual-remaining ${getRemainingClassName(row.annual_remaining_days)}`}>
+                      <strong className="leave-balance-value-pill">{formatDays(row.annual_remaining_days)}</strong>
                     </td>
-                    <BalanceTableCell value={row.medical_effective_entitlement} adjustment={row.medical_adjustment_total} />
-                    <td>{formatDays(row.medical_used_days)}</td>
-                    <td className={row.medical_remaining_days < 0 ? 'leave-balance-negative' : undefined}>
-                      {formatDays(row.medical_remaining_days)}
+                    <BalanceTableCell value={row.medical_effective_entitlement} adjustment={row.medical_adjustment_total} type="medical" />
+                    <td className="leave-balance-column-medical-used leave-balance-used"><strong className="leave-balance-value-pill">{formatDays(row.medical_used_days)}</strong></td>
+                    <td className={`leave-balance-column-medical-remaining ${getRemainingClassName(row.medical_remaining_days)}`}>
+                      <strong className="leave-balance-value-pill">{formatDays(row.medical_remaining_days)}</strong>
                     </td>
-                    <td>
-                      <div className="row-actions leave-balance-row-actions">
-                        {canAdjust ? (
-                          <>
-                            <button className="secondary-button compact-button" type="button" onClick={() => openAdjustment(row, 'annual')}>
-                              <PlusCircle size={15} />
-                              年假
-                            </button>
-                            <button className="secondary-button compact-button" type="button" onClick={() => openAdjustment(row, 'medical')}>
-                              <PlusCircle size={15} />
-                              病假
-                            </button>
-                          </>
-                        ) : null}
-                        <button className="secondary-button compact-button" type="button" onClick={() => openHistory(row)}>
-                          <History size={15} />
-                          记录
-                        </button>
-                      </div>
-                    </td>
+                    <td className="leave-balance-column-actions">{renderActionTrigger(row)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <div className="leave-balance-management-cards">
+            {balances.map((row) => (
+              <article className="leave-balance-management-card" key={row.employee_id}>
+                <header>
+                  <div>
+                    <strong>{row.employee_name}</strong>
+                    <span>{row.employee_code || '-'} · {row.region_code || '-'}</span>
+                  </div>
+                  <small>{employeeStatusLabels[row.employee_status] ?? row.employee_status}</small>
+                </header>
+                <BalanceCardGroup title="年假" tone="annual" values={{ entitlement: row.annual_effective_entitlement, used: row.annual_used_days, remaining: row.annual_remaining_days }} />
+                <BalanceCardGroup title="病假" tone="medical" values={{ entitlement: row.medical_effective_entitlement, used: row.medical_used_days, remaining: row.medical_remaining_days }} />
+                <footer>{renderActionTrigger(row)}</footer>
+              </article>
+            ))}
+          </div>
+          </>
         )}
       </div>
+
+      {openActionMenu ? createPortal(
+        <div
+          ref={actionMenuRef}
+          id={`leave-balance-actions-${openActionMenu.row.employee_id}`}
+          className="leave-balance-action-dropdown leave-balance-action-portal"
+          role="menu"
+          style={openActionMenu.position}
+        >
+          {canAdjust ? <button className="leave-balance-annual-button" type="button" role="menuitem" onClick={() => { setOpenActionMenu(null); openAdjustment(openActionMenu.row, 'annual'); }}><PlusCircle size={15} />调整年假</button> : null}
+          {canAdjust ? <button className="leave-balance-medical-button" type="button" role="menuitem" onClick={() => { setOpenActionMenu(null); openAdjustment(openActionMenu.row, 'medical'); }}><PlusCircle size={15} />调整病假</button> : null}
+          <button className="leave-balance-history-button" type="button" role="menuitem" onClick={() => { setOpenActionMenu(null); void openHistory(openActionMenu.row); }}><History size={15} />查看记录</button>
+        </div>,
+        document.body,
+      ) : null}
 
       {adjustmentTarget ? (
         <SystemModal
@@ -428,16 +553,47 @@ export function LeaveBalanceManagementPage() {
           )}
         </SystemModal>
       ) : null}
+      </>}
     </section>
   );
 }
 
-function BalanceTableCell({ value, adjustment }: { value: number; adjustment: number }) {
+function BalanceTableCell({ value, adjustment, type }: { value: number; adjustment: number; type: ManagedLeaveType }) {
   return (
-    <td>
-      <strong className="leave-balance-table-number">{formatDays(value)}</strong>
+    <td className={`leave-balance-column-${type}-entitlement leave-balance-entitlement leave-balance-entitlement-${type}`}>
+      <strong className={`leave-balance-table-number leave-balance-value-pill`}>{formatDays(value)}</strong>
       {adjustment !== 0 ? <span>{formatSignedDays(adjustment)}</span> : null}
     </td>
+  );
+}
+
+function BalanceCardGroup({
+  title,
+  tone,
+  values,
+}: {
+  title: string;
+  tone: ManagedLeaveType;
+  values: { entitlement: number; used: number; remaining: number };
+}) {
+  return (
+    <section className={`leave-balance-card-group leave-balance-card-group-${tone}`} aria-label={title}>
+      <h4>{title}</h4>
+      <div>
+        <BalanceCardValue label="年度额度" className={`leave-balance-entitlement-${tone}`} value={values.entitlement} />
+        <BalanceCardValue label="已使用" className="leave-balance-used" value={values.used} />
+        <BalanceCardValue label="剩余" className={getRemainingClassName(values.remaining)} value={values.remaining} />
+      </div>
+    </section>
+  );
+}
+
+function BalanceCardValue({ label, className, value }: { label: string; className: string; value: number }) {
+  return (
+    <div className="leave-balance-card-value">
+      <span>{label}</span>
+      <strong className={`${className} leave-balance-value-pill`}>{formatDays(value)}</strong>
+    </div>
   );
 }
 
@@ -472,6 +628,12 @@ function getBalanceValues(row: ManagementLeaveBalanceRow, leaveType: ManagedLeav
 
 function formatDays(days: number) {
   return `${days} 天`;
+}
+
+function getRemainingClassName(days: number) {
+  if (days < 0) return 'leave-balance-negative';
+  if (days === 0) return 'leave-balance-zero';
+  return 'leave-balance-remaining';
 }
 
 function formatSignedDays(days: number) {

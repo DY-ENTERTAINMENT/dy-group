@@ -2472,6 +2472,20 @@ a {
   gap: 22px;
 }
 
+.holiday-management-tabs { display:flex; flex-wrap:wrap; gap:10px; padding:6px; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
+.holiday-management-tab { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 18px; border:1px solid transparent; border-radius:10px; font:inherit; font-weight:800; cursor:pointer; }
+.holiday-management-tab b { display:grid; min-width:21px; height:21px; place-items:center; border-radius:999px; font-size:12px; background:rgba(255,255,255,.72); }
+.holiday-management-tab.leave { color:#21648c; background:#eaf5ff; }.holiday-management-tab.replacement { color:#7052a0; background:#f2ecff; }.holiday-management-tab.balance { color:#28754c; background:#eaf8ef; }
+.holiday-management-tab.active { box-shadow:0 3px 10px rgba(61,84,110,.14); transform:translateY(-1px); }.holiday-management-tab.leave.active { border-color:#9ed3f7; background:#d8efff; }.holiday-management-tab.replacement.active { border-color:#c9b5f5; background:#e8dcff; }.holiday-management-tab.balance.active { border-color:#aee0bc; background:#d9f3e2; }
+.holiday-management-tab:disabled { opacity:.55; cursor:not-allowed; }
+.holiday-review-page { gap:16px; }
+.holiday-review-view-switcher { display:flex; gap:8px; width:max-content; max-width:100%; padding:5px; border:1px solid var(--border); border-radius:10px; background:var(--panel); }.holiday-review-view-switcher button { min-height:34px; padding:0 13px; border:0; border-radius:7px; color:var(--muted); background:transparent; font:inherit; font-size:13px; font-weight:800; cursor:pointer; }.holiday-review-view-switcher button.active { color:#21648c; background:#eaf5ff; }
+.holiday-review-filters { display:flex; flex-wrap:wrap; gap:10px; padding:14px 22px; border-bottom:1px solid var(--border); background:#fbfcfe; }.holiday-review-filters input,.holiday-review-filters select { min-height:38px; padding:0 10px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--panel); font:inherit; }.holiday-review-filters input { min-width:240px; flex:1 1 240px; }
+.leave-type-quick-filters { display:flex; flex-wrap:wrap; gap:8px; padding:12px 22px; border-bottom:1px solid var(--border); background:#fff; }.leave-type-quick-filters button { min-height:34px; padding:0 13px; border:1px solid #d7e5f0; border-radius:999px; color:#58718a; background:#f5faff; font:inherit; font-size:13px; font-weight:800; cursor:pointer; }.leave-type-quick-filters button.active { border-color:#75b7e5; color:#17618d; background:#dcefff; }
+.holiday-history-filters { display:grid; grid-template-columns:repeat(6,minmax(110px,1fr)); gap:10px; padding:14px 22px; border-bottom:1px solid var(--border); background:#fbfcfe; }.holiday-history-filters input,.holiday-history-filters select { box-sizing:border-box; width:100%; min-height:38px; padding:0 9px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--panel); font:inherit; }.holiday-history-table { min-width:1180px; }.history-approved { color:#17603a; background:#e8f7ee; }.history-rejected { color:#a63825; background:#ffebe8; }.holiday-history-pagination { display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:14px 22px; color:var(--muted); font-size:13px; }
+
+@media (max-width:640px) { .holiday-management-tabs { display:grid; grid-template-columns:1fr; }.holiday-management-tab { width:100%; }.holiday-review-filters,.holiday-history-filters { grid-template-columns:1fr; padding:12px; }.holiday-review-filters input,.holiday-review-filters select { width:100%; min-width:0; }.holiday-review-view-switcher { width:100%; }.holiday-review-view-switcher button { flex:1; }.holiday-history-pagination { justify-content:space-between; padding:12px; } }
+
 .review-grid {
   display: grid;
   grid-template-columns: minmax(360px, 0.95fr) minmax(320px, 0.75fr);
@@ -6332,6 +6346,14 @@ button.leave-chip:disabled {
     width: 100%;
     min-width: 0;
   }
+}
+
+@media (max-width: 760px) {
+  .leave-balance-management-table-wrap { display:none; }
+  .leave-balance-management-cards { display:grid; gap:12px; padding:14px; background:#fbfcfe; }
+  .leave-balance-management-card { display:grid; gap:12px; padding:14px; border:1px solid #e2eaf2; border-radius:12px; background:#fff; }
+  .leave-balance-management-card header,.leave-balance-management-card footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }.leave-balance-management-card header > div { display:grid; gap:3px; min-width:0; }.leave-balance-management-card header strong { color:var(--text); font-size:15px; }.leave-balance-management-card header span,.leave-balance-management-card header small { color:var(--muted); font-size:12px; }.leave-balance-management-card header small { flex:0 0 auto; padding:4px 7px; border-radius:999px; background:#f2f6fa; }
+  .leave-balance-card-group { display:grid; gap:8px; padding:10px; border-radius:9px; }.leave-balance-card-group-annual { background:#f5f9ff; }.leave-balance-card-group-medical { background:#faf7ff; }.leave-balance-card-group h4 { margin:0; font-size:13px; }.leave-balance-card-group-annual h4 { color:#2563c8; }.leave-balance-card-group-medical h4 { color:#8054bd; }.leave-balance-card-group > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }.leave-balance-card-value { display:grid; justify-items:center; gap:6px; min-width:0; }.leave-balance-card-value > span { color:var(--muted); font-size:11px; white-space:nowrap; }.leave-balance-management-card footer { justify-content:flex-end; }
 }
 
 @media (max-width: 430px) {
@@ -14487,34 +14509,36 @@ button.leave-chip:disabled {
 }
 
 .leave-balance-management-table {
-  min-width: 1180px;
+  width: 100%;
+  min-width: 1080px;
+  table-layout: fixed;
 }
 
-.leave-balance-management-table th {
-  white-space: nowrap;
-}
+.leave-balance-management-table-wrap { container-type:inline-size; overflow-x:auto; }
+.leave-balance-management-page .holiday-management-tabs { align-items:center; margin-top:0; }
+.leave-balance-management-table th,.leave-balance-management-table td { padding:12px 10px; white-space:nowrap; }
+.leave-balance-management-table th.leave-balance-annual-heading { color:#2563c8; background:#edf5ff; }.leave-balance-management-table th.leave-balance-medical-heading { color:#8054bd; background:#f6f2ff; }
+.leave-balance-management-table .leave-balance-column-employee { width:16%; }.leave-balance-management-table .leave-balance-column-code { width:10%; }.leave-balance-management-table .leave-balance-column-region { width:7%; }.leave-balance-management-table .leave-balance-column-annual-entitlement,.leave-balance-management-table .leave-balance-column-medical-entitlement { width:10%; }.leave-balance-management-table .leave-balance-column-annual-used,.leave-balance-management-table .leave-balance-column-annual-remaining,.leave-balance-management-table .leave-balance-column-medical-used,.leave-balance-management-table .leave-balance-column-medical-remaining { width:9%; }.leave-balance-management-table .leave-balance-column-actions { width:11%; }
+.leave-balance-management-table th.leave-balance-annual-heading,.leave-balance-management-table th.leave-balance-medical-heading,.leave-balance-management-table td.leave-balance-entitlement,.leave-balance-management-table td.leave-balance-used,.leave-balance-management-table td.leave-balance-remaining,.leave-balance-management-table td.leave-balance-zero,.leave-balance-management-table td.leave-balance-negative,.leave-balance-management-table .leave-balance-column-actions { text-align:center; }
+.leave-balance-management-table th.leave-balance-group-start { border-radius:7px 0 0 7px; }.leave-balance-management-table th.leave-balance-group-end { border-radius:0 7px 7px 0; }
 
-.leave-balance-management-table td {
-  white-space: nowrap;
-}
+@container (min-width:1120px) { .leave-balance-management-table .leave-balance-column-actions { position:sticky; right:0; z-index:2; border-left:1px solid #dce5ef; box-shadow:-5px 0 10px rgba(49,72,98,.05); }.leave-balance-management-table th.leave-balance-column-actions { z-index:3; background:#f6f8fb; }.leave-balance-management-table tbody tr:nth-child(odd) td.leave-balance-column-actions { background:#fff; }.leave-balance-management-table tbody tr:nth-child(even) td.leave-balance-column-actions { background:#f9fbfe; }.leave-balance-management-table tbody tr:hover td.leave-balance-column-actions { background:#f0f7ff; } }
+.leave-balance-management-table tbody tr:nth-child(even) { background:#f9fbfe; }.leave-balance-management-table tbody tr:hover { background:#f0f7ff; }.leave-balance-management-table td { border-bottom-color:#e8edf4; }
 
 .leave-balance-table-number {
   color: var(--text);
   font-size: 15px;
 }
 
+.leave-balance-value-pill { display:inline-flex; align-items:center; justify-content:center; min-width:58px; min-height:28px; padding:0 9px; border-radius:8px; font-size:14px; line-height:1; }
+.leave-balance-entitlement-annual .leave-balance-table-number,.leave-balance-entitlement-annual.leave-balance-value-pill { color:#2563c8; background:#e7f1ff; }.leave-balance-entitlement-medical .leave-balance-table-number,.leave-balance-entitlement-medical.leave-balance-value-pill { color:#8054bd; background:#f0e9ff; }.leave-balance-management-table .leave-balance-entitlement > span { display:none; }.leave-balance-used .leave-balance-value-pill,.leave-balance-used.leave-balance-value-pill { color:#b46e1e; background:#fff1de; }.leave-balance-remaining .leave-balance-value-pill,.leave-balance-remaining.leave-balance-value-pill { color:#167a46; background:#e9f8ef; }.leave-balance-zero .leave-balance-value-pill,.leave-balance-zero.leave-balance-value-pill { color:#718096; background:#f1f4f7; }.leave-balance-negative .leave-balance-value-pill,.leave-balance-negative.leave-balance-value-pill { color:#a63825; background:#ffebe8; }
+
 .leave-balance-negative {
   color: #a63825;
 }
 
-.leave-balance-row-actions {
-  flex-wrap: wrap;
-  min-width: 230px;
-}
-
-.leave-balance-row-actions .secondary-button {
-  width: auto;
-}
+.leave-balance-action-trigger { min-width:92px; min-height:34px; justify-content:center; border-color:#d5e1ed; color:#425b72; background:#edf3f8; }.leave-balance-action-trigger span { margin-left:3px; font-size:16px; line-height:1; }.leave-balance-action-dropdown { display:grid; min-width:142px; padding:5px; border:1px solid #dbe4ed; border-radius:9px; background:#fff; box-shadow:0 8px 20px rgba(44,65,88,.16); }.leave-balance-action-portal { position:fixed; z-index:1100; }.leave-balance-action-dropdown button { display:flex; align-items:center; gap:7px; min-height:33px; border:0; border-radius:6px; padding:0 9px; font:inherit; font-size:13px; font-weight:800; text-align:left; cursor:pointer; }.leave-balance-action-dropdown button:hover { filter:brightness(.97); }.leave-balance-annual-button { color:#2563c8; background:#e7f1ff; }.leave-balance-medical-button { color:#8054bd; background:#f0e9ff; }.leave-balance-history-button { color:#425b72; background:#edf3f8; }
+.leave-balance-management-cards { display:none; }
 
 .leave-balance-summary-grid {
   display: grid;
