@@ -41,6 +41,7 @@ import {
   type RevenuePeriodSettingSaveInput,
   type WeeklyRevenueRecord,
 } from '../services/agent.service';
+import { getEligibleManagementAgents } from '../services/management-agent-ranking-eligibility';
 import type { CreatorPlatform, CreatorProfile } from '../services/scout.service';
 import { creatorCalendarMilestoneLabels, getCreatorMilestones, type CreatorCalendarMilestoneType } from '../utils/creator-calendar';
 import { createUuidV4 } from '../utils/uuid';
@@ -524,14 +525,19 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
     () => managementRevenueMonthDateRange(filters.startMonth, filters.endMonth),
     [filters.endMonth, filters.startMonth],
   );
-  const rankingRosterRows = useMemo(() => {
-    if (filters.creatorSearch.trim() || filters.creatorType) return [];
-    return offlineRows.filter((row) => {
-      if (filters.managerEmployeeId && row.agent_employee_id !== filters.managerEmployeeId) return false;
-      if (filters.regionId && offlineManagerEmployees.find((employee) => employee.id === row.agent_employee_id)?.region_id !== filters.regionId) return false;
+  const eligibleAgentRankingRoster = useMemo(() => {
+    const eligibleAgents = getEligibleManagementAgents(
+      props.options.employees,
+      platformKpiRows.tiktok,
+      platformKpiRows.douyin,
+    );
+    const employeeRegions = new Map(props.options.employees.map((employee) => [employee.id, employee.region_id]));
+    return eligibleAgents.filter((agent) => {
+      if (filters.managerEmployeeId && agent.id !== filters.managerEmployeeId) return false;
+      if (filters.regionId && employeeRegions.get(agent.id) !== filters.regionId) return false;
       return true;
     });
-  }, [filters.creatorSearch, filters.creatorType, filters.managerEmployeeId, filters.regionId, offlineManagerEmployees, offlineRows]);
+  }, [filters.managerEmployeeId, filters.regionId, platformKpiRows, props.options.employees]);
   const visibleOfflineRows = useMemo(() => {
     const employeeRegions = new Map(offlineManagerEmployees.map((employee) => [employee.id, employee.region_id]));
 
@@ -554,7 +560,10 @@ function RevenuePanel(props: { loading: boolean; options: AgentOptions }) {
       .sort((first, second) => Number(second.completed_amount ?? 0) - Number(first.completed_amount ?? 0) || (first.agent_name ?? '').localeCompare(second.agent_name ?? '') || first.agent_employee_id.localeCompare(second.agent_employee_id));
     return { tiktok: sortRows(platformKpiRows.tiktok), douyin: sortRows(platformKpiRows.douyin) };
   }, [filters.regionId, offlineManagerEmployees, platformKpiRows]);
-  const agentRankingRows = useMemo(() => buildManagementAgentRanking(records, agentRankingView, rankingRosterRows), [agentRankingView, rankingRosterRows, records]);
+  const agentRankingRows = useMemo(
+    () => buildManagementAgentRanking(records, agentRankingView, eligibleAgentRankingRoster, !filters.creatorSearch.trim() && !filters.creatorType),
+    [agentRankingView, eligibleAgentRankingRoster, filters.creatorSearch, filters.creatorType, records],
+  );
   const canEditOfflineKpi = permissions.isSuperAdmin || currentUserJobTitle === 'TALENT AGENT LEAD';
 
   useLayoutEffect(() => {
@@ -1540,11 +1549,12 @@ function createManagementTrendChart(points: ManagementTrendPoint[]) {
   };
 }
 
-function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView, roster: AgentOfflineRevenueKpiSummary[] = []): ManagementRankingRow[] {
+function buildManagementAgentRanking(records: ManagementRevenueRecord[], view: ManagementRankingView, roster: { id: string; name: string }[] = [], includeZeroRevenueAgents = true): ManagementRankingRow[] {
   const rows = new Map<string, ManagementRankingRow>();
-  roster.forEach((agent) => rows.set(agent.agent_employee_id, { id: agent.agent_employee_id, label: agent.agent_name, tiktok: 0, douyin: 0, firstCreatedAt: null }));
-  records.filter((record) => record.platform === view).forEach((record) => {
-    const id = record.reporting_manager_employee_id ?? 'unassigned';
+  const eligibleAgentIds = new Set(roster.map((agent) => agent.id));
+  if (includeZeroRevenueAgents) roster.forEach((agent) => rows.set(agent.id, { id: agent.id, label: agent.name, tiktok: 0, douyin: 0, firstCreatedAt: null }));
+  records.filter((record) => record.platform === view && Boolean(record.reporting_manager_employee_id) && eligibleAgentIds.has(record.reporting_manager_employee_id!)).forEach((record) => {
+    const id = record.reporting_manager_employee_id!;
     const current = rows.get(id) ?? { id, label: getManagementRecordAgentName(record), tiktok: 0, douyin: 0, firstCreatedAt: null };
     if (record.platform === 'tiktok') current.tiktok += record.revenue_amount;
     if (record.platform === 'douyin') current.douyin += record.revenue_amount;
