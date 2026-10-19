@@ -16,6 +16,7 @@ import { menuItems, toolGroupOrder } from '../routes/menu';
 import logoUrl from '../assets/logo.png';
 import { usePermissions } from '../hooks/usePermissions';
 import { useOutgoingPendingApprovalCount } from '../services/outgoing-notification.service';
+import { useWorkTimeAdjustmentPendingCount } from '../hooks/useWorkTimeAdjustmentPendingCount';
 
 type SidebarProps = {
   collapsed: boolean;
@@ -218,14 +219,17 @@ function SidebarLink({
       }}
     >
       <Icon size={nested ? 18 : 20} />
-      <span>{item.label}{item.key === 'attendance-management' ? <OutgoingSidebarBadge /> : null}</span>
+      <span>{item.label}{item.key === 'attendance-management' ? <AttendanceSidebarBadge /> : null}</span>
     </NavLink>
   );
 }
 
-function OutgoingSidebarBadge() {
-  const { count, mode } = useOutgoingPendingApprovalCount();
-  const label = mode === 'local-preview' ? `${count} 个本地待审批外出申请` : `${count} 个待审批外出申请`;
+function AttendanceSidebarBadge() {
+  const permissions = usePermissions();
+  const { count: outgoingCount, mode } = useOutgoingPendingApprovalCount();
+  const { count: workHoursCount } = useWorkTimeAdjustmentPendingCount(permissions.canView('work-time-adjustment'));
+  const count = outgoingCount + workHoursCount;
+  const label = mode === 'local-preview' ? `${count} 个待审批项目` : `${count} 个待审批项目`;
   return count ? <span className="outgoing-notification-badge sidebar-outgoing-notification-badge" aria-label={label}>{count}</span> : null;
 }
 
