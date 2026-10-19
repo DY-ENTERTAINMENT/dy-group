@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Eye, RefreshCw } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
 import { OutgoingManagementPreview } from '../components/OutgoingPreview';
@@ -20,6 +21,7 @@ import {
   getAttendancePeriodRange,
 } from '../services/attendanceManagement.service';
 import { createEffectiveAttendanceDayResolver, isEmployeeActiveOnDate, resolveEffectiveAttendanceDay } from '../utils/attendance-effective-day';
+import { WorkTimeAdjustmentReviewPage } from './WorkTimeAdjustmentReviewPage';
 import type {
   AttendanceAbnormalReviewHistory,
   AttendanceAbnormalReviewStatus,
@@ -82,7 +84,7 @@ type AbnormalReviewSnapshot = {
 type AbnormalCenterTab = 'pending' | 'abnormal';
 
 type EmployeeStatusFilter = 'working-attendance' | 'all-working' | 'attendance-exempt' | 'left' | 'all';
-type AttendanceTab = 'today' | 'outgoing' | 'statistics';
+type AttendanceTab = 'today' | 'outgoing' | 'work-hours' | 'statistics';
 type TodayAttendanceStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out';
 type TodayQuickFilter = 'all' | TodayAttendanceStatus | 'abnormal' | 'late' | 'overtime_break' | 'abnormal_clock_out';
 
@@ -118,10 +120,11 @@ const leaveTypeLabels: Record<LeaveType, string> = {
 };
 
 export function AttendanceManagementPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const permissions = usePermissions();
   const canUseAttendance = permissions.canUse('attendance-management');
-  const [activeTab, setActiveTab] = useState<AttendanceTab>('today');
+  const [activeTab, setActiveTab] = useState<AttendanceTab>(() => searchParams.get('tab') === 'work-hours' ? 'work-hours' : 'today');
   const [todayDate, setTodayDate] = useState(malaysiaDateKey(new Date()));
   const [todaySearch, setTodaySearch] = useState('');
   const [todayStatusFilter, setTodayStatusFilter] = useState<TodayAttendanceStatus | 'abnormal' | ''>('');
@@ -277,25 +280,35 @@ export function AttendanceManagementPage() {
     }
   }
 
+  function selectTab(tab: AttendanceTab) {
+    setActiveTab(tab);
+    if (tab === 'work-hours') {
+      setSearchParams({ tab: 'work-hours' });
+    } else if (searchParams.has('tab')) {
+      setSearchParams({});
+    }
+  }
+
   return (
     <section className="attendance-management-page">
       <div className="staff-toolbar">
         <div className="page-heading">
           <span>工作工具 / 人事部</span>
           <h2>考勤</h2>
-          <p>{activeTab === 'today' ? '按员工当天真实打卡记录只读汇总。' : activeTab === 'outgoing' ? (outgoingDataMode === 'local-preview' ? '外出申请与审批 localStorage 测试，不读取或写入数据库。' : outgoingDataMode === 'real' ? '外出真实服务已显式启用；所有权限与区域范围以服务器端为准。' : '外出功能尚未接入正式数据库。') : `${range.startDate} 至 ${range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。`}</p>
+          <p>{activeTab === 'today' ? '按员工当天真实打卡记录只读汇总。' : activeTab === 'outgoing' ? (outgoingDataMode === 'local-preview' ? '外出申请与审批 localStorage 测试，不读取或写入数据库。' : outgoingDataMode === 'real' ? '外出真实服务已显式启用；所有权限与区域范围以服务器端为准。' : '外出功能尚未接入正式数据库。') : activeTab === 'work-hours' ? '查看并处理员工提交的工时调整申请。' : `${range.startDate} 至 ${range.endDate}，按公司考勤周期统计迟到、早退、旷工与异常打卡。`}</p>
         </div>
 
-        <button className="secondary-action" type="button" onClick={() => activeTab === 'today' ? loadTodayAttendanceData() : activeTab === 'statistics' ? loadAttendanceData() : undefined} disabled={activeTab === 'today' ? todayLoading : activeTab === 'statistics' ? loading : false}>
+        {activeTab !== 'work-hours' ? <button className="secondary-action" type="button" onClick={() => activeTab === 'today' ? loadTodayAttendanceData() : activeTab === 'statistics' ? loadAttendanceData() : undefined} disabled={activeTab === 'today' ? todayLoading : activeTab === 'statistics' ? loading : false}>
           <RefreshCw size={17} />
           <span>刷新</span>
-        </button>
+        </button> : null}
       </div>
 
       <div className="attendance-page-tabs" role="tablist" aria-label="考勤页面">
-        <button className={activeTab === 'today' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'today'} onClick={() => setActiveTab('today')}>今日考勤</button>
-        <button className={activeTab === 'outgoing' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'outgoing'} onClick={() => setActiveTab('outgoing')}>外出管理 {outgoingPendingCount ? <span className="outgoing-notification-badge">{outgoingPendingCount}</span> : null}</button>
-        <button className={activeTab === 'statistics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'statistics'} onClick={() => setActiveTab('statistics')}>考勤统计</button>
+        <button className={activeTab === 'today' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'today'} onClick={() => selectTab('today')}>今日考勤</button>
+        <button className={activeTab === 'outgoing' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'outgoing'} onClick={() => selectTab('outgoing')}>外出管理 {outgoingPendingCount ? <span className="outgoing-notification-badge">{outgoingPendingCount}</span> : null}</button>
+        <button className={activeTab === 'work-hours' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'work-hours'} onClick={() => selectTab('work-hours')}>工时管理</button>
+        <button className={activeTab === 'statistics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'statistics'} onClick={() => selectTab('statistics')}>考勤统计</button>
       </div>
 
       {activeTab === 'today' ? (
@@ -326,7 +339,7 @@ export function AttendanceManagementPage() {
         canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')}
         reviewerName={profile?.nickname || profile?.full_name || profile?.email || '当前 HR'}
         onChanged={() => setOutgoingRevision((value) => value + 1)}
-      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} canViewOutgoingPhotos={isSuperAdmin || permissions.canView('outgoing-photos')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : <>
+      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} canViewOutgoingPhotos={isSuperAdmin || permissions.canView('outgoing-photos')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : activeTab === 'work-hours' ? <WorkTimeAdjustmentReviewPage embedded /> : <>
       {canUseAttendance ? (
         <button className="abnormal-banner" type="button" onClick={() => setShowAbnormalCenter(true)}>
           <AlertTriangle size={20} />

@@ -202,14 +202,6 @@ export const menuItems: MenuItem[] = [
     group: '人事部',
   },
   {
-    key: 'work-time-adjustment',
-    label: '工时调整审核',
-    path: '/hr/work-time-adjustments',
-    icon: Clock3,
-    section: '工作工具',
-    group: '人事部',
-  },
-  {
     key: 'attendance-management',
     label: '考勤',
     path: '/hr/attendance',

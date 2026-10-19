@@ -3055,6 +3055,35 @@ a {
 .attendance-page-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
 .attendance-page-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
 .attendance-page-tabs button.active { border-bottom-color: var(--primary); color: var(--primary); }
+.work-hours-management-panel { display: grid; gap: 18px; }
+.work-hours-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.work-hours-filter-row { display: grid; flex: 1; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; }
+.work-hours-filter-row .form-field { min-width: 0; }
+.work-hours-toolbar > .secondary-action { min-height: 42px; margin-bottom: 16px; }
+.work-hours-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.work-hours-stat { display: grid; min-height: 82px; place-items: center; align-content: center; gap: 6px; padding: 12px 8px; border: 2px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); font: inherit; cursor: pointer; transition: box-shadow .16s ease, transform .16s ease; }
+.work-hours-stat:hover { transform: translateY(-1px); }
+.work-hours-stat.active { box-shadow: 0 5px 14px rgba(23, 32, 51, .16), 0 0 0 2px currentColor; }
+.work-hours-stat span { color: currentColor; font-size: 13px; font-weight: 800; }
+.work-hours-stat strong { color: currentColor; font-size: 25px; line-height: 1; }
+.work-hours-stat-today { border-color: #60A5FA; color: #1D4ED8; background: #DBEAFE; }
+.work-hours-stat-pending { border-color: #FBBF24; color: #B45309; background: #FEF3C7; }
+.work-hours-stat-approved { border-color: #4ADE80; color: #15803D; background: #DCFCE7; }
+.work-hours-stat-rejected { border-color: #F87171; color: #DC2626; background: #FEE2E2; }
+.work-hours-stat-cancelled { border-color: #C084FC; color: #7E22CE; background: #F3E8FF; }
+.work-hours-stat-all { border-color: #22D3EE; color: #0E7490; background: #CFFAFE; }
+.work-hours-reason { max-width: 220px; white-space: normal !important; }
+.work-hours-mobile-list { display: none; }
+.work-hours-mobile-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.work-hours-mobile-card > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }.work-hours-mobile-card > div:first-child span { color: var(--muted); font-size: 13px; }
+.work-hours-mobile-card > .status-pill { justify-self: start; }.work-hours-mobile-card dl { display: grid; gap: 7px; margin: 0; }.work-hours-mobile-card dl div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; }.work-hours-mobile-card dt { color: var(--muted); }.work-hours-mobile-card dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }.work-hours-mobile-card .secondary-button { justify-self: start; }
+.work-hours-detail { display: grid; gap: 16px; }
+.work-hours-management-panel .status-pill { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 4px 9px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; font-weight: 800; line-height: 1; }
+.work-hours-management-panel .work-time-adjustment-status-pending { border-color: #FBBF24; color: #B45309; background: #FEF3C7; }
+.work-hours-management-panel .work-time-adjustment-status-approved { border-color: #4ADE80; color: #15803D; background: #DCFCE7; }
+.work-hours-management-panel .work-time-adjustment-status-rejected { border-color: #F87171; color: #DC2626; background: #FEE2E2; }
+.work-hours-management-panel .work-time-adjustment-status-cancelled { border-color: #C084FC; color: #7E22CE; background: #F3E8FF; }
+.work-hours-management-panel .work-time-adjustment-status-revoked { border-color: #b9b3c6; color: #655d72; background: #f1eff5; }
 .today-attendance-filters { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
 .today-attendance-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .today-attendance-stat { display: grid; gap: 5px; min-height: 88px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); font: inherit; text-align: center; cursor: pointer; }
@@ -5718,6 +5747,14 @@ button.leave-chip:disabled {
   .attendance-management-page .attendance-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .work-hours-toolbar { align-items: stretch; flex-direction: column; }
+  .work-hours-toolbar > .secondary-action { margin-bottom: 0; }
+  .work-hours-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .work-hours-toolbar > .secondary-action { align-self: flex-end; }
+  .work-hours-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .work-hours-desktop-table { display: none; }
+  .work-hours-mobile-list { display: grid; gap: 10px; }
 
   .abnormal-banner {
     min-height: 48px;

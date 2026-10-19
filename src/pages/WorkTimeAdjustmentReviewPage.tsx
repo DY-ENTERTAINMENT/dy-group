@@ -1,429 +1,58 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CheckCircle2, Eye, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import {
-  type WorkTimeAdjustmentReviewDetail,
-  type WorkTimeAdjustmentReviewDecision,
-  type WorkTimeAdjustmentReviewStatusFilter,
-  workTimeAdjustmentService,
-  workTimeAdjustmentStatusLabels,
-} from '../services/work-time-adjustment.service';
+import { type WorkTimeAdjustmentReviewDetail, type WorkTimeAdjustmentReviewDecision, type WorkTimeAdjustmentReviewStatusFilter, workTimeAdjustmentService, workTimeAdjustmentStatusLabels } from '../services/work-time-adjustment.service';
 
-const statusFilterOptions: Array<{ value: WorkTimeAdjustmentReviewStatusFilter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'pending', label: '待审核' },
-  { value: 'approved', label: '已通过' },
-  { value: 'rejected', label: '已拒绝' },
-  { value: 'cancelled', label: '已取消' },
-  { value: 'revoked', label: '已撤销' },
+const statusOptions: Array<{ value: WorkTimeAdjustmentReviewStatusFilter; label: string }> = [
+  { value: 'all', label: '全部状态' }, { value: 'pending', label: '待审核' }, { value: 'approved', label: '已批准' }, { value: 'rejected', label: '已拒绝' }, { value: 'cancelled', label: '已取消' }, { value: 'revoked', label: '已撤销' },
 ];
+type ReviewModalState = { detail: WorkTimeAdjustmentReviewDetail; status: WorkTimeAdjustmentReviewDecision };
+type HistoryFilter = 'all' | 'pending' | 'history';
+type StatsFilter = 'today' | WorkTimeAdjustmentReviewStatusFilter;
 
-type ReviewModalState = {
-  detail: WorkTimeAdjustmentReviewDetail;
-  status: WorkTimeAdjustmentReviewDecision;
-};
-
-export function WorkTimeAdjustmentReviewPage() {
+export function WorkTimeAdjustmentReviewPage({ embedded = false }: { embedded?: boolean }) {
   const [details, setDetails] = useState<WorkTimeAdjustmentReviewDetail[]>([]);
-  const [statusFilter, setStatusFilter] = useState<WorkTimeAdjustmentReviewStatusFilter>('pending');
+  const [statusFilter, setStatusFilter] = useState<WorkTimeAdjustmentReviewStatusFilter>('all');
+  const [workDateFilter, setWorkDateFilter] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
+  const [statsFilter, setStatsFilter] = useState<StatsFilter>('all');
+  const [selectedDetail, setSelectedDetail] = useState<WorkTimeAdjustmentReviewDetail | null>(null);
   const [selectedReview, setSelectedReview] = useState<ReviewModalState | null>(null);
   const [selectedRevoke, setSelectedRevoke] = useState<WorkTimeAdjustmentReviewDetail | null>(null);
-  const [reviewNote, setReviewNote] = useState('');
-  const [revokeNote, setRevokeNote] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    void loadDetails();
-  }, [statusFilter]);
-
-  usePullToRefresh(loadDetails, [statusFilter]);
-
-  async function loadDetails() {
-    setLoading(true);
-    setError('');
-
-    try {
-      const reviewDetails = await workTimeAdjustmentService.listReviewDetails(statusFilter);
-      setDetails(reviewDetails);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : '读取工时调整审核列表失败。');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function openReview(detail: WorkTimeAdjustmentReviewDetail, status: WorkTimeAdjustmentReviewDecision) {
-    setSelectedReview({ detail, status });
-    setReviewNote('');
-    setError('');
-    setMessage('');
-  }
-
-  function openRevoke(detail: WorkTimeAdjustmentReviewDetail) {
-    setSelectedRevoke(detail);
-    setRevokeNote('');
-    setError('');
-    setMessage('');
-  }
-
-  async function handleSubmitReview(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedReview || submitting) {
-      return;
-    }
-
-    if (selectedReview.status === 'rejected' && !reviewNote.trim()) {
-      setError('请填写拒绝原因。');
-      return;
-    }
-
-    setSubmitting(true);
-    setError('');
-    setMessage('');
-
-    try {
-      await workTimeAdjustmentService.reviewDate(selectedReview.detail.id, selectedReview.status, reviewNote);
-      setMessage(selectedReview.status === 'approved' ? '工时调整申请已通过。' : '工时调整申请已拒绝。');
-      setSelectedReview(null);
-      setReviewNote('');
-      await loadDetails();
-    } catch (reviewError) {
-      console.error('工时调整审核失败', reviewError);
-      setError(reviewError instanceof Error ? `工时调整审核失败：${reviewError.message}` : '工时调整审核失败。');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleSubmitRevoke(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedRevoke || submitting) {
-      return;
-    }
-
-    const trimmedNote = revokeNote.trim();
-    if (!trimmedNote) {
-      setError('请填写撤销原因。');
-      return;
-    }
-
-    setSubmitting(true);
-    setError('');
-    setMessage('');
-
-    try {
-      await workTimeAdjustmentService.revokeApprovedDate(selectedRevoke.id, trimmedNote);
-      setMessage('工时调整申请已撤销通过。');
-      setSelectedRevoke(null);
-      setRevokeNote('');
-      await loadDetails();
-    } catch (revokeError) {
-      console.error('工时调整撤销失败', revokeError);
-      setError(revokeError instanceof Error ? `工时调整撤销失败：${revokeError.message}` : '工时调整撤销失败。');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <section className="leave-page">
-      <div className="staff-toolbar">
-        <div className="page-heading">
-          <span>人事部</span>
-          <h2>工时调整审核</h2>
-          <p>用于查看员工提交的工时调整申请明细。</p>
-        </div>
-
-        <div className="row-actions">
-          <label className="form-field compact-field">
-            <span>状态筛选</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as WorkTimeAdjustmentReviewStatusFilter)}
-              disabled={loading}
-            >
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="secondary-action" type="button" onClick={loadDetails} disabled={loading}>
-            <RefreshCw size={17} />
-            <span>{loading ? '读取中...' : '刷新'}</span>
-          </button>
-        </div>
-      </div>
-
-      {error ? <p className="form-alert">{error}</p> : null}
-      {message ? <p className="form-success">{message}</p> : null}
-
-      <div className="staff-list-panel">
-        <div className="list-header">
-          <div>
-            <span>审核明细</span>
-            <h3>{details.length} 条记录</h3>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="table-state">正在读取工时调整审核列表...</div>
-        ) : details.length === 0 ? (
-          <div className="table-state">暂无符合条件的工时调整申请。</div>
-        ) : (
-          <div className="staff-table-wrap">
-            <table className="staff-table">
-              <thead>
-                <tr>
-                  <th>员工姓名</th>
-                  <th>员工编号</th>
-                  <th>申请日期</th>
-                  <th>原工作时间</th>
-                  <th>调整后工作时间</th>
-                  <th>申请原因</th>
-                  <th>状态</th>
-                  <th>审核 / 撤销备注</th>
-                  <th>申请时间</th>
-                  <th>附件</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {details.map((detail) => (
-                  <tr key={detail.id}>
-                    <td>{detail.employee?.full_name ?? '未取得员工姓名'}</td>
-                    <td>{detail.employee?.employee_code ?? '未取得'}</td>
-                    <td>{formatDate(detail.work_date)}</td>
-                    <td>
-                      {formatTime(detail.original_start_work_time)} 至 {formatTime(detail.original_end_work_time)}
-                    </td>
-                    <td>
-                      {formatTime(detail.adjusted_start_time)} 至 {formatTime(detail.adjusted_end_time)}
-                    </td>
-                    <td>{detail.request?.reason ?? '未取得申请原因'}</td>
-                    <td>
-                      <span className={`status-pill work-time-adjustment-status-${detail.status}`}>
-                        {workTimeAdjustmentStatusLabels[detail.status]}
-                      </span>
-                    </td>
-                    <td>{formatReviewNote(detail)}</td>
-                    <td>{detail.request ? formatDateTime(detail.request.created_at) : '未取得'}</td>
-                    <td>{detail.request?.attachment_path ? '有附件' : '无附件'}</td>
-                    <td>
-                      {detail.status === 'pending' ? (
-                        <div className="row-actions">
-                          <button
-                            className="primary-button compact-button"
-                            type="button"
-                            onClick={() => openReview(detail, 'approved')}
-                          >
-                            <CheckCircle2 size={15} />
-                            <span>通过</span>
-                          </button>
-                          <button
-                            className="secondary-button compact-button danger-text-button"
-                            type="button"
-                            onClick={() => openReview(detail, 'rejected')}
-                          >
-                            <XCircle size={15} />
-                            <span>拒绝</span>
-                          </button>
-                        </div>
-                      ) : detail.status === 'approved' ? (
-                        <button
-                          className="secondary-button compact-button danger-text-button"
-                          type="button"
-                          onClick={() => openRevoke(detail)}
-                        >
-                          <RotateCcw size={15} />
-                          <span>撤销通过</span>
-                        </button>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {selectedReview ? (
-        <SystemModal
-          title={selectedReview.status === 'approved' ? '确认通过工时调整申请' : '确认拒绝工时调整申请'}
-          subtitle="工时调整审核"
-          ariaLabel={selectedReview.status === 'approved' ? '确认通过工时调整申请' : '确认拒绝工时调整申请'}
-          wide={false}
-          onClose={() => setSelectedReview(null)}
-          footer={
-            <>
-              <button
-                className="secondary-button compact-button"
-                type="button"
-                onClick={() => setSelectedReview(null)}
-                disabled={submitting}
-              >
-                取消
-              </button>
-              <button
-                className={
-                  selectedReview.status === 'approved'
-                    ? 'primary-button compact-button'
-                    : 'secondary-button compact-button danger-text-button'
-                }
-                type="submit"
-                form="work-time-adjustment-review-form"
-                disabled={submitting}
-              >
-                {selectedReview.status === 'approved' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                <span>
-                  {submitting
-                    ? '处理中...'
-                    : selectedReview.status === 'approved'
-                      ? '确认通过'
-                      : '确认拒绝'}
-                </span>
-              </button>
-            </>
-          }
-        >
-          <form id="work-time-adjustment-review-form" onSubmit={handleSubmitReview}>
-            <div className="detail-list">
-              <div>
-                <span>员工</span>
-                <strong>{selectedReview.detail.employee?.full_name ?? '未取得员工姓名'}</strong>
-              </div>
-              <div>
-                <span>申请日期</span>
-                <strong>{formatDate(selectedReview.detail.work_date)}</strong>
-              </div>
-              <div>
-                <span>调整后工作时间</span>
-                <strong>
-                  {formatTime(selectedReview.detail.adjusted_start_time)} 至 {formatTime(selectedReview.detail.adjusted_end_time)}
-                </strong>
-              </div>
-            </div>
-
-            <label className="form-field">
-              <span>{selectedReview.status === 'approved' ? '审核备注' : '拒绝原因'}</span>
-              <textarea
-                value={reviewNote}
-                onChange={(event) => setReviewNote(event.target.value)}
-                placeholder={selectedReview.status === 'approved' ? '可填写审核备注' : '请填写拒绝原因'}
-                required={selectedReview.status === 'rejected'}
-              />
-            </label>
-
-            {error ? <p className="form-alert">{error}</p> : null}
-          </form>
-        </SystemModal>
-      ) : null}
-
-      {selectedRevoke ? (
-        <SystemModal
-          title="撤销已通过的工时调整"
-          subtitle="工时调整审核"
-          ariaLabel="撤销已通过的工时调整"
-          wide={false}
-          onClose={() => setSelectedRevoke(null)}
-          footer={
-            <>
-              <button
-                className="secondary-button compact-button"
-                type="button"
-                onClick={() => setSelectedRevoke(null)}
-                disabled={submitting}
-              >
-                取消
-              </button>
-              <button
-                className="secondary-button compact-button danger-text-button"
-                type="submit"
-                form="work-time-adjustment-revoke-form"
-                disabled={submitting}
-              >
-                <RotateCcw size={18} />
-                <span>{submitting ? '处理中...' : '确认撤销'}</span>
-              </button>
-            </>
-          }
-        >
-          <form id="work-time-adjustment-revoke-form" onSubmit={handleSubmitRevoke}>
-            <div className="detail-list">
-              <div>
-                <span>员工姓名</span>
-                <strong>{selectedRevoke.employee?.full_name ?? '未取得员工姓名'}</strong>
-              </div>
-              <div>
-                <span>申请日期</span>
-                <strong>{formatDate(selectedRevoke.work_date)}</strong>
-              </div>
-              <div>
-                <span>调整后工作时间</span>
-                <strong>
-                  {formatTime(selectedRevoke.adjusted_start_time)} 至 {formatTime(selectedRevoke.adjusted_end_time)}
-                </strong>
-              </div>
-            </div>
-
-            <label className="form-field">
-              <span>撤销原因</span>
-              <textarea
-                value={revokeNote}
-                onChange={(event) => setRevokeNote(event.target.value)}
-                placeholder="请输入撤销原因"
-                required
-              />
-            </label>
-
-            {error ? <p className="form-alert">{error}</p> : null}
-          </form>
-        </SystemModal>
-      ) : null}
-    </section>
-  );
+  const [reviewNote, setReviewNote] = useState(''); const [revokeNote, setRevokeNote] = useState('');
+  const [loading, setLoading] = useState(true); const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  useEffect(() => { void loadDetails(); }, []);
+  usePullToRefresh(loadDetails, []);
+  async function loadDetails() { setLoading(true); setError(''); try { setDetails(await workTimeAdjustmentService.listReviewDetails('all')); } catch (loadError) { setError(loadError instanceof Error ? loadError.message : '读取工时调整审核列表失败。'); } finally { setLoading(false); } }
+  const today = malaysiaDateKey(new Date());
+  const statistics = useMemo(() => ({ today: details.filter((item) => item.work_date === today).length, pending: details.filter((item) => item.status === 'pending').length, approved: details.filter((item) => item.status === 'approved').length, rejected: details.filter((item) => item.status === 'rejected').length, cancelled: details.filter((item) => item.status === 'cancelled').length, all: details.length }), [details, today]);
+  const filteredDetails = useMemo(() => { const query = employeeFilter.trim().toLowerCase(); return details.filter((item) => { const status = statusFilter === 'all' || item.status === statusFilter; const stat = statsFilter === 'all' || (statsFilter === 'today' ? item.work_date === today : item.status === statsFilter); const date = !workDateFilter || item.work_date === workDateFilter; const employee = !query || [item.employee?.full_name, item.employee?.employee_code].some((value) => value?.toLowerCase().includes(query)); const history = historyFilter === 'all' || (historyFilter === 'pending' ? item.status === 'pending' : item.status !== 'pending'); return status && stat && date && employee && history; }); }, [details, employeeFilter, historyFilter, statsFilter, statusFilter, today, workDateFilter]);
+  function selectStat(filter: StatsFilter) { setStatsFilter(filter); if (filter === 'today') { setWorkDateFilter(today); } else { setStatusFilter(filter); } }
+  function clearStatFilters() { setStatsFilter('all'); setStatusFilter('all'); setWorkDateFilter(''); }
+  function openReview(detail: WorkTimeAdjustmentReviewDetail, status: WorkTimeAdjustmentReviewDecision) { setSelectedReview({ detail, status }); setReviewNote(''); setError(''); setMessage(''); }
+  function openRevoke(detail: WorkTimeAdjustmentReviewDetail) { setSelectedRevoke(detail); setRevokeNote(''); setError(''); setMessage(''); }
+  async function handleSubmitReview(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!selectedReview || submitting) return; if (selectedReview.status === 'rejected' && !reviewNote.trim()) { setError('请填写拒绝原因。'); return; } setSubmitting(true); setError(''); setMessage(''); try { await workTimeAdjustmentService.reviewDate(selectedReview.detail.id, selectedReview.status, reviewNote); setMessage(selectedReview.status === 'approved' ? '工时调整申请已通过。' : '工时调整申请已拒绝。'); setSelectedReview(null); setReviewNote(''); await loadDetails(); } catch (reviewError) { console.error('工时调整审核失败', reviewError); setError(reviewError instanceof Error ? `工时调整审核失败：${reviewError.message}` : '工时调整审核失败。'); } finally { setSubmitting(false); } }
+  async function handleSubmitRevoke(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!selectedRevoke || submitting) return; const note = revokeNote.trim(); if (!note) { setError('请填写撤销原因。'); return; } setSubmitting(true); setError(''); setMessage(''); try { await workTimeAdjustmentService.revokeApprovedDate(selectedRevoke.id, note); setMessage('工时调整申请已撤销通过。'); setSelectedRevoke(null); setRevokeNote(''); await loadDetails(); } catch (revokeError) { console.error('工时调整撤销失败', revokeError); setError(revokeError instanceof Error ? `工时调整撤销失败：${revokeError.message}` : '工时调整撤销失败。'); } finally { setSubmitting(false); } }
+  return <section className={embedded ? 'work-hours-management-panel' : 'leave-page work-hours-management-panel'}>
+    {!embedded ? <div className="staff-toolbar"><div className="page-heading"><span>人事部</span><h2>工时调整审核</h2><p>用于查看员工提交的工时调整申请明细。</p></div></div> : null}
+    <div className="work-hours-toolbar"><div className="work-hours-filter-row"><label className="form-field compact-field"><span>工作日期</span><input type="date" value={workDateFilter} onChange={(event) => { setWorkDateFilter(event.target.value); setStatsFilter('all'); }} /></label><label className="form-field compact-field"><span>员工姓名 / ID</span><input value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)} placeholder="搜索员工" /></label><label className="form-field compact-field"><span>审批状态</span><select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as WorkTimeAdjustmentReviewStatusFilter); setStatsFilter('all'); }}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="form-field compact-field"><span>记录范围</span><select value={historyFilter} onChange={(event) => setHistoryFilter(event.target.value as HistoryFilter)}><option value="all">全部记录</option><option value="pending">仅待审核</option><option value="history">历史记录</option></select></label></div><button className="secondary-action" type="button" onClick={loadDetails} disabled={loading}><RefreshCw size={17} /><span>{loading ? '读取中...' : '刷新'}</span></button></div>
+    <div className="work-hours-stats" aria-label="工时调整统计"><StatCard label="今日调整" count={statistics.today} tone="today" active={statsFilter === 'today'} onClick={() => selectStat('today')} /><StatCard label="待审核" count={statistics.pending} tone="pending" active={statsFilter === 'pending'} onClick={() => selectStat('pending')} /><StatCard label="已批准" count={statistics.approved} tone="approved" active={statsFilter === 'approved'} onClick={() => selectStat('approved')} /><StatCard label="已拒绝" count={statistics.rejected} tone="rejected" active={statsFilter === 'rejected'} onClick={() => selectStat('rejected')} /><StatCard label="已取消" count={statistics.cancelled} tone="cancelled" active={statsFilter === 'cancelled'} onClick={() => selectStat('cancelled')} /><StatCard label="全部记录" count={statistics.all} tone="all" active={statsFilter === 'all'} onClick={clearStatFilters} /></div>
+    {error ? <p className="form-alert">{error}</p> : null}{message ? <p className="form-success">{message}</p> : null}
+    <div className="staff-list-panel"><div className="list-header"><div><span>工时调整记录</span><h3>{filteredDetails.length} 条记录</h3></div></div>{loading ? <div className="table-state">正在读取工时调整审核列表...</div> : filteredDetails.length === 0 ? <div className="table-state">暂无符合条件的工时调整申请。</div> : <><div className="staff-table-wrap work-hours-desktop-table"><table className="staff-table"><thead><tr><th>员工</th><th>员工 ID</th><th>工作日期</th><th>原工作时间</th><th>申请上班时间</th><th>原因</th><th>状态</th><th>提交时间</th><th>查看详情</th></tr></thead><tbody>{filteredDetails.map((detail) => <tr key={detail.id}><td>{detail.employee?.full_name ?? '未取得员工姓名'}</td><td>{detail.employee?.employee_code ?? '未取得'}</td><td>{formatDate(detail.work_date)}</td><td>{formatWorkHours(detail.original_start_work_time, detail.original_end_work_time)}</td><td>{formatTime(detail.adjusted_start_time)}</td><td className="work-hours-reason">{detail.request?.reason ?? '未取得申请原因'}</td><td><span className={`status-pill work-time-adjustment-status-${detail.status}`}>{workTimeAdjustmentStatusLabels[detail.status]}</span></td><td>{detail.request ? formatDateTime(detail.request.created_at) : '未取得'}</td><td><button className="secondary-button compact-button" type="button" onClick={() => setSelectedDetail(detail)}><Eye size={15} /><span>查看详情</span></button></td></tr>)}</tbody></table></div><div className="work-hours-mobile-list">{filteredDetails.map((detail) => <article className="work-hours-mobile-card" key={detail.id}><div><strong>{detail.employee?.full_name ?? '未取得员工姓名'}</strong><span>{detail.employee?.employee_code ?? '未取得 ID'}</span></div><span className={`status-pill work-time-adjustment-status-${detail.status}`}>{workTimeAdjustmentStatusLabels[detail.status]}</span><dl><div><dt>工作日期</dt><dd>{formatDate(detail.work_date)}</dd></div><div><dt>申请上班时间</dt><dd>{formatTime(detail.adjusted_start_time)}</dd></div><div><dt>原因</dt><dd>{detail.request?.reason ?? '未取得申请原因'}</dd></div></dl><button className="secondary-button compact-button" type="button" onClick={() => setSelectedDetail(detail)}><Eye size={15} /><span>查看详情</span></button></article>)}</div></>}</div>
+    {selectedDetail ? <SystemModal title="工时调整详情" subtitle="工时管理" ariaLabel="工时调整详情" wide onClose={() => setSelectedDetail(null)} footer={<button className="secondary-button compact-button" type="button" onClick={() => setSelectedDetail(null)}>关闭</button>}><Detail detail={selectedDetail} onReview={openReview} onRevoke={openRevoke} /></SystemModal> : null}
+    {selectedReview ? <ReviewModal state={selectedReview} note={reviewNote} submitting={submitting} error={error} onNoteChange={setReviewNote} onClose={() => setSelectedReview(null)} onSubmit={handleSubmitReview} /> : null}{selectedRevoke ? <RevokeModal detail={selectedRevoke} note={revokeNote} submitting={submitting} error={error} onNoteChange={setRevokeNote} onClose={() => setSelectedRevoke(null)} onSubmit={handleSubmitRevoke} /> : null}
+  </section>;
 }
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(`${value}T00:00:00`));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function formatReviewNote(detail: WorkTimeAdjustmentReviewDetail) {
-  if (detail.status === 'revoked') {
-    return detail.revoke_note || '-';
-  }
-
-  if (detail.status === 'approved' || detail.status === 'rejected') {
-    return detail.review_note || '-';
-  }
-
-  return '-';
-}
-
-function formatTime(value: string) {
-  return value.slice(0, 5);
-}
+function StatCard({ label, count, tone, active, onClick }: { label: string; count: number; tone: string; active: boolean; onClick: () => void }) { return <button className={`work-hours-stat work-hours-stat-${tone}${active ? ' active' : ''}`} type="button" onClick={onClick}><span>{label}</span><strong>{count}</strong></button>; }
+function Detail({ detail, onReview, onRevoke }: { detail: WorkTimeAdjustmentReviewDetail; onReview: (detail: WorkTimeAdjustmentReviewDetail, status: WorkTimeAdjustmentReviewDecision) => void; onRevoke: (detail: WorkTimeAdjustmentReviewDetail) => void }) { return <div className="work-hours-detail"><div className="detail-list"><div><span>员工</span><strong>{detail.employee?.full_name ?? '未取得员工姓名'}（{detail.employee?.employee_code ?? '未取得 ID'}）</strong></div><div><span>工作日期</span><strong>{formatDate(detail.work_date)}</strong></div><div><span>原工作时间</span><strong>{formatWorkHours(detail.original_start_work_time, detail.original_end_work_time)}</strong></div><div><span>申请工作时间</span><strong>{formatTime(detail.adjusted_start_time)}</strong></div><div><span>申请原因</span><strong>{detail.request?.reason ?? '未取得申请原因'}</strong></div><div><span>审批状态</span><strong>{workTimeAdjustmentStatusLabels[detail.status]}</strong></div><div><span>提交时间</span><strong>{detail.request ? formatDateTime(detail.request.created_at) : '未取得'}</strong></div><div><span>审核 / 撤销备注</span><strong>{formatReviewNote(detail)}</strong></div><div><span>附件</span><strong>{detail.request?.attachment_path ? '已上传（沿用原附件访问权限）' : '无附件'}</strong></div></div>{detail.status === 'pending' ? <div className="row-actions"><button className="primary-button compact-button" type="button" onClick={() => onReview(detail, 'approved')}><CheckCircle2 size={15} /><span>通过</span></button><button className="secondary-button compact-button danger-text-button" type="button" onClick={() => onReview(detail, 'rejected')}><XCircle size={15} /><span>拒绝</span></button></div> : detail.status === 'approved' ? <button className="secondary-button compact-button danger-text-button" type="button" onClick={() => onRevoke(detail)}><RotateCcw size={15} /><span>撤销通过</span></button> : null}</div>; }
+function ReviewModal({ state, note, submitting, error, onNoteChange, onClose, onSubmit }: { state: ReviewModalState; note: string; submitting: boolean; error: string; onNoteChange: (value: string) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { const approved = state.status === 'approved'; return <SystemModal title={approved ? '确认通过工时调整申请' : '确认拒绝工时调整申请'} subtitle="工时调整审核" ariaLabel={approved ? '确认通过工时调整申请' : '确认拒绝工时调整申请'} wide={false} onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={submitting}>取消</button><button className={approved ? 'primary-button compact-button' : 'secondary-button compact-button danger-text-button'} type="submit" form="work-time-adjustment-review-form" disabled={submitting}>{approved ? <CheckCircle2 size={18} /> : <XCircle size={18} />}<span>{submitting ? '处理中...' : approved ? '确认通过' : '确认拒绝'}</span></button></>}><form id="work-time-adjustment-review-form" onSubmit={onSubmit}><div className="detail-list"><div><span>员工</span><strong>{state.detail.employee?.full_name ?? '未取得员工姓名'}</strong></div><div><span>工作日期</span><strong>{formatDate(state.detail.work_date)}</strong></div><div><span>申请工作时间</span><strong>{formatTime(state.detail.adjusted_start_time)}</strong></div></div><label className="form-field"><span>{approved ? '审核备注' : '拒绝原因'}</span><textarea value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder={approved ? '可填写审核备注' : '请填写拒绝原因'} required={!approved} /></label>{error ? <p className="form-alert">{error}</p> : null}</form></SystemModal>; }
+function RevokeModal({ detail, note, submitting, error, onNoteChange, onClose, onSubmit }: { detail: WorkTimeAdjustmentReviewDetail; note: string; submitting: boolean; error: string; onNoteChange: (value: string) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { return <SystemModal title="撤销已通过的工时调整" subtitle="工时调整审核" ariaLabel="撤销已通过的工时调整" wide={false} onClose={onClose} footer={<><button className="secondary-button compact-button" type="button" onClick={onClose} disabled={submitting}>取消</button><button className="secondary-button compact-button danger-text-button" type="submit" form="work-time-adjustment-revoke-form" disabled={submitting}><RotateCcw size={18} /><span>{submitting ? '处理中...' : '确认撤销'}</span></button></>}><form id="work-time-adjustment-revoke-form" onSubmit={onSubmit}><div className="detail-list"><div><span>员工姓名</span><strong>{detail.employee?.full_name ?? '未取得员工姓名'}</strong></div><div><span>工作日期</span><strong>{formatDate(detail.work_date)}</strong></div><div><span>申请工作时间</span><strong>{formatTime(detail.adjusted_start_time)}</strong></div></div><label className="form-field"><span>撤销原因</span><textarea value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder="请输入撤销原因" required /></label>{error ? <p className="form-alert">{error}</p> : null}</form></SystemModal>; }
+function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(`${value}T00:00:00`)); }
+function formatDateTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)); }
+function formatReviewNote(detail: WorkTimeAdjustmentReviewDetail) { return detail.status === 'revoked' ? detail.revoke_note || '-' : detail.status === 'approved' || detail.status === 'rejected' ? detail.review_note || '-' : '-'; }
+function formatTime(value: string) { return value.slice(0, 5); }
+function formatWorkHours(start: string | null, end: string | null) { return start && end ? `${formatTime(start)} 至 ${formatTime(end)}` : '-'; }
+function malaysiaDateKey(date: Date) { const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date); const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''; return `${value('year')}-${value('month')}-${value('day')}`; }
