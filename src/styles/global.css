@@ -15673,3 +15673,31 @@ button.leave-chip:disabled {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Today attendance: scoped visual refinement only. */
+.attendance-management-page .attendance-page-tabs { gap: 16px; border-bottom-color: #cbd5e1; }
+.attendance-management-page .attendance-page-tabs button { position: relative; padding: 11px 14px 10px; color: #64748b; }
+.attendance-management-page .attendance-page-tabs button.active { border-bottom: 3px solid #2563eb; color: #1d4ed8; }
+.attendance-management-page .today-attendance-filters { gap: 14px; }
+.attendance-management-page .today-attendance-filters .form-field > span { color: #334155; font-weight: 800; }
+.attendance-management-page .today-attendance-filters input, .attendance-management-page .today-attendance-filters select { min-height: 44px; border-color: #cbd5e1; border-radius: 8px; color: #1e293b; background: #fff; }
+.attendance-management-page .today-attendance-filters input::placeholder { color: #94a3b8; }
+.attendance-management-page .today-attendance-filters input:focus, .attendance-management-page .today-attendance-filters select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
+.attendance-management-page .today-attendance-stat { min-height: 94px; gap: 7px; border: 1px solid transparent; border-top: 2px solid #2563eb; border-radius: 11px; background: #cee3f8; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.attendance-management-page .today-attendance-stat span, .attendance-management-page .today-attendance-stat strong { color: #356ca8; text-align: center; }
+.attendance-management-page .today-attendance-stat span { font-weight: 800; }.attendance-management-page .today-attendance-stat strong { font-size: 26px; font-weight: 800; line-height: 1; }
+.attendance-management-page .today-attendance-stat:hover { border-right-color: #2563eb; border-bottom-color: #2563eb; border-left-color: #2563eb; transform: translateY(-2px); box-shadow: 0 7px 16px rgba(37, 99, 235, .14); }
+.attendance-management-page .today-attendance-stat:focus-visible { outline: 3px solid rgba(37, 99, 235, .34); outline-offset: 2px; }
+.attendance-management-page .today-attendance-stat.active { border-right-color: #4b7fb7; border-bottom-color: #4b7fb7; border-left-color: #4b7fb7; box-shadow: 0 0 0 2px rgba(53, 108, 168, .13), 0 5px 12px rgba(53, 108, 168, .08); }
+.attendance-management-page .today-attendance-stat-working { border-top-color: #15803d; background: #d2f1df; }.attendance-management-page .today-attendance-stat-working span, .attendance-management-page .today-attendance-stat-working strong { color: #28764a; }
+.attendance-management-page .today-attendance-stat-on_break { border-top-color: #b45309; background: #f9e8b7; }.attendance-management-page .today-attendance-stat-on_break span, .attendance-management-page .today-attendance-stat-on_break strong { color: #9b611d; }
+.attendance-management-page .today-attendance-stat-clocked_out { border-top-color: #4f46e5; background: #dde1f8; }.attendance-management-page .today-attendance-stat-clocked_out span, .attendance-management-page .today-attendance-stat-clocked_out strong { color: #5a56aa; }
+.attendance-management-page .today-attendance-stat-abnormal { border-top-color: #be123c; background: #f7dae0; }.attendance-management-page .today-attendance-stat-abnormal span, .attendance-management-page .today-attendance-stat-abnormal strong { color: #a23b54; }
+.attendance-management-page .today-attendance-stat-late { border-top-color: #c2410c; background: #f9dfc4; }.attendance-management-page .today-attendance-stat-late span, .attendance-management-page .today-attendance-stat-late strong { color: #a95022; }
+.attendance-management-page .today-attendance-stat-overtime_break { border-top-color: #7e22ce; background: #e9dcf5; }.attendance-management-page .today-attendance-stat-overtime_break span, .attendance-management-page .today-attendance-stat-overtime_break strong { color: #75459f; }
+.attendance-management-page .today-attendance-stat-abnormal_clock_out { border-top-color: #b91c1c; background: #f7dcdc; }.attendance-management-page .today-attendance-stat-abnormal_clock_out span, .attendance-management-page .today-attendance-stat-abnormal_clock_out strong { color: #a43b3b; }
+.attendance-management-page .today-attendance-table th { border-bottom-color: #cbd5e1; color: #334155; background: #e2e8f0; }.attendance-management-page .today-attendance-table td { border-bottom-color: #dbe3ee; }.attendance-management-page .today-attendance-table tbody tr { transition: background-color .14s ease; }.attendance-management-page .today-attendance-table tbody tr:hover { background: #f1f5f9; }.attendance-management-page .today-attendance-table td:first-child { color: #0f172a; font-weight: 750; }
+.attendance-management-page .today-attendance-table .today-punch-cell-abnormal { border-color: #fdba74; background: #fff7ed; }.attendance-management-page .today-attendance-table .today-punch-cell-abnormal strong { color: #c2410c; font-weight: 800; }
+.attendance-management-page .today-status { padding: 5px 9px; font-weight: 800; }.attendance-management-page .today-status-not_started { color: #334155; background: #cbd5e1; }.attendance-management-page .today-status-working { color: #166534; background: #bbf7d0; }.attendance-management-page .today-status-on_break { color: #92400e; background: #fde68a; }.attendance-management-page .today-status-clocked_out { color: #3730a3; background: #c7d2fe; }.attendance-management-page .today-notice { color: #9f1239; background: #fecdd3; }
+.attendance-management-page .today-attendance-table .secondary-button { margin-top: 0; border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }.attendance-management-page .today-attendance-table .secondary-button:hover { border-color: #2563eb; color: #fff; background: #2563eb; box-shadow: 0 5px 12px rgba(37, 99, 235, .18); }
+@media (max-width: 760px) { .attendance-management-page .today-attendance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.attendance-management-page .today-attendance-stat { min-height: 88px; padding: 12px 8px; }.attendance-management-page .today-attendance-stat strong { font-size: 24px; } }
