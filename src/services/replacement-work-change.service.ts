@@ -7,8 +7,8 @@ export type ReplacementWorkChangeReviewItem = ReplacementWorkChangeRequest & {
 
 export type ReplacementWorkChangeReviewHistoryItem = {
   id: string; employee_name: string; employee_code: string | null; region_id: string | null; region_code: string | null;
-  replacement_leave_date: string | null; change_type: ReplacementWorkChangeType; original_makeup_date: string; requested_makeup_date: string | null;
-  original_start_time: string; requested_start_time: string | null; reason: string; status: Extract<ReplacementWorkChangeStatus, 'approved' | 'rejected'>;
+  record_type: 'replacement_leave' | 'makeup_change'; replacement_leave_date: string | null; change_type: ReplacementWorkChangeType | null;
+  original_makeup_date: string | null; requested_makeup_date: string | null; reason: string; status: Extract<ReplacementWorkChangeStatus, 'approved' | 'rejected'>;
   reviewer_name: string | null; reviewed_at: string | null; created_at: string; total_count: number;
 };
 
@@ -26,6 +26,11 @@ export type ReplacementWorkChangeFormValues = {
 
 export const replacementWorkChangeLabels: Record<ReplacementWorkChangeType, string> = {
   reschedule: '更换补班日期', annual_leave: '申请年假', unpaid_leave: '申请无薪假', work_time: '调整补班工时',
+};
+
+export const replacementReviewHistoryRecordTypeLabels: Record<ReplacementWorkChangeReviewHistoryItem['record_type'], string> = {
+  replacement_leave: '调休申请',
+  makeup_change: '补班变更',
 };
 
 export const newReplacementWorkChangeLabels: Record<NewReplacementWorkChangeType, string> = {
@@ -74,7 +79,7 @@ export const replacementWorkChangeService = {
     return changes.map((change) => ({ ...change, employee: byId.get(change.employee_id) ?? null }));
   },
   async listReviewHistory(filters: ReplacementWorkChangeReviewHistoryFilters) {
-    const { data, error } = await (supabase as any).rpc('list_replacement_work_change_review_history_v2', {
+    const { data, error } = await (supabase as any).rpc('list_replacement_review_history_v3', {
       p_year: filters.year, p_month: filters.month, p_change_type: filters.changeType || null, p_region_id: filters.regionId || null,
       p_status: filters.status || null, p_search: filters.search?.trim() || null, p_page: filters.page, p_page_size: filters.pageSize,
     });
