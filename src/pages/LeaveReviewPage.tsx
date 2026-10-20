@@ -335,7 +335,38 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
         </SystemModal>
       ) : null}
       {selectedReplacementChange ? <SystemModal title="审核调休补班变更" subtitle={replacementWorkChangeLabels[selectedReplacementChange.change_type]} ariaLabel="审核调休补班变更" onClose={() => setSelectedReplacementChange(null)} footer={<><button className="secondary-button compact-button" type="button" onClick={() => setSelectedReplacementChange(null)}>关闭</button><button className="primary-button compact-button" type="button" onClick={() => reviewReplacementChange('approved')} disabled={submitting}>审核通过</button><button className="secondary-button compact-button danger-text-button" type="submit" form="replacement-change-reject-form" disabled={submitting}>拒绝</button></>}><div className="detail-list"><div><span>原补班日期</span><strong>{selectedReplacementChange.original_makeup_date}</strong></div><div><span>新补班日期</span><strong>{selectedReplacementChange.requested_makeup_date || '-'}</strong></div><div><span>新开始时间</span><strong>{selectedReplacementChange.requested_start_time?.slice(0, 5) || '-'}</strong></div><div><span>原因</span><strong>{selectedReplacementChange.reason}</strong></div></div><form id="replacement-change-reject-form" className="reject-form" onSubmit={(event) => { event.preventDefault(); void reviewReplacementChange('rejected'); }}><label className="form-field"><span>审核备注 / 拒绝原因</span><textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /></label></form>{error ? <p className="form-alert">{error}</p> : null}</SystemModal> : null}
-      {selectedHistory ? <SystemModal title={selectedHistory.employee_name} subtitle="审批历史详情（只读）" ariaLabel="审批历史详情" onClose={() => setSelectedHistory(null)} footer={<button className="secondary-button compact-button" type="button" onClick={() => setSelectedHistory(null)}>关闭</button>}><div className="detail-list"><div><span>工号</span><strong>{selectedHistory.employee_code || '-'}</strong></div><div><span>区域</span><strong>{selectedHistory.region_code || '-'}</strong></div><div><span>申请日期</span><strong>{formatDateTime(selectedHistory.created_at)}</strong></div><div><span>审批人</span><strong>{selectedHistory.reviewer_name || '-'}</strong></div><div><span>审批时间</span><strong>{selectedHistory.reviewed_at ? formatDateTime(selectedHistory.reviewed_at) : '-'}</strong></div><div><span>申请原因</span><strong>{selectedHistory.reason}</strong></div></div></SystemModal> : null}
+      {selectedHistory ? <SystemModal title={selectedHistory.employee_name} subtitle="审批历史详情（只读）" ariaLabel="审批历史详情" onClose={() => setSelectedHistory(null)} footer={<button className="secondary-button compact-button" type="button" onClick={() => setSelectedHistory(null)}>关闭</button>}>
+        {isReplacementHistoryItem(selectedHistory) ? (
+          <div className="detail-list">
+            <div><span>工号</span><strong>{selectedHistory.employee_code || '-'}</strong></div>
+            <div><span>区域</span><strong>{selectedHistory.region_code || '-'}</strong></div>
+            <div><span>变更类型</span><strong>{replacementWorkChangeLabels[selectedHistory.change_type]}</strong></div>
+            <div><span>原补班日期</span><strong>{selectedHistory.original_makeup_date || '-'}</strong></div>
+            {selectedHistory.requested_makeup_date ? <div><span>申请变更日期</span><strong>{selectedHistory.requested_makeup_date}</strong></div> : null}
+            {selectedHistory.original_start_time ? <div><span>原开始时间</span><strong>{formatOptionalTime(selectedHistory.original_start_time)}</strong></div> : null}
+            {selectedHistory.requested_start_time ? <div><span>新开始时间</span><strong>{formatOptionalTime(selectedHistory.requested_start_time)}</strong></div> : null}
+            <div><span>申请原因</span><strong>{selectedHistory.reason || '-'}</strong></div>
+            <div><span>申请提交时间</span><strong>{formatDateTime(selectedHistory.created_at)}</strong></div>
+            <div><span>审批结果</span><strong>{selectedHistory.status === 'approved' ? '已通过' : '已拒绝'}</strong></div>
+            <div><span>审批人</span><strong>{selectedHistory.reviewer_name || '-'}</strong></div>
+            <div><span>审批时间</span><strong>{selectedHistory.reviewed_at ? formatDateTime(selectedHistory.reviewed_at) : '-'}</strong></div>
+          </div>
+        ) : (
+          <div className="detail-list">
+            <div><span>工号</span><strong>{selectedHistory.employee_code || '-'}</strong></div>
+            <div><span>区域</span><strong>{selectedHistory.region_code || '-'}</strong></div>
+            <div><span>请假类型</span><strong>{leaveTypeLabels[selectedHistory.leave_type]}</strong></div>
+            <div><span>申请提交时间</span><strong>{formatDateTime(selectedHistory.created_at)}</strong></div>
+            <div><span>请假开始日期</span><strong>{selectedHistory.start_date}</strong></div>
+            <div><span>请假结束日期</span><strong>{selectedHistory.end_date}</strong></div>
+            <div><span>申请原因</span><strong>{selectedHistory.reason || '-'}</strong></div>
+            <div><span>审批状态</span><strong>{selectedHistory.status === 'approved' ? '已通过' : '已拒绝'}</strong></div>
+            <div><span>审批人</span><strong>{selectedHistory.reviewer_name || '-'}</strong></div>
+            <div><span>审批时间</span><strong>{selectedHistory.reviewed_at ? formatDateTime(selectedHistory.reviewed_at) : '-'}</strong></div>
+            {selectedHistory.leave_type === 'medical' ? <div><span>病假证明</span><strong>{selectedHistory.has_medical_attachment ? '有证明' : '无证明'}</strong></div> : null}
+          </div>
+        )}
+      </SystemModal> : null}
     </section>
   );
 }
@@ -347,7 +378,6 @@ function HistoryPanel({
   leaveRows: LeaveReviewHistoryItem[]; replacementRows: ReplacementWorkChangeReviewHistoryItem[]; onYear: (value: number) => void; onMonth: (value: number) => void; onType: (value: string) => void; onStatus: (value: string) => void; onRegion: (value: string) => void; onSearch: (value: string) => void; page: number; onPage: (value: number) => void; onDetail: (row: LeaveReviewHistoryItem | ReplacementWorkChangeReviewHistoryItem) => void;
 }) {
   const rows = isReplacement ? replacementRows : leaveRows;
-  void onDetail;
   const total = rows[0]?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 25));
   const typeOptions = isReplacement ? Object.entries(replacementWorkChangeLabels) : Object.entries(leaveTypeLabels);
@@ -361,9 +391,21 @@ function HistoryPanel({
       <select value={regionId} aria-label="区域" onChange={(event) => onRegion(event.target.value)}><option value="">全部可查看区域</option>{regions.map((region) => <option key={region.id} value={region.id}>{region.code}</option>)}</select>
       <input type="search" value={search} aria-label="员工搜索" onChange={(event) => onSearch(event.target.value)} placeholder="搜索员工姓名或工号" />
     </div>
-    {error ? <div className="table-state compact">历史查询不可用：{error}</div> : loading ? <div className="table-state compact">正在读取审批历史...</div> : rows.length === 0 ? <div className="table-state compact">当前筛选条件下没有已处理记录。</div> : <div className="staff-table-wrap"><table className="staff-table holiday-history-table"><thead><tr><th>申请日期</th><th>员工</th><th>工号</th><th>区域</th><th>类型</th><th>申请日期范围</th><th>申请原因</th><th>审批结果</th><th>审批人</th><th>审批时间</th></tr></thead><tbody>{isReplacement ? replacementRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{replacementWorkChangeLabels[row.change_type]}</td><td>{formatReplacementRange(row)}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td></tr>) : leaveRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{leaveTypeLabels[row.leave_type]}</td><td>{row.start_date} 至 {row.end_date}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td></tr>)}</tbody></table></div>}
+    {!isReplacement ? <div className="holiday-history-type-quick-filters" role="group" aria-label="请假类型快捷筛选">
+      <button className={type === '' ? 'active' : ''} type="button" onClick={() => onType('')}>全部类型</button>
+      {(['annual', 'medical', 'unpaid'] as const).map((quickType) => <button key={quickType} className={type === quickType ? 'active' : ''} type="button" onClick={() => onType(quickType)}>{leaveTypeLabels[quickType]}</button>)}
+    </div> : null}
+    {error ? <div className="table-state compact">历史查询不可用：{error}</div> : loading ? <div className="table-state compact">正在读取审批历史...</div> : rows.length === 0 ? <div className="table-state compact">当前筛选条件下没有已处理记录。</div> : <div className="staff-table-wrap"><table className="staff-table holiday-history-table"><thead><tr><th>申请日期</th><th>员工</th><th>工号</th><th>区域</th><th>类型</th><th>申请日期范围</th><th>申请原因</th><th>审批结果</th><th>审批人</th><th>审批时间</th><th>操作</th></tr></thead><tbody>{isReplacement ? replacementRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{replacementWorkChangeLabels[row.change_type]}</td><td>{formatReplacementRange(row)}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>) : leaveRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{leaveTypeLabels[row.leave_type]}</td><td>{row.start_date} 至 {row.end_date}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>)}</tbody></table></div>}
     {!error && total > 0 ? <div className="holiday-history-pagination"><button className="secondary-button compact-button" type="button" disabled={page <= 1 || loading} onClick={() => onPage(page - 1)}>上一页</button><span>第 {page} / {totalPages} 页</span><button className="secondary-button compact-button" type="button" disabled={page >= totalPages || loading} onClick={() => onPage(page + 1)}>下一页</button></div> : null}
   </div>;
+}
+
+function isReplacementHistoryItem(row: LeaveReviewHistoryItem | ReplacementWorkChangeReviewHistoryItem): row is ReplacementWorkChangeReviewHistoryItem {
+  return 'change_type' in row;
+}
+
+function formatOptionalTime(value: string) {
+  return value.slice(0, 5);
 }
 
 function formatReplacementRange(row: ReplacementWorkChangeReviewHistoryItem) {
