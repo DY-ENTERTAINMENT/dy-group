@@ -9,7 +9,9 @@ import { replacementReviewHistoryRecordTypeLabels, replacementWorkChangeLabels, 
 import { leaveBalanceManagementService } from '../services/leave-balance-management.service';
 import type { Region } from '../types/database';
 
-export function LeaveReviewPage({ initialSection, embedded = false }: { initialSection?: 'leave' | 'replacement'; embedded?: boolean }) {
+type PendingReviewCounts = { leave: number; replacement: number };
+
+export function LeaveReviewPage({ initialSection, embedded = false, onPendingCountsChange }: { initialSection?: 'leave' | 'replacement'; embedded?: boolean; onPendingCountsChange?: (counts: PendingReviewCounts) => void }) {
   const permissions = usePermissions();
   const canUseLeaveReview = permissions.canUse('leave-review');
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
@@ -39,11 +41,24 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
   const [selectedHistory, setSelectedHistory] = useState<LeaveReviewHistoryItem | ReplacementWorkChangeReviewHistoryItem | null>(null);
   const [historyFilterSection, setHistoryFilterSection] = useState(initialSection);
   const historyRequestId = useRef(0);
-  const leaveRequests = useMemo(() => requests.filter((request) => {
+  const pendingCountsChangeRef = useRef(onPendingCountsChange);
+  const ordinaryLeaveRequests = useMemo(
+    () => requests.filter((request) => request.leave_type === 'annual' || request.leave_type === 'medical' || request.leave_type === 'unpaid'),
+    [requests],
+  );
+  const replacementLeaveRequests = useMemo(
+    () => requests.filter((request) => request.leave_type === 'replacement'),
+    [requests],
+  );
+  const leaveRequests = useMemo(() => ordinaryLeaveRequests.filter((request) => {
     const search = employeeSearch.trim().toLowerCase();
     return (leaveTypeFilter === 'all' || request.leave_type === leaveTypeFilter)
       && (!search || `${request.employee?.full_name ?? ''} ${request.employee?.employee_code ?? ''}`.toLowerCase().includes(search));
-  }), [employeeSearch, leaveTypeFilter, requests]);
+  }), [employeeSearch, leaveTypeFilter, ordinaryLeaveRequests]);
+  const filteredReplacementLeaveRequests = useMemo(() => replacementLeaveRequests.filter((request) => {
+    const search = employeeSearch.trim().toLowerCase();
+    return !search || `${request.employee?.full_name ?? ''} ${request.employee?.employee_code ?? ''}`.toLowerCase().includes(search);
+  }), [employeeSearch, replacementLeaveRequests]);
   const filteredReplacementChanges = useMemo(() => replacementChanges.filter((change) => {
     const search = employeeSearch.trim().toLowerCase();
     return !search || `${change.employee?.full_name ?? ''} ${change.employee?.employee_code ?? ''}`.toLowerCase().includes(search);
@@ -54,6 +69,10 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
   }, []);
 
   useEffect(() => { void leaveBalanceManagementService.listAuthorizedRegions().then(setRegions).catch(() => setRegions([])); }, []);
+
+  useEffect(() => {
+    pendingCountsChangeRef.current = onPendingCountsChange;
+  }, [onPendingCountsChange]);
 
   useEffect(() => {
     historyRequestId.current += 1;
@@ -86,6 +105,10 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
       const [pendingRequests, pendingChanges] = await Promise.all([leaveService.listPendingLeaveRequests(), replacementWorkChangeService.listPending()]);
       setRequests(pendingRequests);
       setReplacementChanges(pendingChanges);
+      pendingCountsChangeRef.current?.({
+        leave: pendingRequests.filter((request) => request.leave_type === 'annual' || request.leave_type === 'medical' || request.leave_type === 'unpaid').length,
+        replacement: pendingRequests.filter((request) => request.leave_type === 'replacement').length + pendingChanges.length,
+      });
       setSelectedRequest((current) =>
         current && pendingRequests.some((request) => request.id === current.id) ? current : null,
       );
@@ -195,7 +218,7 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
         <div className="list-header">
           <div>
             <span>待审批</span>
-            <h3>{requests.length} 条请假申请</h3>
+            <h3>{ordinaryLeaveRequests.length} 条请假申请</h3>
           </div>
         </div>
 
@@ -232,9 +255,9 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
       </div> : null}
 
       {view === 'pending' && initialSection !== 'leave' ? <div className="staff-list-panel">
-        <div className="list-header"><div><span>待审批</span><h3>{replacementChanges.length} 条调休补班变更</h3></div></div>
+        <div className="list-header"><div><span>待审批</span><h3>{replacementLeaveRequests.length + replacementChanges.length} 条调休申请</h3></div></div>
         <div className="holiday-review-filters"><input type="search" value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} placeholder="搜索员工姓名或工号" aria-label="员工搜索" /></div>
-        {loading ? <div className="table-state">正在读取变更申请...</div> : filteredReplacementChanges.length === 0 ? <div className="table-state">暂无待审核调休补班变更。</div> : <div className="registration-list">{filteredReplacementChanges.map((change) => <button key={change.id} className="registration-item" type="button" onClick={() => { setSelectedReplacementChange(change); setReviewNote(''); setError(''); }}><span><strong>{replacementWorkChangeLabels[change.change_type]}</strong><small>原补班：{change.original_makeup_date} · 员工：{change.employee?.full_name ?? '未关联员工'}{change.employee?.employee_code ? `（${change.employee.employee_code}）` : ''}</small></span><em>待审核</em></button>)}</div>}
+        {loading ? <div className="table-state">正在读取调休申请...</div> : filteredReplacementLeaveRequests.length + filteredReplacementChanges.length === 0 ? <div className="table-state">暂无待审核调休申请。</div> : <div className="registration-list">{filteredReplacementLeaveRequests.map((request) => <button key={`leave-${request.id}`} className="registration-item" type="button" onClick={() => openReview(request)}><span><strong>{request.employee?.full_name ?? '未关联员工'}</strong><small>{leaveTypeLabels[request.leave_type]} · {formatLeaveDate(request)}</small></span><em>{leaveStatusLabels[request.status]}</em></button>)}{filteredReplacementChanges.map((change) => <button key={`change-${change.id}`} className="registration-item" type="button" onClick={() => { setSelectedReplacementChange(change); setReviewNote(''); setError(''); }}><span><strong>{replacementWorkChangeLabels[change.change_type]}</strong><small>原补班：{change.original_makeup_date} · 员工：{change.employee?.full_name ?? '未关联员工'}{change.employee?.employee_code ? `（${change.employee.employee_code}）` : ''}</small></span><em>待审核</em></button>)}</div>}
       </div> : null}
 
       {view === 'history' ? <HistoryPanel

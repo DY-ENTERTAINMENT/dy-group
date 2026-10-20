@@ -115,7 +115,10 @@ export function LeaveBalanceManagementPage() {
   useEffect(() => {
     if (!canViewReviews) return;
     void Promise.all([leaveService.listPendingLeaveRequests(), replacementWorkChangeService.listPending()])
-      .then(([leave, replacement]) => setPendingCounts({ leave: leave.length, replacement: replacement.length }))
+      .then(([leave, replacement]) => setPendingCounts({
+        leave: leave.filter((request) => request.leave_type === 'annual' || request.leave_type === 'medical' || request.leave_type === 'unpaid').length,
+        replacement: leave.filter((request) => request.leave_type === 'replacement').length + replacement.length,
+      }))
       .catch(() => setPendingCounts({ leave: 0, replacement: 0 }));
   }, [canViewReviews]);
 
@@ -293,7 +296,7 @@ export function LeaveBalanceManagementPage() {
         <button className={`holiday-management-tab balance${activeTab === 'balance' ? ' active' : ''}`} type="button" role="tab" aria-selected={activeTab === 'balance'} onClick={() => selectTab('balance')} disabled={!canViewBalances}>假期额度</button>
       </div>
       {activeTab === 'leave' || activeTab === 'replacement' ? (
-        canViewReviews ? <LeaveReviewPage initialSection={activeTab} embedded /> : <div className="staff-list-panel"><div className="table-state compact">您没有查看审批资料的权限。</div></div>
+        canViewReviews ? <LeaveReviewPage initialSection={activeTab} embedded onPendingCountsChange={setPendingCounts} /> : <div className="staff-list-panel"><div className="table-state compact">您没有查看审批资料的权限。</div></div>
       ) : !canViewBalances ? <div className="staff-list-panel"><div className="table-state compact">您没有查看假期额度的权限。</div></div> : <>
       {error && !adjustmentTarget && !historyTarget ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
