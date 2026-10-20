@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
@@ -37,6 +37,8 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [selectedHistory, setSelectedHistory] = useState<LeaveReviewHistoryItem | ReplacementWorkChangeReviewHistoryItem | null>(null);
+  const [historyFilterSection, setHistoryFilterSection] = useState(initialSection);
+  const historyRequestId = useRef(0);
   const leaveRequests = useMemo(() => requests.filter((request) => {
     const search = employeeSearch.trim().toLowerCase();
     return (leaveTypeFilter === 'all' || request.leave_type === leaveTypeFilter)
@@ -54,9 +56,25 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
   useEffect(() => { void leaveBalanceManagementService.listAuthorizedRegions().then(setRegions).catch(() => setRegions([])); }, []);
 
   useEffect(() => {
+    historyRequestId.current += 1;
+    setHistoryType('');
+    setHistoryStatus('');
+    setHistoryRegionId('');
+    setHistorySearch('');
+    setHistoryPage(1);
+    setHistoryError('');
+    setHistoryLoading(false);
+    setLeaveHistory([]);
+    setReplacementHistory([]);
+    setSelectedHistory(null);
+    setHistoryFilterSection(initialSection);
+  }, [initialSection]);
+
+  useEffect(() => {
     if (view !== 'history') return;
+    if (historyFilterSection !== initialSection) return;
     void loadHistory();
-  }, [view, initialSection, historyYear, historyMonth, historyType, historyStatus, historyRegionId, historySearch, historyPage]);
+  }, [view, initialSection, historyFilterSection, historyYear, historyMonth, historyType, historyStatus, historyRegionId, historySearch, historyPage]);
 
   usePullToRefresh(loadPendingRequests);
 
@@ -79,15 +97,21 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
   }
 
   async function loadHistory() {
+    const requestId = ++historyRequestId.current;
     setHistoryLoading(true); setHistoryError('');
     try {
       if (initialSection === 'replacement') {
-        setReplacementHistory(await replacementWorkChangeService.listReviewHistory({ year: historyYear, month: historyMonth, changeType: historyType, status: historyStatus, regionId: historyRegionId, search: historySearch, page: historyPage, pageSize: 25 }));
+        const rows = await replacementWorkChangeService.listReviewHistory({ year: historyYear, month: historyMonth, changeType: historyType, status: historyStatus, regionId: historyRegionId, search: historySearch, page: historyPage, pageSize: 25 });
+        if (requestId === historyRequestId.current) setReplacementHistory(rows);
       } else {
-        setLeaveHistory(await leaveService.listReviewHistory({ year: historyYear, month: historyMonth, leaveType: historyType, status: historyStatus, regionId: historyRegionId, search: historySearch, page: historyPage, pageSize: 25 }));
+        const rows = await leaveService.listReviewHistory({ year: historyYear, month: historyMonth, leaveType: historyType, status: historyStatus, regionId: historyRegionId, search: historySearch, page: historyPage, pageSize: 25 });
+        if (requestId === historyRequestId.current) setLeaveHistory(rows);
       }
-    } catch (historyLoadError) { setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : '审批历史暂时不可用。'); }
-    finally { setHistoryLoading(false); }
+    } catch (historyLoadError) {
+      if (requestId === historyRequestId.current) setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : '审批历史暂时不可用。');
+    } finally {
+      if (requestId === historyRequestId.current) setHistoryLoading(false);
+    }
   }
 
   async function reviewReplacementChange(status: 'approved' | 'rejected') {
@@ -216,7 +240,7 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
       {view === 'history' ? <HistoryPanel
         isReplacement={initialSection === 'replacement'} year={historyYear} month={historyMonth} type={historyType} status={historyStatus} regionId={historyRegionId} search={historySearch}
         regions={regions} loading={historyLoading} error={historyError} leaveRows={leaveHistory} replacementRows={replacementHistory}
-        onYear={setHistoryYear} onMonth={setHistoryMonth} onType={(value) => { setHistoryType(value); setHistoryPage(1); }} onStatus={(value) => { setHistoryStatus(value); setHistoryPage(1); }} onRegion={(value) => { setHistoryRegionId(value); setHistoryPage(1); }} onSearch={(value) => { setHistorySearch(value); setHistoryPage(1); }}
+        onYear={(value) => { setHistoryYear(value); setHistoryPage(1); }} onMonth={(value) => { setHistoryMonth(value); setHistoryPage(1); }} onType={(value) => { setHistoryType(value); setHistoryPage(1); }} onStatus={(value) => { setHistoryStatus(value); setHistoryPage(1); }} onRegion={(value) => { setHistoryRegionId(value); setHistoryPage(1); }} onSearch={(value) => { setHistorySearch(value); setHistoryPage(1); }}
         page={historyPage} onPage={setHistoryPage} onDetail={setSelectedHistory}
       /> : null}
 
@@ -341,15 +365,13 @@ export function LeaveReviewPage({ initialSection, embedded = false }: { initialS
             <div><span>工号</span><strong>{selectedHistory.employee_code || '-'}</strong></div>
             <div><span>区域</span><strong>{selectedHistory.region_code || '-'}</strong></div>
             <div><span>变更类型</span><strong>{replacementWorkChangeLabels[selectedHistory.change_type]}</strong></div>
-            <div><span>原补班日期</span><strong>{selectedHistory.original_makeup_date || '-'}</strong></div>
-            {selectedHistory.requested_makeup_date ? <div><span>申请变更日期</span><strong>{selectedHistory.requested_makeup_date}</strong></div> : null}
-            {selectedHistory.original_start_time ? <div><span>原开始时间</span><strong>{formatOptionalTime(selectedHistory.original_start_time)}</strong></div> : null}
-            {selectedHistory.requested_start_time ? <div><span>新开始时间</span><strong>{formatOptionalTime(selectedHistory.requested_start_time)}</strong></div> : null}
+            <div><span>调休日期</span><strong>{selectedHistory.replacement_leave_date || '-'}</strong></div>
+            <div><span>补班日期</span><strong>{selectedHistory.requested_makeup_date ?? selectedHistory.original_makeup_date ?? '-'}</strong></div>
             <div><span>申请原因</span><strong>{selectedHistory.reason || '-'}</strong></div>
-            <div><span>申请提交时间</span><strong>{formatDateTime(selectedHistory.created_at)}</strong></div>
+            <div><span>申请提交日期</span><strong>{formatDate(selectedHistory.created_at)}</strong></div>
             <div><span>审批结果</span><strong>{selectedHistory.status === 'approved' ? '已通过' : '已拒绝'}</strong></div>
             <div><span>审批人</span><strong>{selectedHistory.reviewer_name || '-'}</strong></div>
-            <div><span>审批时间</span><strong>{selectedHistory.reviewed_at ? formatDateTime(selectedHistory.reviewed_at) : '-'}</strong></div>
+            <div><span>审批日期</span><strong>{selectedHistory.reviewed_at ? formatDate(selectedHistory.reviewed_at) : '-'}</strong></div>
           </div>
         ) : (
           <div className="detail-list">
@@ -395,7 +417,7 @@ function HistoryPanel({
       <button className={type === '' ? 'active' : ''} type="button" onClick={() => onType('')}>全部类型</button>
       {(['annual', 'medical', 'unpaid'] as const).map((quickType) => <button key={quickType} className={type === quickType ? 'active' : ''} type="button" onClick={() => onType(quickType)}>{leaveTypeLabels[quickType]}</button>)}
     </div> : null}
-    {error ? <div className="table-state compact">历史查询不可用：{error}</div> : loading ? <div className="table-state compact">正在读取审批历史...</div> : rows.length === 0 ? <div className="table-state compact">当前筛选条件下没有已处理记录。</div> : <div className="staff-table-wrap"><table className="staff-table holiday-history-table"><thead><tr><th>申请日期</th><th>员工</th><th>工号</th><th>区域</th><th>类型</th><th>申请日期范围</th><th>申请原因</th><th>审批结果</th><th>审批人</th><th>审批时间</th><th>操作</th></tr></thead><tbody>{isReplacement ? replacementRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{replacementWorkChangeLabels[row.change_type]}</td><td>{formatReplacementRange(row)}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>) : leaveRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{leaveTypeLabels[row.leave_type]}</td><td>{row.start_date} 至 {row.end_date}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>)}</tbody></table></div>}
+    {error ? <div className="table-state compact">历史查询不可用：{error}</div> : loading ? <div className="table-state compact">正在读取审批历史...</div> : rows.length === 0 ? <div className="table-state compact">当前筛选条件下没有已处理记录。</div> : isReplacement ? <div className="staff-table-wrap"><table className="staff-table holiday-history-table"><thead><tr><th>申请提交日期</th><th>员工姓名</th><th>员工工号</th><th>所属区域</th><th>调休变更类型</th><th>调休日期</th><th>补班日期</th><th>申请原因</th><th>审批结果</th><th>审批人</th><th>审批日期</th><th>操作</th></tr></thead><tbody>{replacementRows.map((row) => <tr key={row.id}><td>{formatDate(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{replacementWorkChangeLabels[row.change_type]}</td><td>{row.replacement_leave_date || '-'}</td><td>{row.requested_makeup_date ?? row.original_makeup_date ?? '-'}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDate(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>)}</tbody></table></div> : <div className="staff-table-wrap"><table className="staff-table holiday-history-table"><thead><tr><th>申请日期</th><th>员工</th><th>工号</th><th>区域</th><th>类型</th><th>申请日期范围</th><th>申请原因</th><th>审批结果</th><th>审批人</th><th>审批时间</th><th>操作</th></tr></thead><tbody>{leaveRows.map((row) => <tr key={row.id}><td>{formatDateTime(row.created_at)}</td><td><strong>{row.employee_name}</strong></td><td>{row.employee_code || '-'}</td><td>{row.region_code || '-'}</td><td>{leaveTypeLabels[row.leave_type]}</td><td>{row.start_date} 至 {row.end_date}</td><td>{row.reason}</td><td><span className={`status-pill history-${row.status}`}>{row.status === 'approved' ? '已通过' : '已拒绝'}</span></td><td>{row.reviewer_name || '-'}</td><td>{row.reviewed_at ? formatDateTime(row.reviewed_at) : '-'}</td><td className="holiday-history-action-cell"><button className="holiday-history-detail-button" type="button" onClick={() => onDetail(row)}>查看详情</button></td></tr>)}</tbody></table></div>}
     {!error && total > 0 ? <div className="holiday-history-pagination"><button className="secondary-button compact-button" type="button" disabled={page <= 1 || loading} onClick={() => onPage(page - 1)}>上一页</button><span>第 {page} / {totalPages} 页</span><button className="secondary-button compact-button" type="button" disabled={page >= totalPages || loading} onClick={() => onPage(page + 1)}>下一页</button></div> : null}
   </div>;
 }
@@ -404,14 +426,8 @@ function isReplacementHistoryItem(row: LeaveReviewHistoryItem | ReplacementWorkC
   return 'change_type' in row;
 }
 
-function formatOptionalTime(value: string) {
-  return value.slice(0, 5);
-}
-
-function formatReplacementRange(row: ReplacementWorkChangeReviewHistoryItem) {
-  if (row.change_type === 'reschedule') return `原补班 ${row.original_makeup_date} → ${row.requested_makeup_date ?? '-'}`;
-  if (row.change_type === 'work_time') return `${row.original_makeup_date} · ${row.original_start_time.slice(0, 5)} → ${row.requested_start_time?.slice(0, 5) ?? '-'}`;
-  return `原补班 ${row.original_makeup_date}`;
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 }
 
 function formatDateTime(value: string) {
