@@ -16,6 +16,7 @@ import { menuItems, toolGroupOrder } from '../routes/menu';
 import logoUrl from '../assets/logo.png';
 import { usePermissions } from '../hooks/usePermissions';
 import { useOutgoingPendingApprovalCount } from '../services/outgoing-notification.service';
+import { useLeavePendingApprovalCount } from '../hooks/useLeavePendingApprovalCount';
 import { useWorkTimeAdjustmentPendingCount } from '../hooks/useWorkTimeAdjustmentPendingCount';
 
 type SidebarProps = {
@@ -199,6 +200,10 @@ function SidebarLink({
 }) {
   const Icon = item.icon;
 
+  if (item.key === 'leave-balance-management') {
+    return <LeaveManagementSidebarLink item={item} collapsed={collapsed} nested={nested} onNavigate={onNavigate} />;
+  }
+
   if (item.disabled) {
     return (
       <span className={nested ? 'nav-link nested muted' : 'nav-link muted'} title={collapsed ? item.label : undefined}>
@@ -222,6 +227,28 @@ function SidebarLink({
       <span>{item.label}{item.key === 'attendance-management' ? <AttendanceSidebarBadge /> : null}</span>
     </NavLink>
   );
+}
+
+function LeaveManagementSidebarLink({ item, collapsed, nested, onNavigate }: {
+  item: (typeof menuItems)[number]; collapsed: boolean; nested: boolean; onNavigate?: () => void;
+}) {
+  const permissions = usePermissions();
+  const { total, preferredTab } = useLeavePendingApprovalCount(permissions.canUse('leave-review'));
+  const Icon = item.icon;
+  const to = preferredTab === 'replacement' ? '/hr/leave-balances?tab=replacement' : item.path;
+
+  if (item.disabled) {
+    return <span className={nested ? 'nav-link nested muted' : 'nav-link muted'} title={collapsed ? item.label : undefined}><Icon size={nested ? 18 : 20} /><span>{item.label}</span></span>;
+  }
+
+  return <NavLink to={to} title={collapsed ? item.label : undefined} onClick={onNavigate} className={({ isActive }) => {
+    const baseClass = nested ? 'nav-link nested' : 'nav-link';
+    return isActive ? `${baseClass} active` : baseClass;
+  }}><Icon size={nested ? 18 : 20} /><span>{item.label}{total ? <span className="outgoing-notification-badge sidebar-outgoing-notification-badge" aria-label={`${total} 个待审批假期申请`}>{formatPendingCount(total)}</span> : null}</span></NavLink>;
+}
+
+function formatPendingCount(count: number) {
+  return count > 99 ? '99+' : count;
 }
 
 function AttendanceSidebarBadge() {

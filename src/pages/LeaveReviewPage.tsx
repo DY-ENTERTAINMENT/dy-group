@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { notifyLeavePendingApprovalsChanged } from '../hooks/useLeavePendingApprovalCount';
 import { type LeaveRequestItem, type LeaveReviewHistoryItem, leaveService } from '../services/leave.service';
 import { leaveStatusLabels, leaveTypeLabels } from './LeavePage';
 import { replacementReviewHistoryRecordTypeLabels, replacementWorkChangeLabels, replacementWorkChangeService, type ReplacementWorkChangeReviewItem, type ReplacementWorkChangeReviewHistoryItem } from '../services/replacement-work-change.service';
@@ -109,6 +110,7 @@ export function LeaveReviewPage({ initialSection, embedded = false, onPendingCou
         leave: pendingRequests.filter((request) => request.leave_type === 'annual' || request.leave_type === 'medical' || request.leave_type === 'unpaid').length,
         replacement: pendingRequests.filter((request) => request.leave_type === 'replacement').length + pendingChanges.length,
       });
+      notifyLeavePendingApprovalsChanged();
       setSelectedRequest((current) =>
         current && pendingRequests.some((request) => request.id === current.id) ? current : null,
       );
