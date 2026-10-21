@@ -125,7 +125,8 @@ export function AttendanceManagementPage() {
   const { profile } = useAuth();
   const permissions = usePermissions();
   const canUseAttendance = permissions.canUse('attendance-management');
-  const [activeTab, setActiveTab] = useState<AttendanceTab>(() => searchParams.get('tab') === 'work-hours' ? 'work-hours' : 'today');
+  const canAccessWorkHours = permissions.canView('attendance-management') && permissions.canView('work-time-adjustment');
+  const [activeTab, setActiveTab] = useState<AttendanceTab>('today');
   const [workHoursRequestedFilter, setWorkHoursRequestedFilter] = useState<'today' | 'pending'>('today');
   const [todayDate, setTodayDate] = useState(malaysiaDateKey(new Date()));
   const [todaySearch, setTodaySearch] = useState('');
@@ -152,7 +153,7 @@ export function AttendanceManagementPage() {
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const { count: outgoingPendingCount, mode: outgoingDataMode } = useOutgoingPendingApprovalCount();
-  const { count: workHoursPendingCount } = useWorkTimeAdjustmentPendingCount(permissions.canView('work-time-adjustment'));
+  const { count: workHoursPendingCount } = useWorkTimeAdjustmentPendingCount(canAccessWorkHours);
   const outgoingPageMode = getOutgoingDataMode(isOutgoingLocalPreviewEnabled());
   const canRequestOtherAttendancePhotos = isSuperAdmin || (
     permissions.canView('attendance-management') && permissions.canView('attendance-photos')
@@ -225,6 +226,18 @@ export function AttendanceManagementPage() {
   }, []);
   useEffect(() => outgoingPageMode === 'local-preview' ? outgoingLocalPreviewService.subscribe(() => setOutgoingRevision((value) => value + 1)) : undefined, [outgoingPageMode]);
 
+  useEffect(() => {
+    if (permissions.loading) return;
+    if (searchParams.get('tab') === 'work-hours' && canAccessWorkHours) {
+      setActiveTab('work-hours');
+    } else if (activeTab === 'work-hours') {
+      setActiveTab('today');
+    }
+    if (searchParams.get('tab') === 'work-hours' && !canAccessWorkHours) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [activeTab, canAccessWorkHours, permissions.loading, searchParams, setSearchParams]);
+
   usePullToRefresh(loadAttendanceData, [month, regionId]);
 
   async function loadAttendanceData(options: { resetView?: boolean } = {}) {
@@ -284,6 +297,7 @@ export function AttendanceManagementPage() {
   }
 
   function selectTab(tab: AttendanceTab, workHoursFilter: 'today' | 'pending' = 'today') {
+    if (tab === 'work-hours' && !canAccessWorkHours) return;
     setActiveTab(tab);
     if (tab === 'work-hours') {
       setWorkHoursRequestedFilter(workHoursFilter);
@@ -316,7 +330,7 @@ export function AttendanceManagementPage() {
       <div className="attendance-page-tabs" role="tablist" aria-label="考勤页面">
         <button className={activeTab === 'today' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'today'} onClick={() => selectTab('today')}>今日考勤</button>
         <button className={activeTab === 'outgoing' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'outgoing'} onClick={() => selectTab('outgoing')}>外出管理 {outgoingPendingCount ? <span className="outgoing-notification-badge">{outgoingPendingCount}</span> : null}</button>
-        <button className={activeTab === 'work-hours' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'work-hours'} onClick={() => selectTab('work-hours')}>工时管理 {workHoursPendingCount ? <span className="outgoing-notification-badge" role="button" tabIndex={0} aria-label={`${workHoursPendingCount} 个待审核工时调整`} onClick={openPendingWorkHours} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTab('work-hours', 'pending'); } }}>{workHoursPendingCount}</span> : null}</button>
+        {canAccessWorkHours ? <button className={activeTab === 'work-hours' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'work-hours'} onClick={() => selectTab('work-hours')}>工时管理 {workHoursPendingCount ? <span className="outgoing-notification-badge" role="button" tabIndex={0} aria-label={`${workHoursPendingCount} 个待审核工时调整`} onClick={openPendingWorkHours} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTab('work-hours', 'pending'); } }}>{workHoursPendingCount}</span> : null}</button> : null}
         <button className={activeTab === 'statistics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'statistics'} onClick={() => selectTab('statistics')}>考勤统计</button>
       </div>
 
@@ -348,7 +362,7 @@ export function AttendanceManagementPage() {
         canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')}
         reviewerName={profile?.nickname || profile?.full_name || profile?.email || '当前 HR'}
         onChanged={() => setOutgoingRevision((value) => value + 1)}
-      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} canViewOutgoingPhotos={isSuperAdmin || permissions.canView('outgoing-photos')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : activeTab === 'work-hours' ? <WorkTimeAdjustmentReviewPage embedded requestedFilter={workHoursRequestedFilter} /> : <>
+      /> : activeTab === 'outgoing' && outgoingPageMode === 'real' ? <OutgoingRealManagementPanel regions={regions} employees={todayEmployees} canApprove={isSuperAdmin || permissions.canUse('outgoing-approval')} canHandleExceptions={isSuperAdmin || permissions.canUse('outgoing-exception-handling')} canViewOutgoingPhotos={isSuperAdmin || permissions.canView('outgoing-photos')} /> : activeTab === 'outgoing' ? <p className="outgoing-management-empty">外出功能尚未接入正式数据库。</p> : activeTab === 'work-hours' && canAccessWorkHours ? <WorkTimeAdjustmentReviewPage embedded requestedFilter={workHoursRequestedFilter} /> : <>
       {canUseAttendance ? (
         <button className="abnormal-banner" type="button" onClick={() => setShowAbnormalCenter(true)}>
           <AlertTriangle size={20} />

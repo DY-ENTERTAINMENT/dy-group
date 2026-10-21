@@ -11,7 +11,6 @@ import { AttendanceManagementPage } from '../pages/AttendanceManagementPage';
 import { LeavePage } from '../pages/LeavePage';
 import { LeaveBalanceManagementPage } from '../pages/LeaveBalanceManagementPage';
 import { WorkTimeAdjustmentPage } from '../pages/WorkTimeAdjustmentPage';
-import { WorkTimeAdjustmentReviewPage } from '../pages/WorkTimeAdjustmentReviewPage';
 import { RestPlanningPage } from '../pages/RestPlanningPage';
 import { PublicHolidayPage } from '../pages/PublicHolidayPage';
 import { ItineraryPage } from '../pages/ItineraryPage';
@@ -86,8 +85,10 @@ export const router = createBrowserRouter([
           {
             path: 'hr/work-time-adjustments',
             element: (
-              <RequirePermission permissionKey="work-time-adjustment">
-                <WorkTimeAdjustmentReviewPage />
+              <RequirePermission permissionKey="attendance-management">
+                <RequirePermission permissionKey="work-time-adjustment">
+                  <Navigate to="/hr/attendance?tab=work-hours" replace />
+                </RequirePermission>
               </RequirePermission>
             ),
           },
