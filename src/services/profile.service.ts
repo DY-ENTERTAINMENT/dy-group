@@ -1,10 +1,15 @@
 import { supabase } from '../lib/supabase';
-import { normalizeEmployeeName } from './staff.service';
 import type { Employee, EmploymentType, JobTitle, Profile, Region } from '../types/database';
 
 const AVATAR_BUCKET = 'profile-avatars';
 const BUSINESS_CARD_BUCKET = 'profile-business-card';
 const BUSINESS_CARD_QR_TYPES = ['wechat', 'instagram'] as const;
+
+function createProfileUpdateError(code: 'DY_EMPLOYEE_UPDATE_NOT_FOUND' | 'DY_PROFILE_UPDATE_NOT_FOUND') {
+  const error = new Error(code) as Error & { code: string };
+  error.code = code;
+  return error;
+}
 
 export type BusinessCardQrType = (typeof BUSINESS_CARD_QR_TYPES)[number];
 
@@ -49,7 +54,6 @@ export type MyProfileData = {
 };
 
 export type MyProfileUpdateValues = {
-  full_name: string;
   phone: string;
   avatar_url?: string | null;
   nickname?: string;
@@ -152,56 +156,86 @@ export const profileService = {
       throw new Error('请先登录后再保存个人资料。');
     }
 
-    const { data: linkedEmployee, error: linkedEmployeeError } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('profile_id', userId)
-      .is('deleted_at', null)
-      .maybeSingle();
+    const [profileResult, employeeResult] = await Promise.all([
+      supabase.from('profiles').select('phone, avatar_url').eq('id', userId).maybeSingle(),
+      supabase
+        .from('employees')
+        .select('id, phone, nickname, avatar_url, address, bank_name, bank_account')
+        .eq('profile_id', userId)
+        .is('deleted_at', null)
+        .maybeSingle(),
+    ]);
 
-    if (linkedEmployeeError) {
-      throw linkedEmployeeError;
+    if (profileResult.error) {
+      throw profileResult.error;
     }
 
-    const fullName = linkedEmployee ? normalizeEmployeeName(values.full_name) : values.full_name.trim();
-
-    if (linkedEmployee && !fullName) {
-      throw new Error('工作人员姓名不能为空');
+    if (!profileResult.data) {
+      throw new Error('找不到当前登录用户的个人资料。');
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName,
-        phone: values.phone.trim() || null,
-        avatar_url: values.avatar_url ?? null,
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw error;
+    if (employeeResult.error) {
+      throw employeeResult.error;
     }
 
-    if (!linkedEmployee) {
-      return;
+    const phone = values.phone.trim() || null;
+    const avatarUrl = values.avatar_url ?? null;
+    const linkedEmployee = employeeResult.data;
+    const profileUpdates: Partial<Pick<Profile, 'phone' | 'avatar_url'>> = {};
+
+    if (profileResult.data.phone !== phone) profileUpdates.phone = phone;
+    if (profileResult.data.avatar_url !== avatarUrl) profileUpdates.avatar_url = avatarUrl;
+
+    if (linkedEmployee) {
+      const employeeUpdates: Partial<Pick<Employee, 'phone' | 'nickname' | 'avatar_url' | 'address' | 'bank_name' | 'bank_account'>> = {};
+      const nickname = values.nickname?.trim() || null;
+      const address = values.address?.trim() || null;
+      const bankName = values.bank_name?.trim() || null;
+      const bankAccount = values.bank_account?.trim() || null;
+
+      if (linkedEmployee.phone !== phone) employeeUpdates.phone = phone;
+      if (linkedEmployee.nickname !== nickname) employeeUpdates.nickname = nickname;
+      if (linkedEmployee.avatar_url !== avatarUrl) employeeUpdates.avatar_url = avatarUrl;
+      if (linkedEmployee.address !== address) employeeUpdates.address = address;
+      if (linkedEmployee.bank_name !== bankName) employeeUpdates.bank_name = bankName;
+      if (linkedEmployee.bank_account !== bankAccount) employeeUpdates.bank_account = bankAccount;
+
+      // Check the more restrictive employee authorization first. This prevents a
+      // rejected employee update from leaving the profile row partially updated.
+      if (Object.keys(employeeUpdates).length > 0) {
+        const { data: updatedEmployee, error: employeeError } = await supabase
+          .from('employees')
+          .update(employeeUpdates)
+          .eq('id', linkedEmployee.id)
+          .is('deleted_at', null)
+          .select('id')
+          .maybeSingle();
+
+        if (employeeError) {
+          throw employeeError;
+        }
+
+        if (updatedEmployee?.id !== linkedEmployee.id) {
+          throw createProfileUpdateError('DY_EMPLOYEE_UPDATE_NOT_FOUND');
+        }
+      }
     }
 
-    const { error: employeeError } = await supabase
-      .from('employees')
-      .update({
-        full_name: fullName,
-        nickname: values.nickname?.trim() || null,
-        phone: values.phone.trim() || null,
-        avatar_url: values.avatar_url ?? null,
-        address: values.address?.trim() || null,
-        bank_name: values.bank_name?.trim() || null,
-        bank_account: values.bank_account?.trim() || null,
-      })
-      .eq('id', linkedEmployee.id)
-      .is('deleted_at', null);
+    if (Object.keys(profileUpdates).length > 0) {
+      const { data: updatedProfile, error: profileError } = await supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', userId)
+        .select('id')
+        .maybeSingle();
 
-    if (employeeError) {
-      throw employeeError;
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (updatedProfile?.id !== userId) {
+        throw createProfileUpdateError('DY_PROFILE_UPDATE_NOT_FOUND');
+      }
     }
   },
 

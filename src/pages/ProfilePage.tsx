@@ -26,6 +26,34 @@ const avatarOriginalStorageKey = 'dy-group-avatar-original-url';
 const avatarCropSize = 320;
 const avatarOutputSize = 800;
 
+function getSafeErrorMessage(error: unknown, fallback: string) {
+  const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : '';
+  const name = error instanceof Error ? error.name : typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string' ? error.name : '';
+  const message = error instanceof Error ? error.message : typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' ? error.message : '';
+
+  if (code === '42501') {
+    return '没有权限修改此资料，请联系管理员。';
+  }
+
+  if (code === 'DY_EMPLOYEE_UPDATE_NOT_FOUND') {
+    return '未找到可更新的员工资料，请刷新后重试。';
+  }
+
+  if (code === 'DY_PROFILE_UPDATE_NOT_FOUND') {
+    return '未找到可更新的个人资料，请刷新后重试。';
+  }
+
+  if (['22001', '22007', '22008', '22P02', '23502', '23514'].includes(code)) {
+    return '填写的资料格式不正确，请检查后重试。';
+  }
+
+  if (['AbortError', 'FetchError', 'TypeError'].includes(name) || ['Failed to fetch', 'Network request failed'].includes(message)) {
+    return '连接失败，请检查网络后重试。';
+  }
+
+  return fallback;
+}
+
 export function ProfilePage() {
   const [profileData, setProfileData] = useState<MyProfileData | null>(null);
   const [form, setForm] = useState<ProfileForm>({
@@ -145,7 +173,6 @@ export function ProfilePage() {
 
   function getUpdateValues(nextForm = form): MyProfileUpdateValues {
     return {
-      full_name: displayName,
       phone: nextForm.phone,
       avatar_url: nextForm.avatar_url,
       nickname: nextForm.nickname,
@@ -304,7 +331,7 @@ export function ProfilePage() {
       closeAvatarCrop();
       setSuccess('头像已更新。');
     } catch (err) {
-      setError(`头像上传失败：${err instanceof Error ? err.message : '未知错误'}`);
+      setError(`头像上传失败：${getSafeErrorMessage(err, '头像上传失败，请稍后重试。')}`);
     } finally {
       setUploading(false);
     }
@@ -392,7 +419,7 @@ export function ProfilePage() {
       );
       setSuccess('个人资料已保存。');
     } catch (err) {
-      setError(`保存个人资料失败：${err instanceof Error ? err.message : '未知错误'}`);
+      setError(`保存个人资料失败：${getSafeErrorMessage(err, '请稍后重试。')}`);
     } finally {
       setSaving(false);
     }
