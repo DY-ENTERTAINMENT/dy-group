@@ -546,9 +546,7 @@ function LeaveRequestModal({
                   />
                 </label>
                 {values.medical_attachment_url ? (
-                  <a className="attachment-preview-link" href={values.medical_attachment_url} target="_blank" rel="noreferrer">
-                    查看已上传病假证明
-                  </a>
+                  <MedicalAttachmentLink attachment={values.medical_attachment_url} />
                 ) : (
                   <p className="form-helper">请先拍好照片，再从手机相册选择上传。</p>
                 )}
@@ -561,6 +559,25 @@ function LeaveRequestModal({
         </form>
     </SystemModal>
   );
+}
+
+function MedicalAttachmentLink({ attachment }: { attachment: string }) {
+  const [url, setUrl] = useState('');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setUrl('');
+    setFailed(false);
+    void leaveService.getMedicalAttachmentSignedUrl(attachment, 120)
+      .then((signedUrl) => { if (active) setUrl(signedUrl); })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [attachment]);
+
+  if (failed) return <span className="form-helper">病假证明暂时不可读取。</span>;
+  if (!url) return <span className="form-helper">病假证明读取中…</span>;
+  return <a className="attachment-preview-link" href={url} target="_blank" rel="noreferrer">查看已上传病假证明</a>;
 }
 
 function ReplacementWorkChangeModal({ request, currentMakeupDate, values, saving, onChange, onClose, onSubmit }: { request: LeaveRequestItem; currentMakeupDate: string; values: ReplacementWorkChangeFormValues; saving: boolean; onChange: (values: ReplacementWorkChangeFormValues) => void; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

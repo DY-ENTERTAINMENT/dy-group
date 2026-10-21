@@ -25,9 +25,29 @@ const MEDICAL_ATTACHMENT_EXTENSIONS = {
   webp: 'image/webp',
   gif: 'image/gif',
 } as const;
+const MEDICAL_ATTACHMENT_PUBLIC_URL_MARKER = `/storage/v1/object/public/${MEDICAL_BUCKET}/`;
 const HEIC_MEDICAL_ATTACHMENT_TYPES = new Set(['image/heic', 'image/heif']);
 const HEIC_MEDICAL_ATTACHMENT_EXTENSIONS = new Set(['heic', 'heif']);
 const CONVERTED_MEDICAL_ATTACHMENT_QUALITY = 0.92;
+
+function normalizeMedicalAttachmentPath(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  let path = raw;
+  if (/^https?:\/\//i.test(raw)) {
+    let url: URL;
+    try { url = new URL(raw); } catch { return null; }
+    const markerAt = url.pathname.indexOf(MEDICAL_ATTACHMENT_PUBLIC_URL_MARKER);
+    if (markerAt < 0) return null;
+    path = url.pathname.slice(markerAt + MEDICAL_ATTACHMENT_PUBLIC_URL_MARKER.length);
+  }
+  try { path = decodeURIComponent(path); } catch { return null; }
+  return /^[0-9a-f]{8}-[0-9a-f-]{27,35}\/[A-Za-z0-9][A-Za-z0-9._-]*$/i.test(path) ? path : null;
+}
+
+function isMedicalAttachmentPublicUrl(value: string) {
+  try { return new URL(value).pathname.includes(MEDICAL_ATTACHMENT_PUBLIC_URL_MARKER); } catch { return false; }
+}
 
 export type LeaveRequestItem = LeaveRequest & {
   employee: Pick<Employee, 'id' | 'full_name' | 'phone' | 'employee_code' | 'region_id'> | null;
@@ -43,7 +63,8 @@ export type LeaveBalance = {
 export type LeaveReviewHistoryItem = {
   id: string; employee_name: string; employee_code: string | null; region_id: string | null; region_code: string | null;
   leave_type: LeaveType; start_date: string; end_date: string; reason: string; status: Extract<LeaveRequestStatus, 'approved' | 'rejected'>;
-  reviewer_name: string | null; reviewed_at: string | null; created_at: string; has_medical_attachment: boolean; total_count: number;
+  reviewer_name: string | null; reviewed_at: string | null; created_at: string; has_medical_attachment: boolean;
+  medical_attachment_path: string | null; total_count: number;
 };
 
 export type LeaveReviewHistoryFilters = {
@@ -112,7 +133,7 @@ export const leaveService = {
   },
 
   async listReviewHistory(filters: LeaveReviewHistoryFilters) {
-    const { data, error } = await (supabase as any).rpc('list_leave_review_history', {
+    const { data, error } = await (supabase as any).rpc('list_leave_review_history_v2', {
       p_year: filters.year, p_month: filters.month, p_leave_type: filters.leaveType || null, p_region_id: filters.regionId || null,
       p_status: filters.status || null, p_search: filters.search?.trim() || null, p_page: filters.page, p_page_size: filters.pageSize,
     });
@@ -227,8 +248,16 @@ export const leaveService = {
       throw error;
     }
 
-    const { data } = supabase.storage.from(MEDICAL_BUCKET).getPublicUrl(path);
-    return data.publicUrl;
+    return path;
+  },
+
+  async getMedicalAttachmentSignedUrl(value: string, expiresInSeconds = 120) {
+    const path = normalizeMedicalAttachmentPath(value);
+    if (!path) throw new Error('病假附件路径无效或不属于本系统。');
+    const { data, error } = await supabase.storage.from(MEDICAL_BUCKET).createSignedUrl(path, Math.min(300, Math.max(30, expiresInSeconds)));
+    if (data?.signedUrl) return data.signedUrl;
+    if (isMedicalAttachmentPublicUrl(value)) return value;
+    throw error ?? new Error('无法读取病假附件，可能不存在或您没有权限。');
   },
 
   async approveLeaveRequest(requestId: string) {
