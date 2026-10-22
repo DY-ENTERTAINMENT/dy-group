@@ -1,0 +1,141 @@
+name: Deploy Frontend Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Approved current origin/main commit SHA (40 lowercase hexadecimal characters)"
+        required: true
+        type: string
+      deployment_mode:
+        description: "dry-run validates only; production requires the protected production environment approval"
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - production
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: frontend-production
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    name: Validate approved main frontend release
+    runs-on: ubuntu-latest
+    outputs:
+      main_sha: ${{ steps.validate.outputs.main_sha }}
+
+    steps:
+      - name: Checkout origin/main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate approved main SHA and deployment prerequisites
+        id: validate
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PRODUCTION_DOMAIN: ${{ vars.VERCEL_PRODUCTION_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "expected_sha must be an exact lowercase 40-character SHA."; exit 1; }
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          checked_out_sha="$(git rev-parse HEAD)"
+
+          [[ "$checked_out_sha" == "$main_sha" ]] || { echo "Checkout is not the current origin/main HEAD."; exit 1; }
+          [[ "$EXPECTED_SHA" == "$main_sha" ]] || { echo "expected_sha does not match the current origin/main HEAD."; exit 1; }
+          [[ -f vercel.json ]] || { echo "Missing committed Vercel configuration."; exit 1; }
+
+          missing=()
+          [[ -n "$VERCEL_TOKEN" ]] || missing+=(VERCEL_TOKEN)
+          [[ -n "$VERCEL_ORG_ID" ]] || missing+=(VERCEL_ORG_ID)
+          [[ -n "$VERCEL_PROJECT_ID" ]] || missing+=(VERCEL_PROJECT_ID)
+          [[ -n "$VERCEL_PRODUCTION_DOMAIN" ]] || missing+=(VERCEL_PRODUCTION_DOMAIN)
+          [[ ${#missing[@]} -eq 0 ]] || { printf 'Missing required deployment configuration: %s\n' "${missing[*]}"; exit 1; }
+
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "Validated the exact current origin/main commit and required configuration presence."
+          if [[ "$DEPLOYMENT_MODE" == "dry-run" ]]; then
+            echo "Dry-run complete. No Vercel command was executed."
+          fi
+
+  deploy-production:
+    name: Deploy exact main commit to Vercel Production
+    needs: validate-release
+    if: inputs.deployment_mode == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      APPROVED_SHA: ${{ needs.validate-release.outputs.main_sha }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_PRODUCTION_DOMAIN: ${{ vars.VERCEL_PRODUCTION_DOMAIN }}
+      VERCEL_GIT_COMMIT_REF: main
+      VERCEL_GIT_COMMIT_SHA: ${{ needs.validate-release.outputs.main_sha }}
+
+    steps:
+      - name: Checkout approved current main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.main_sha }}
+          fetch-depth: 0
+
+      - name: Enforce protected GitHub production environment
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          environment_json="$(curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/environments/production")"
+          jq -e '[.protection_rules[]? | select(.type == "required_reviewers")] | length > 0' <<<"$environment_json" >/dev/null \
+            || { echo "The GitHub production environment must require reviewer approval before deployment."; exit 1; }
+
+      - name: Verify existing Vercel project and approved production domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$VERCEL_TOKEN" && -n "$VERCEL_ORG_ID" && -n "$VERCEL_PROJECT_ID" && -n "$VERCEL_PRODUCTION_DOMAIN" ]] \
+            || { echo "Missing required Vercel deployment configuration."; exit 1; }
+          project_json="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID")"
+          jq -e --arg project_id "$VERCEL_PROJECT_ID" '.id == $project_id' <<<"$project_json" >/dev/null \
+            || { echo "Configured Vercel project could not be verified."; exit 1; }
+          domains_json="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/domains?teamId=$VERCEL_ORG_ID")"
+          jq -e --arg domain "$VERCEL_PRODUCTION_DOMAIN" '(.domains // []) | any(.name == $domain)' <<<"$domains_json" >/dev/null \
+            || { echo "Configured production domain is not assigned to the configured Vercel project."; exit 1; }
+
+      - name: Reconfirm checked-out SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$APPROVED_SHA" ]] || { echo "Checked-out commit differs from the approved main SHA."; exit 1; }
+
+      - name: Build and deploy only to Vercel Production
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@58.4.4 pull --yes --environment=production --token "$VERCEL_TOKEN"
+          npx --yes vercel@58.4.4 build --prod --token "$VERCEL_TOKEN"
+          npx --yes vercel@58.4.4 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
