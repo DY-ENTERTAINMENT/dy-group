@@ -36,13 +36,19 @@ export type WorkTimeAdjustmentFormValues = {
 
 export type WorkTimeAdjustmentRequestItem = WorkTimeAdjustmentRequest & {
   dates: WorkTimeAdjustmentRequestDate[];
+  currentStandardWorkTime: CurrentStandardWorkTime;
 };
 
 export type WorkTimeAdjustmentReviewStatusFilter = WorkTimeAdjustmentDetailStatus | 'all';
 
 export type WorkTimeAdjustmentReviewDecision = Extract<WorkTimeAdjustmentDetailStatus, 'approved' | 'rejected'>;
 
-export type WorkTimeAdjustmentReviewEmployee = Pick<Employee, 'id' | 'full_name' | 'employee_code'>;
+export type CurrentStandardWorkTime = Pick<Employee, 'start_work_time' | 'end_work_time'> | null;
+
+export type WorkTimeAdjustmentReviewEmployee = Pick<
+  Employee,
+  'id' | 'full_name' | 'employee_code' | 'start_work_time' | 'end_work_time'
+>;
 
 export type WorkTimeAdjustmentReviewDetail = WorkTimeAdjustmentRequestDate & {
   request: WorkTimeAdjustmentRequest | null;
@@ -100,7 +106,9 @@ export const workTimeAdjustmentService = {
       throw dateError;
     }
 
-    return attachDatesToRequests(requestList, dates ?? []);
+    const currentStandardWorkTimes = await getCurrentStandardWorkTimes(requestList.map((request) => request.employee_id));
+
+    return attachDatesToRequests(requestList, dates ?? [], currentStandardWorkTimes);
   },
 
   async listReviewDetails(status: WorkTimeAdjustmentReviewStatusFilter = 'pending') {
@@ -130,15 +138,14 @@ export const workTimeAdjustmentService = {
 
     const [requestResult, employeeResult] = await Promise.all([
       supabase.from('work_time_adjustment_requests').select('*').in('id', requestIds),
-      supabase.from('employees').select('id, full_name, employee_code').in('id', employeeIds),
+      supabase
+        .from('employees')
+        .select('id, full_name, employee_code, start_work_time, end_work_time')
+        .in('id', employeeIds),
     ]);
 
     if (requestResult.error) {
       throw requestResult.error;
-    }
-
-    if (employeeResult.error) {
-      throw employeeResult.error;
     }
 
     const requestsById = new Map((requestResult.data ?? []).map((request) => [request.id, request]));
@@ -253,6 +260,7 @@ async function ensureCanUseWorkTimeAdjustment() {
 function attachDatesToRequests(
   requests: WorkTimeAdjustmentRequest[],
   dates: WorkTimeAdjustmentRequestDate[],
+  currentStandardWorkTimes: Map<string, CurrentStandardWorkTime>,
 ): WorkTimeAdjustmentRequestItem[] {
   const datesByRequestId = new Map<string, WorkTimeAdjustmentRequestDate[]>();
 
@@ -265,7 +273,32 @@ function attachDatesToRequests(
   return requests.map((request) => ({
     ...request,
     dates: datesByRequestId.get(request.id) ?? [],
+    currentStandardWorkTime: currentStandardWorkTimes.get(request.employee_id) ?? null,
   }));
+}
+
+async function getCurrentStandardWorkTimes(employeeIds: string[]) {
+  const uniqueEmployeeIds = [...new Set(employeeIds)];
+  if (uniqueEmployeeIds.length === 0) {
+    return new Map<string, CurrentStandardWorkTime>();
+  }
+
+  const { data, error } = await supabase
+    .from('employees')
+    .select('id, start_work_time, end_work_time')
+    .in('id', uniqueEmployeeIds);
+
+  if (error) {
+    return new Map<string, CurrentStandardWorkTime>();
+  }
+
+  return new Map<string, CurrentStandardWorkTime>((data ?? []).map((employee) => [
+    employee.id,
+    {
+      start_work_time: employee.start_work_time,
+      end_work_time: employee.end_work_time,
+    },
+  ]));
 }
 
 async function getCurrentProfileId() {

@@ -220,7 +220,7 @@ export function WorkTimeAdjustmentPage() {
                 <span>
                   <strong>{formatDateRange(request.requested_start_date, request.requested_end_date)}</strong>
                   <small>
-                    原工作时间 {formatTime(request.original_start_work_time)} 至 {formatTime(request.original_end_work_time)} ·{' '}
+                    当前标准工作时间 {formatCurrentStandardWorkTime(request.currentStandardWorkTime)} ·{' '}
                     {formatRequestAdjustmentSummary(request)}
                   </small>
                   <small>申请原因：{request.reason}</small>
@@ -246,7 +246,7 @@ export function WorkTimeAdjustmentPage() {
                     <thead>
                       <tr>
                         <th>日期</th>
-                        <th>原工作时间</th>
+                        <th>当前标准工作时间</th>
                         <th>调整后工作时间</th>
                         <th>状态</th>
                         <th>审核备注</th>
@@ -263,7 +263,7 @@ export function WorkTimeAdjustmentPage() {
                           <tr key={detail.id}>
                             <td>{formatDate(detail.work_date)}</td>
                             <td>
-                              {formatTime(detail.original_start_work_time)} 至 {formatTime(detail.original_end_work_time)}
+                              {formatCurrentStandardWorkTime(request.currentStandardWorkTime)}
                             </td>
                             <td>
                               {detail.status === 'pending' ? (
@@ -553,6 +553,16 @@ function formatDateTime(value: string) {
 
 function formatTime(value: string) {
   return value.slice(0, 5);
+}
+
+function formatCurrentStandardWorkTime(
+  workTime: Pick<import('../types/database').Employee, 'start_work_time' | 'end_work_time'> | null,
+) {
+  if (!workTime?.start_work_time || !workTime.end_work_time) {
+    return '当前标准工作时间不可用';
+  }
+
+  return `${formatTime(workTime.start_work_time)} 至 ${formatTime(workTime.end_work_time)}`;
 }
 
 function getTomorrowDateKey() {
