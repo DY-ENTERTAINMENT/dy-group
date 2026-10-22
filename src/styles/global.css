@@ -12807,6 +12807,19 @@ button.leave-chip:disabled {
 .designer-request-pricing-heading h3 { margin:0; color:#2f2541; font-size:18px; }
 .designer-request-pricing-edit { min-height:34px; border:1px solid #ddd5e9; border-radius:8px; padding:0 11px; color:#9a91a9; background:#f5f2f8; font:inherit; font-size:12px; font-weight:800; cursor:not-allowed; }
 .designer-request-pricing-edit:disabled { opacity:1; }
+.designer-request-pricing-edit:not(:disabled) { border-color:#c7b4e8; color:#55339e; background:#f0ebfb; cursor:pointer; }
+.designer-request-pricing-edit:not(:disabled):hover { background:#e7def8; }
+.designer-pricing-read-error { margin:0; padding:10px 13px; border:1px solid #f4b7c1; border-radius:9px; color:#9c2941; background:#fff5f6; font-size:13px; font-weight:700; }
+.designer-pricing-modal { width:min(820px,calc(100vw - 32px)); }
+.designer-pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; align-items:start; }
+.designer-pricing-modal .designer-request-field small { color:#82778f; font-size:12px; font-weight:600; }
+@media (max-width:760px) {
+  .modal-panel.designer-pricing-modal { width:calc(100vw - 24px); height:auto; max-height:calc(100dvh - 24px); }
+  .designer-pricing-modal .modal-body { flex:0 1 auto; max-height:calc(100dvh - 252px); overflow-y:auto; overscroll-behavior:contain; }
+  .designer-pricing-modal .modal-footer { display:grid; grid-template-columns:1fr; gap:10px; margin-top:14px; padding-top:12px; }
+  .designer-pricing-modal .modal-footer .designer-request-primary,.designer-pricing-modal .modal-footer .designer-request-secondary { width:100%; min-width:0; }
+  .designer-pricing-grid { grid-template-columns:1fr; gap:14px; }
+}
 .designer-request-pricing .designer-request-guides { gap:14px; }
 .designer-request-pricing .designer-request-guide { grid-template-rows:auto minmax(18px,auto) auto; gap:9px; padding:16px; border:1px solid #e7e0f0; border-radius:13px; background:#fff; box-shadow:0 5px 14px rgba(54,36,98,.04); }
 .designer-request-pricing .designer-request-guide:first-child { padding-left:16px; border-left:1px solid #e7e0f0; }

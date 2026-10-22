@@ -153,6 +153,13 @@ const independentPermissionItems: PermissionItem[] = [
     parentKey: null,
     level: 0,
   },
+  {
+    key: 'designer-pricing:manage',
+    name: '美工收费编辑',
+    parentKey: null,
+    level: 0,
+    explicitOnly: true,
+  },
 ];
 const explicitHrPermissionItems: PermissionItem[] = [
   {

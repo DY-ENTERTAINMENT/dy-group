@@ -5,6 +5,8 @@ import { designerRequestService, formatCreatorLabel, validateReferenceFile, type
 import { canRemoveDesignerReference, designerReferenceUploadsEnabled } from '../services/designer-reference-feature';
 import { ReferenceStorageCleanupError } from '../services/designer-reference-upload';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
+import { designerPricingService, type DesignerReferencePricing, type UpdateDesignerReferencePricing } from '../services/designer-pricing.service';
 
 type Tab = 'design' | 'setup';
 type DesignerMode = 'intake' | 'progress';
@@ -37,6 +39,7 @@ function displayStageStatus(stage: DesignerStage): string {
 }
 
 export function AgentDesignerRequests() {
+  const permissions = usePermissions();
   const [items, setItems] = useState<DesignerRequestV2[]>([]);
   const [creators, setCreators] = useState<DesignerRequestCreator[]>([]);
   const [tab, setTab] = useState<Tab>('design');
@@ -49,14 +52,20 @@ export function AgentDesignerRequests() {
   const [creatorsLoading, setCreatorsLoading] = useState(true);
   const [filters, setFilters] = useState<AgentFilters>(emptyAgentFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [pricing, setPricing] = useState<DesignerReferencePricing | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(true);
+  const [pricingError, setPricingError] = useState('');
+  const [pricingEditorOpen, setPricingEditorOpen] = useState(false);
   const load = useCallback(async () => {
-    setRequestsLoading(true); setCreatorsLoading(true); setRequestsError(''); setCreatorsError('');
+    setRequestsLoading(true); setCreatorsLoading(true); setPricingLoading(true); setRequestsError(''); setCreatorsError(''); setPricingError('');
     await Promise.all([
       designerRequestService.listAgentRequests().then(setItems).catch((reason: unknown) => setRequestsError(errorMessage(reason))).finally(() => setRequestsLoading(false)),
       designerRequestService.listEligibleCreators().then(setCreators).catch((reason: unknown) => setCreatorsError(errorMessage(reason))).finally(() => setCreatorsLoading(false)),
+      designerPricingService.getReferencePricing().then(setPricing).catch((reason: unknown) => { setPricing(null); setPricingError(`参考价格读取失败：${errorMessage(reason)}`); }).finally(() => setPricingLoading(false)),
     ]);
   }, []);
   useEffect(() => { void load(); }, [load]);
+  const canEditPricing = permissions.isSuperAdmin || permissions.hasPermission('designer-pricing:manage', 'use');
   const agentBase = useMemo(() => items
     .filter((request) => (tab === 'setup' ? request.work_mode === 'setup_only' : request.work_mode !== 'setup_only'))
     .filter((request) => matchesKeyword(request, filters.keyword))
@@ -75,12 +84,13 @@ export function AgentDesignerRequests() {
       <button className="designer-request-primary" type="button" onClick={() => setForm({ ...emptyForm, workMode: tab === 'setup' ? 'setup_only' : 'design_only' })}><Plus size={17} />新增申请</button>
     </header>
     <section className="designer-request-pricing" aria-labelledby="designer-request-pricing-title">
-      <div className="designer-request-pricing-heading"><div><span>服务价格与申请规则</span><h3 id="designer-request-pricing-title">制作服务</h3></div><button className="designer-request-pricing-edit" type="button" disabled title="价格编辑权限与保存功能尚未开放">编辑价格</button></div>
+      <div className="designer-request-pricing-heading"><div><span>服务价格与申请规则</span><h3 id="designer-request-pricing-title">制作服务</h3></div>{canEditPricing ? <button className="designer-request-pricing-edit" type="button" onClick={() => setPricingEditorOpen(true)} disabled={!pricing || pricingLoading}>编辑价格</button> : null}</div>
       <div className="designer-request-guides" aria-label="美工申请说明与价格规则">
-        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>Banner 制作</strong><b>RM30 <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>默认尺寸：100cm × 30cm</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-time"><span>时间</span><small>制作周期：10–15天，请提前安排</small></div><div className="designer-request-guide-rule designer-request-guide-online"><span>线上主播</span><small>月流水每达 <em>200K</em>，可申请 <em>1次 Banner 制作</em></small></div><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
-        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>立牌制作</strong><b>RM50 <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>制作周期：10–15天，请提前安排</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
-        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>活动设计与布置</strong><b>RM50 <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>含基础直播间背景布置及道具搭配</span><span>额外需求将另行评估与报价</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-time"><span>时间</span><small>所有活动海报及布置需求须至少提前10天申请</small></div><div className="designer-request-guide-rule designer-request-guide-rule-detail"><small>逾期申请无法保证按时完成</small></div><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
+        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>Banner 制作</strong><b>{pricingLabel(pricing?.banner_production_price, pricingLoading, pricingError)} <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>默认尺寸：100cm × 30cm</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-time"><span>时间</span><small>制作周期：10–15天，请提前安排</small></div><div className="designer-request-guide-rule designer-request-guide-online"><span>线上主播</span><small>月流水每达 <em>200K</em>，可申请 <em>1次 Banner 制作</em></small></div><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
+        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>立牌制作</strong><b>{pricingLabel(pricing?.standee_production_price, pricingLoading, pricingError)} <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>制作周期：10–15天，请提前安排</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
+        <section className="designer-request-guide"><div className="designer-request-guide-heading"><strong>活动设计与布置</strong><b>{pricingLabel(pricing?.event_design_setup_price, pricingLoading, pricingError)} <small>/ 次</small></b></div><div className="designer-request-guide-details"><span>含基础直播间背景布置及道具搭配</span><span>额外需求将另行评估与报价</span></div><div className="designer-request-guide-rules"><div className="designer-request-guide-rule designer-request-guide-time"><span>时间</span><small>所有活动海报及布置需求须至少提前10天申请</small></div><div className="designer-request-guide-rule designer-request-guide-rule-detail"><small>逾期申请无法保证按时完成</small></div><div className="designer-request-guide-rule designer-request-guide-offline"><span>线下主播</span><small>可使用直播间累积金额抵扣</small></div></div></section>
       </div>
+      {pricingError ? <p className="designer-pricing-read-error">{pricingError}</p> : null}
     </section>
     <div className="designer-request-workbench">
       <div className="designer-request-workbench-header designer-request-agent-workbench-header">
@@ -92,8 +102,41 @@ export function AgentDesignerRequests() {
       <RequestFilters className={filtersOpen ? 'is-open' : ''}><label className="designer-request-search"><Search size={16} /><input type="search" placeholder="搜索主播名 / TikTok ID / 平台账号" value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} /></label><SelectFilter label="任务类型" value={filters.taskType} onChange={(taskType) => setFilters({ ...filters, taskType })} options={[['daily', '日常'], ['activity', '活动']]} /><SelectFilter label="工作方式" value={filters.workMode} onChange={(workMode) => setFilters({ ...filters, workMode })} options={[['design_only', '纯设计'], ['design_production', '设计 + 制作'], ['setup_only', '活动布置']]} /><SelectFilter label="状态" value={filters.status} onChange={(status) => setFilters({ ...filters, status: status as AgentStatusFilter })} options={[['all', '全部'], ['processing', '处理中'], ['awaiting', '待我确认'], ['completed', '已完成'], ['cancelled', '已取消']]} /><label className="designer-request-filter-field"><span>申请日期</span><input type="date" value={filters.applicationDate} onChange={(event) => setFilters({ ...filters, applicationDate: event.target.value })} /></label><button className="designer-request-reset" type="button" onClick={() => setFilters(emptyAgentFilters)}>重置</button></RequestFilters>
       {requestsError ? <p className="designer-request-read-error">申请列表读取失败：{requestsError}</p> : null}{actionError ? <p className="designer-request-read-error">操作失败：{actionError}</p> : null}{requestsLoading ? <div className="designer-request-empty">正在读取申请…</div> : <RequestTable items={visible} onDetail={setDetail} onEdit={edit} onCancel={setCancelling} agent hideDesignType={tab === 'setup'} />}
     </div>
-    {form ? <RequestFormModal form={form} creators={creators} creatorsLoading={creatorsLoading} creatorsError={creatorsError} editing={editing} onChange={setForm} onClose={() => { setForm(null); setEditing(null); }} onSubmit={submit} /> : null}{detail ? <RequestDetail request={detail} applicant onClose={() => setDetail(null)} onReview={review} /> : null}{cancelling ? <CancelModal onClose={() => setCancelling(null)} onConfirm={cancel} /> : null}
+    {pricingEditorOpen && pricing ? <DesignerPricingModal pricing={pricing} onClose={() => setPricingEditorOpen(false)} onSaved={async (next) => { setPricing(next); setPricingEditorOpen(false); }} /> : null}{form ? <RequestFormModal form={form} creators={creators} creatorsLoading={creatorsLoading} creatorsError={creatorsError} editing={editing} onChange={setForm} onClose={() => { setForm(null); setEditing(null); }} onSubmit={submit} /> : null}{detail ? <RequestDetail request={detail} applicant onClose={() => setDetail(null)} onReview={review} /> : null}{cancelling ? <CancelModal onClose={() => setCancelling(null)} onConfirm={cancel} /> : null}
   </section>;
+}
+
+function pricingLabel(value: number | undefined, loading: boolean, error: string) {
+  if (loading) return '价格读取中…';
+  if (error || value === undefined) return '价格不可用';
+  return `RM${value.toFixed(2)}`;
+}
+
+function DesignerPricingModal({ pricing, onClose, onSaved }: { pricing: DesignerReferencePricing; onClose: () => void; onSaved: (pricing: DesignerReferencePricing) => Promise<void> }) {
+  const [draft, setDraft] = useState<UpdateDesignerReferencePricing>({ banner_production_price: pricing.banner_production_price, standee_production_price: pricing.standee_production_price, event_design_setup_price: pricing.event_design_setup_price });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fields: Array<[keyof UpdateDesignerReferencePricing, string]> = [['banner_production_price', 'Banner 制作'], ['standee_production_price', '立牌制作'], ['event_design_setup_price', '活动设计与布置']];
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    const values = Object.values(draft);
+    if (values.some((value) => !Number.isFinite(value) || value < 0 || Math.round(value * 100) !== value * 100)) {
+      setError('请输入非负金额，且最多保留两位小数。');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      await onSaved(await designerPricingService.updateReferencePricing(draft));
+    } catch (reason) {
+      setError(`保存参考价格失败：${errorMessage(reason)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <SystemModal title="编辑美工参考收费" subtitle="仅更新页面参考价格，不影响现有申请、审批或计算" className="designer-pricing-modal" wide={false} onClose={saving ? () => undefined : onClose} footer={<><button className="designer-request-secondary" type="button" onClick={onClose} disabled={saving}>取消</button><button className="designer-request-primary" form="designer-pricing-form" type="submit" disabled={saving}>{saving ? '保存中…' : '保存全部价格'}</button></>}><form id="designer-pricing-form" className="designer-request-form" onSubmit={submit}><fieldset className="designer-request-section"><legend>参考价格</legend><div className="designer-pricing-grid">{fields.map(([key, label]) => <label className="designer-request-field" key={key}><span>{label}</span><input type="number" min="0" step="0.01" inputMode="decimal" value={Number.isFinite(draft[key]) ? draft[key] : ''} onChange={(event) => setDraft({ ...draft, [key]: event.target.value === '' ? Number.NaN : Number(event.target.value) })} disabled={saving} required /><small>RM · 最多两位小数</small></label>)}</div></fieldset>{error ? <p className="form-alert">{error}</p> : null}</form></SystemModal>;
 }
 
 export function DesignerWorkflow({ mode }: { mode: DesignerMode }) {
