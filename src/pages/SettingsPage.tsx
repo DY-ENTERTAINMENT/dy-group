@@ -192,6 +192,13 @@ const agentSensitivePermissionItems: PermissionItem[] = [
   { key: 'agent-creator-revenue-settings', name: '修改主播流水设置', parentKey: 'agent', level: 1 },
   { key: 'agent-creator-platform-account-link', name: '关联现有平台账号', parentKey: 'agent', level: 1 },
 ];
+// These are server-enforced claim qualifications, not page-access permissions.
+// Keep them explicit so selecting the 美工 parent never silently grants a stage.
+const designerStageEligibilityPermissionItems: PermissionItem[] = [
+  { key: 'designer-design-eligible', name: '设计阶段接单资格', parentKey: 'designer', level: 1, explicitOnly: true },
+  { key: 'designer-production-eligible', name: '制作阶段接单资格', parentKey: 'designer', level: 1, explicitOnly: true },
+  { key: 'designer-setup-eligible', name: '布置阶段接单资格', parentKey: 'designer', level: 1, explicitOnly: true },
+];
 const agentSensitivePermissionKeys = new Set(agentSensitivePermissionItems.map((item) => item.key));
 const scoutAssignmentEligiblePermissionKey = 'scout-assignment-eligible';
 
@@ -1425,7 +1432,7 @@ function buildPermissionItems(): PermissionItem[] {
     groups.set(groupKey, currentItems);
   });
 
-  [...explicitHrPermissionItems, ...explicitManagementPermissionItems].forEach((item) => {
+  [...explicitHrPermissionItems, ...explicitManagementPermissionItems, ...designerStageEligibilityPermissionItems].forEach((item) => {
     const currentItems = groups.get(item.parentKey ?? '') ?? [];
     if (!currentItems.some((permissionItem) => permissionItem.key === item.key)) {
       currentItems.push({ ...item });
