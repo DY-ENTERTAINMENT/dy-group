@@ -15807,9 +15807,27 @@ button.leave-chip:disabled {
 
 /* Detail modal reference images stay as compact thumbnails; intake and PDF cards keep their own layouts. */
 .designer-detail-modal .designer-workspace-references .designer-detail-gallery { grid-template-columns:repeat(auto-fill,160px); justify-content:start; }
-.designer-detail-modal .designer-workspace-references .designer-detail-image { width:100%; height:auto; max-width:100%; aspect-ratio:4 / 3; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file { width:160px; max-width:160px; box-sizing:border-box; }
+.designer-detail-modal .designer-workspace-references .designer-detail-image { width:100%; height:120px; max-width:100%; aspect-ratio:4 / 3; }
 .designer-detail-modal .designer-workspace-references .designer-detail-image img { min-width:0; max-width:100%; object-fit:contain; }
-@media (max-width:760px) { .designer-detail-modal .designer-workspace-references .designer-detail-gallery { grid-template-columns:repeat(2,minmax(0,160px)); } }
+@media (max-width:760px) { .designer-detail-modal .designer-workspace-references .designer-detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }.designer-detail-modal .designer-workspace-references .designer-detail-file { width:auto; max-width:none; } }
+
+/* Reference previews are portaled so they cannot enter the detail modal's scroll flow. */
+.designer-detail-preview { position:fixed; z-index:100; inset:0; display:grid; place-items:center; padding:clamp(16px,5vw,48px); background:rgba(19,12,35,.72); }
+.designer-detail-preview > section { position:relative; display:grid; place-items:center; width:min(90vw,1200px); height:min(85vh,900px); border-radius:12px; background:#171025; box-shadow:0 24px 72px rgba(0,0,0,.48); }
+.designer-detail-preview > section > button { position:absolute; z-index:1; top:10px; right:10px; display:grid; place-items:center; width:38px; height:38px; border:1px solid rgba(255,255,255,.35); border-radius:50%; color:#fff; background:rgba(20,13,34,.78); cursor:pointer; }
+.designer-detail-preview img { display:block; width:100%; height:100%; object-fit:contain; }
+.designer-detail-preview iframe { width:100%; height:100%; border:0; border-radius:12px; background:#fff; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file { display:grid; grid-template-rows:120px auto auto auto; align-content:start; min-width:0; gap:7px; overflow:hidden; }
+.designer-detail-modal .designer-workspace-references .designer-detail-image,.designer-detail-modal .designer-workspace-references .designer-detail-pdf { position:static; grid-row:1; display:grid; place-items:center; width:100%; height:120px; min-height:120px; overflow:hidden; padding:0; }
+.designer-detail-modal .designer-workspace-references .designer-detail-image img { position:static; display:block; width:100%; height:100%; max-width:100%; max-height:100%; object-fit:contain; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file b { position:static; grid-row:2; display:block; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file small { position:static; grid-row:3; display:block; min-height:18px; margin:0; color:#706883; line-height:1.35; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file > div { grid-row:4; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file > div > button,.designer-detail-modal .designer-workspace-references .designer-detail-file > div > a { display:grid; place-items:center; min-width:0; min-height:32px; box-sizing:border-box; border:1px solid #cdbdf4; border-radius:7px; padding:5px; color:#5b34c5; font-size:12px; font-weight:800; text-align:center; background:#fff; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file > div > button:hover,.designer-detail-modal .designer-workspace-references .designer-detail-file > div > a:hover { border-color:#6d45e8; color:#fff; background:#6d45e8; }
+.designer-detail-modal .designer-workspace-references .designer-detail-file > div > button:last-child:nth-child(3) { grid-column:1 / -1; }
+@media (max-width:760px) { .designer-detail-preview { padding:12px; }.designer-detail-preview > section { width:90vw; height:85vh; }.designer-detail-modal .designer-workspace-references .designer-detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }.designer-detail-modal .designer-workspace-references .designer-detail-file > div { grid-template-columns:1fr; }.designer-detail-modal .designer-workspace-references .designer-detail-file > div > button:last-child:nth-child(3) { grid-column:auto; } }
 
 /* Intake V2: scoped to the published intake route; progress and agent pages remain unchanged. */
 .designer-intake-page.designer-intake-v2 .designer-intake-section .designer-detail-gallery { grid-template-columns:repeat(auto-fill,160px); justify-content:start; }
