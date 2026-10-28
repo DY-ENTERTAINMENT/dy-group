@@ -1763,6 +1763,31 @@ function CreatorStatsPanel({
   onView: (group: CreatorProfileGroup) => void;
 }) {
   const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
+  const managerScopeGroups = useMemo(
+    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId), {
+      month,
+      searchQuery: creatorSearchQuery,
+      platform: platformFilter,
+      regionId: regionFilter,
+      scoutId: scoutFilter,
+      managerId: '',
+      creatorType: creatorTypeFilter,
+      registrationType: creatorRegistrationTypeFilter,
+      status: creatorStatusFilter,
+      operationStatus: operationStatusFilter,
+      revenueCycle: revenueCycleFilter,
+      priority: priorityFilter,
+    }),
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
+  );
+  const managerEmployeeIds = useMemo(
+    () => new Set(managerScopeGroups.flatMap((group) => group.profiles.map((creator) => creator.manager_employee_id).filter((managerEmployeeId): managerEmployeeId is string => Boolean(managerEmployeeId)))),
+    [managerScopeGroups],
+  );
+  const managerEmployees = useMemo(
+    () => options.employees.filter((employee) => managerEmployeeIds.has(employee.id)),
+    [managerEmployeeIds, options.employees],
+  );
   const creatorGroups = useMemo(
     () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId), {
       month,
@@ -1798,11 +1823,16 @@ function CreatorStatsPanel({
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
+  useEffect(() => {
+    if (managerFilter && !managerEmployeeIds.has(managerFilter)) onManagerFilter('');
+  }, [managerEmployeeIds, managerFilter, onManagerFilter]);
+
   return (
     <div className="staff-list-panel creator-stats-panel">
       <CreatorSummaryCards summary={summary} isManagement={isManagement} />
       <CreatorFilters
         options={options}
+        managerEmployees={managerEmployees}
         isManagement={isManagement}
         month={month}
         searchQuery={creatorSearchQuery}
@@ -1897,6 +1927,7 @@ function CreatorSummaryCard({ title, value, icon, logoUrl }: { title: string; va
 
 function CreatorFilters(props: {
   options: ScoutOptions;
+  managerEmployees: ScoutOptions['employees'];
   isManagement: boolean;
   month: string;
   searchQuery: string;
@@ -1958,7 +1989,7 @@ function CreatorFilters(props: {
       {props.isManagement ? (
         <EmployeeSelect label="星探" value={props.scoutFilter} employees={props.options.employees} onChange={props.onScoutFilter} includeAll />
       ) : null}
-      <EmployeeSelect label="经纪人" value={props.managerFilter} employees={props.options.employees} onChange={props.onManagerFilter} includeAll />
+      <EmployeeSelect label="经纪人" value={props.managerFilter} employees={props.managerEmployees} onChange={props.onManagerFilter} includeAll />
       <SelectField label="主播形式" value={props.creatorTypeFilter} onChange={props.onCreatorTypeFilter}>
         <option value="">全部</option>
         {creatorTypes.map((type) => (
