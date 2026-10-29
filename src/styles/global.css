@@ -15854,5 +15854,11 @@ button.leave-chip:disabled {
 @media (max-width:760px) { .designer-progress-v2-identification { display:grid; gap:4px; }.designer-progress-v2 .designer-progress-v2-requirements dl > div { grid-template-columns:1fr; gap:3px; }.designer-progress-v2-detail section .designer-detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }.designer-progress-v2-detail section .designer-detail-file { width:auto; max-width:none; }.designer-progress-v2-detail section .designer-detail-image,.designer-progress-v2-detail section .designer-detail-pdf { height:auto; min-height:0; aspect-ratio:4 / 3; }.designer-progress-v2-detail section .designer-detail-file > div { grid-template-columns:1fr; } }
 
 @media (max-width:760px) { .designer-progress-v2-hero { margin-bottom:10px; padding:18px 16px; }.designer-progress-v2-hero h2 { font-size:24px; }.designer-progress-v2-hero p { margin:3px 0 0; line-height:1.4; }.designer-progress-v2-hero .designer-request-refresh { min-height:34px; padding:7px 10px; } }
+
+/* Designer progress V2 header: compact decorative hero and workspace controls. */
+.designer-progress-v2-hero { min-height:20px; padding:10px 16px; }
+.designer-progress-v2-switch-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; }
+.designer-progress-v2-switch-row .designer-progress-v2-switch { margin-bottom:0; }
+@media (max-width:760px) { .designer-progress-v2-hero { min-height:16px; margin-bottom:10px; padding:8px 12px; }.designer-progress-v2-switch-row { flex-wrap:wrap; margin-bottom:10px; }.designer-progress-v2-switch { max-width:100%; }.designer-progress-v2-switch-row .designer-request-refresh { margin-left:auto; min-height:34px; padding:7px 10px; } }
 .designer-progress-v2-actions { display:flex; justify-content:flex-end; padding:0; border:0 !important; background:transparent !important; }.designer-progress-v2-actions .designer-request-primary { min-width:154px; }.designer-progress-v2-action-note { margin:0; color:#80600d; font-size:13px; font-weight:800; text-align:right; }
 @media (max-width:760px) { .designer-progress-v2-actions .designer-request-primary { width:100%; min-height:44px; }.designer-progress-v2-action-note { text-align:left; } }
