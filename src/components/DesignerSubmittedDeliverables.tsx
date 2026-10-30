@@ -1,0 +1,16 @@
+import { Download, Eye, FileText } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { designerStageDeliverablesEnabled } from '../services/designer-stage-deliverables.feature';
+import { designerStageDeliverablesService, type DesignerStageDeliverable } from '../services/designer-stage-deliverables';
+
+type Props = { requestId: string; stageId: string | null | undefined; stageType: string | null | undefined; requestItemId: string | null | undefined; requestItems: unknown[] | null | undefined; requestItemsLoaded: boolean };
+
+export function DesignerSubmittedDeliverables({ requestId, stageId, stageType, requestItemId, requestItems, requestItemsLoaded }: Props) {
+  const [files, setFiles] = useState<DesignerStageDeliverable[]>([]); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const alive = useRef(0);
+  const eligible = designerStageDeliverablesEnabled && Boolean(stageId) && stageType === 'design' && requestItemId === null && requestItemsLoaded && Array.isArray(requestItems) && requestItems.length === 0;
+  useEffect(() => { const token = ++alive.current; setFiles([]); setError(''); if (!eligible || !stageId) return () => { alive.current++; }; setLoading(true); void designerStageDeliverablesService.list(stageId).then((rows) => { if (alive.current === token) setFiles(rows.filter((row) => row.submission_id !== null)); }).catch((reason) => { if (alive.current === token) setError(reason instanceof Error ? reason.message : '设计成果读取失败。'); }).finally(() => { if (alive.current === token) setLoading(false); }); return () => { alive.current++; }; }, [requestId, stageId, eligible]);
+  if (!eligible) return null;
+  const groups = new Map<number, DesignerStageDeliverable[]>(); for (const file of files) { if (file.version_number === null) continue; groups.set(file.version_number, [...(groups.get(file.version_number) ?? []), file]); }
+  const signed = async (file: DesignerStageDeliverable, download = false) => { try { const url = await designerStageDeliverablesService.preview(file.storage_path, download ? file.original_name : undefined); window.open(url, '_blank', 'noopener,noreferrer'); } catch (reason) { setError(reason instanceof Error ? reason.message : '预览链接获取失败。'); } };
+  return <section className="designer-workspace-results"><h4>设计成果</h4>{loading ? <p>正在读取已提交成果…</p> : groups.size ? [...groups.entries()].sort(([a], [b]) => b - a).map(([version, entries], index) => <div className="designer-deliverable-version" key={version}><header><b>第 {version} 版 · {index === 0 ? '当前版本' : '历史版本'}</b><small>{entries[0]?.submitted_at || entries[0]?.created_at}</small></header><div className="designer-detail-gallery">{entries.map((file) => <article className="designer-deliverable-card" key={file.id}><div className="designer-deliverable-thumb">{file.content_type === 'application/pdf' ? <FileText /> : <span>图片</span>}</div><b title={file.original_name}>{file.original_name}</b><small>{file.content_type} · {(file.size_bytes / 1024 / 1024).toFixed(2)} MB</small><div><button type="button" onClick={() => void signed(file)}><Eye size={13} />查看</button><button type="button" onClick={() => void signed(file, true)}><Download size={13} />下载</button></div></article>)}</div></div>) : <p>暂无已提交成果。</p>}{error ? <p className="designer-request-read-error">{error}</p> : null}</section>;
+}
