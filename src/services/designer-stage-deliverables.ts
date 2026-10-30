@@ -1,5 +1,18 @@
-import { supabase } from '../lib/supabase';
+import { supabase as supabaseClient } from '../lib/supabase';
 import { designerStageDeliverablesEnabled } from './designer-stage-deliverables.feature';
+type UploadSession={upload_task_id:string;storage_path:string};
+type DeliverablesRpc={
+  create_designer_stage_deliverable_upload_session:{Args:{p_upload_task_id:string;p_request_id:string;p_stage_id:string;p_storage_path:string;p_original_name:string;p_content_type:DeliverableContentType;p_size_bytes:number;p_file_fingerprint:string;p_last_modified:number};Returns:UploadSession};
+  register_designer_stage_deliverable_draft:{Args:{p_upload_task_id:string};Returns:DesignerStageDeliverable};
+  list_designer_stage_deliverables:{Args:{p_stage_id:string};Returns:DesignerStageDeliverable[]};
+  request_designer_stage_deliverable_upload_session_cleanup:{Args:{p_upload_task_id:string;p_error:string|null};Returns:string};
+  complete_designer_stage_deliverable_upload_session_cleanup:{Args:{p_upload_task_id:string;p_error:string|null};Returns:null};
+  request_designer_stage_deliverable_draft_delete:{Args:{p_deliverable_id:string};Returns:string};
+  finalize_designer_stage_deliverable_draft_delete:{Args:{p_deliverable_id:string};Returns:null};
+  submit_designer_stage_deliverables:{Args:{p_stage_id:string};Returns:null};
+};
+type DeliverablesRpcClient={rpc<Name extends keyof DeliverablesRpc>(name:Name,args:DeliverablesRpc[Name]['Args']):Promise<{data:DeliverablesRpc[Name]['Returns']|null;error:{message:string}|null}>};
+const supabase=supabaseClient as typeof supabaseClient & DeliverablesRpcClient;
 export type DeliverableContentType='image/jpeg'|'image/png'|'image/webp'|'application/pdf';
 export type DesignerStageDeliverable={id:string;request_id:string;stage_id:string;request_item_id:string|null;storage_path:string;original_name:string;content_type:DeliverableContentType;size_bytes:number;submission_id:string|null;version_number:number|null;created_at:string;submitted_at:string|null};
 const bucket='designer-stage-deliverables'; const submittingStageIds=new Set<string>(); const ext:Record<DeliverableContentType,string>={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'};
