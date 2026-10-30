@@ -166,7 +166,7 @@ export const leaveService = {
     }
 
     const publicHolidays = await listPublicHolidaysForRange(values.start_date, values.end_date, employee?.region_id ?? null);
-    const effectiveMakeupDates = values.leave_type === 'annual' || values.leave_type === 'unpaid'
+    const effectiveMakeupDates = values.leave_type === 'annual' || values.leave_type === 'medical' || values.leave_type === 'unpaid'
       ? new Set((await getMyEffectiveReplacementMakeupDates(profileId)).values())
       : new Set<string>();
     const workingDays = countWorkingLeaveDays(
@@ -793,7 +793,7 @@ function getWorkingLeaveDates(
 
   while (current <= end) {
     const dateKey = toDateKeyFromDate(current);
-    if ((!isWeekend(dateKey) || (isSaturday(dateKey) && effectiveMakeupDates.has(dateKey))) && !holidayDates.has(dateKey)) {
+    if ((!isWeekend(dateKey) || effectiveMakeupDates.has(dateKey)) && !holidayDates.has(dateKey)) {
       workingDates.push(dateKey);
     }
     current.setDate(current.getDate() + 1);
