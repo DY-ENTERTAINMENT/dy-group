@@ -259,6 +259,10 @@ export const menuItems: MenuItem[] = [
     group: '管理',
   },
   {
+    key: 'management-designer', label: '美工管理', path: '/management/designer', icon: Palette,
+    section: '管理', group: '管理', permissionKey: 'management-designer',
+  },
+  {
     key: 'settings',
     label: '系统设置',
     path: '/settings',

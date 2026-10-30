@@ -27,6 +27,7 @@ import { AgentPage } from '../pages/AgentPage';
 import { CreatorActivityCalendarPage } from '../pages/CreatorActivityCalendarPage';
 import { DesignerPage } from '../pages/DesignerPage';
 import { OfflineLiveRoomManagementPage } from '../pages/OfflineLiveRoomManagementPage';
+import { DesignerManagementPage } from '../pages/DesignerManagementPage';
 import { CreatorMonthlyKpiPage } from '../pages/CreatorMonthlyKpiPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { getMenuPath } from './menu';
@@ -251,6 +252,10 @@ export const router = createBrowserRouter([
                 <ScoutPage mode="management-recruiting" />
               </RequirePermission>
             ),
+          },
+          {
+            path: getMenuPath('management-designer'),
+            element: <RequirePermission permissionKey="management-designer"><DesignerManagementPage /></RequirePermission>,
           },
           {
             path: 'attendance',
