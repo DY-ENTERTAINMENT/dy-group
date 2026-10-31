@@ -1415,6 +1415,10 @@ export type Database = {
       };
       cancel_outgoing_request: { Args: { p_request_id: string }; Returns: undefined };
       review_outgoing_request: { Args: { p_request_id: string; p_decision: 'approved' | 'rejected'; p_note?: string | null }; Returns: undefined };
+      list_management_designer_requests: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
       list_my_outgoing_requests: { Args: Record<string, never>; Returns: OutgoingRequest[] };
       list_my_outgoing_request_review_history: { Args: { p_request_id: string }; Returns: OutgoingRequestReviewHistory[] };
       create_outgoing_request_evidence: { Args: { p_request_id: string; p_photo_path: string }; Returns: OutgoingRequestEvidence };
