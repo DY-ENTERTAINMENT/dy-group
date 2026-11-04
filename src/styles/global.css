@@ -15888,3 +15888,15 @@ button.leave-chip:disabled {
 .designer-management-detail-content .designer-management-attachments{grid-template-columns:repeat(auto-fill,150px);justify-content:start}.designer-management-detail-content .designer-management-attachment{width:150px;box-sizing:border-box;padding:7px}.designer-management-detail-content .designer-management-attachment-thumbnail,.designer-management-detail-content .designer-management-attachment-pdf{width:120px;height:90px;aspect-ratio:auto;justify-self:center}.designer-management-detail-content .designer-management-attachment-info>span{gap:4px}.designer-management-detail-content .designer-management-attachment-info>span button{padding:5px 3px;font-size:11px}@media(max-width:390px){.designer-management-detail-content .designer-management-attachments{grid-template-columns:repeat(auto-fill,150px);justify-content:start}.designer-management-detail-content .designer-management-attachment{width:150px}}
 /* IMG-2J1: paired filter actions remain compact and equal at every width. */
 .designer-management-filters .designer-management-filter-actions{display:inline-flex;gap:6px;flex:none}.designer-management-filters .designer-management-filter-actions button{display:inline-flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box;width:72px;min-width:72px;height:34px;min-height:34px;padding:0;border-radius:8px;font-size:13px;line-height:1}.designer-management-filters .designer-management-filter-actions .designer-management-action{min-height:34px;padding:0}.designer-management-filters .designer-management-filter-actions svg{width:14px;height:14px}@media(max-width:760px){.designer-management-filters .designer-management-filter-actions{flex:0 0 auto}.designer-management-filters .designer-management-filter-actions button{flex:0 0 72px}}
+
+/* Searchable creator selector in the design request form. */
+.designer-creator-field,.designer-creator-combobox { min-width:0; }
+.designer-creator-combobox { position:relative; }
+.designer-creator-popup { position:absolute; z-index:5; top:calc(100% + 4px); left:0; right:0; min-width:0; border:1px solid #dcd5e8; border-radius:8px; background:#fff; box-shadow:0 8px 20px rgba(48,43,60,.14); }
+.designer-creator-options { max-height:300px; overflow-y:auto; overscroll-behavior:contain; }
+.designer-creator-option { display:grid; gap:3px; min-width:0; padding:9px 10px; cursor:pointer; font-size:13px; }
+.designer-creator-option strong,.designer-creator-option span { overflow-wrap:anywhere; }
+.designer-creator-option span { color:#746d82; font-size:12px; font-weight:400; }
+.designer-creator-option:hover,.designer-creator-option.is-active { background:#f2eef9; }
+.designer-creator-empty { padding:12px 10px; color:#746d82; font-weight:400; }
+.designer-creator-empty button { border:0; padding:4px; color:#55339e; background:transparent; cursor:pointer; font:inherit; text-decoration:underline; }
