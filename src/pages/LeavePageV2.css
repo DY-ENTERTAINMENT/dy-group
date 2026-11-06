@@ -1,0 +1,136 @@
+/* Employee leave page only. */
+.leave-page { gap: 20px; max-width: 1280px; }
+.leave-page .page-heading h2 { margin: 0; color: #15213b; font-size: 26px; }
+.leave-page-subtitle { margin: 5px 0 0; color: #68778e; font-size: 14px; }
+.leave-page .leave-apply-button { min-height: 46px; padding: 0 20px; border-radius: 10px; background: #87239b; box-shadow: 0 5px 14px #83249326; }
+.leave-page > .leave-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.leave-page .leave-balance-card { display: flex; align-items: flex-start; justify-items: unset; gap: 16px; min-width: 0; min-height: 140px; padding: 20px; border-radius: 12px; text-align: left; }
+.leave-page .leave-balance-annual { border-color: #d2e6ff; background: #edf5ff; }
+.leave-page .leave-balance-medical { border-color: #d2efe1; background: #edf9f3; }
+.leave-page .leave-balance-icon { display: grid; flex: 0 0 48px; height: 48px; place-items: center; border-radius: 12px; background: #d7eaff; }
+.leave-page .leave-balance-icon svg { color: #1667c9; }
+.leave-page .leave-balance-medical .leave-balance-icon { background: #d7f3e5; }
+.leave-page .leave-balance-medical .leave-balance-icon svg { color: #009b5d; }
+.leave-page .leave-balance-content { display: grid; gap: 8px; min-width: 0; }
+.leave-page .leave-balance-content > span { color: #1a2842; font-size: 15px; }
+.leave-page .leave-balance-content strong { color: #14213b; font-size: 30px; line-height: 1; }
+.leave-page .leave-balance-content strong small { font-size: 14px; }
+.leave-page .leave-balance-content > small { color: #60718a; font-size: 12px; }
+.leave-page > .staff-list-panel { overflow: hidden; border-radius: 12px; box-shadow: 0 4px 18px #24385a0b; }
+.leave-page .leave-request-header-title h3 { margin: 0 0 5px; font-size: 20px; }
+.leave-page .leave-request-header-title > span { color: #718096; font-size: 13px; }
+.leave-page .leave-request-desktop-table th { background: #f3f6fa; }
+.leave-page .leave-request-desktop-table td { vertical-align: middle; }
+.leave-page .leave-record-type { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.leave-page .leave-record-type-annual { color: #1264bd; background: #e5f1ff; }
+.leave-page .leave-record-type-medical { color: #008b54; background: #e0f6e9; }
+.leave-page .leave-record-type-unpaid { color: #b86000; background: #fff0de; }
+.leave-page .leave-record-type-replacement { color: #7041ba; background: #f0eaff; }
+.leave-page .leave-record-mobile-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 4px; }
+@media (max-width: 767.98px) {
+  .leave-page { gap: 14px; }
+  .leave-page .view-tabs-row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .leave-page .page-heading { width: 100%; }
+  .leave-page .page-heading h2 { font-size: 23px; }
+  .leave-page .leave-apply-button { width: 100%; justify-content: center; }
+  .leave-page > .leave-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding: 0; gap: 8px; }
+  .leave-page > .leave-stats-grid .leave-balance-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 0; padding: 12px; }
+  .leave-page > .leave-stats-grid .leave-balance-card .leave-balance-icon { display: grid; flex: none; width: 38px; height: 38px; border-radius: 9px; }
+  .leave-page > .leave-stats-grid .leave-balance-card .leave-balance-icon svg { display: block; width: 21px; height: 21px; }
+  .leave-page > .leave-stats-grid .leave-balance-card .leave-balance-content > span { font-size: 13px; }
+  .leave-page > .leave-stats-grid .leave-balance-card .leave-balance-content strong { font-size: 24px; }
+  .leave-page .list-header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .leave-page .leave-request-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .leave-page .leave-request-mobile-list { padding: 0 12px 12px; }
+  .leave-page .leave-request-mobile-card { gap: 8px; background: #fbfcfe; border-color: #e3eaf2; }
+}
+
+/* Local overrides for the employee leave layout, including later global rules. */
+.leave-page.leave-page { width: 100%; max-width: 1480px; min-width: 0; }
+.leave-page.leave-page > .leave-stats-grid { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.leave-page.leave-page > .staff-list-panel > .list-header { align-items: end; gap: 16px; }
+.leave-page.leave-page > .staff-list-panel > .table-state { min-height: 120px; padding: 20px; text-align: center; }
+.leave-page.leave-page .leave-empty-state { display: flex; flex-direction: column; justify-content: center; gap: 8px; color: #718096; font-size: 14px; }
+.leave-page.leave-page .leave-empty-state svg { color: #a0aec0; }
+@media (max-width: 767.98px) {
+  .leave-page.leave-page > .leave-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; padding: 0; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-card { display: flex; flex-direction: column; align-items: flex-start; box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; gap: 10px; padding: 12px; }
+  .leave-page.leave-page > .staff-list-panel > .list-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 12px; }
+  .leave-page.leave-page .leave-request-header-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; min-width: 0; }
+  .leave-page.leave-page .leave-request-header-title h3 { margin: 0; }
+  .leave-page.leave-page .leave-request-filters { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .leave-page.leave-page .leave-request-filters .form-field, .leave-page.leave-page .leave-request-filters select { box-sizing: border-box; width: 100%; min-width: 0; }
+  .leave-page.leave-page > .staff-list-panel > .table-state { min-height: 100px; padding: 16px; }
+}
+
+/* Reference-inspired employee leave presentation. */
+.leave-page.leave-page { gap: 16px; }
+.leave-page.leave-page .leave-apply-button,
+.leave-page.leave-page .leave-apply-button:hover:not(:disabled) { color: #fff; border-color: #87239b; background: #87239b; box-shadow: 0 5px 14px #87239b2b; }
+.leave-page.leave-page > .leave-stats-grid { gap: 16px; padding: 10px; box-sizing: border-box; border: 1px solid #e8edf4; border-radius: 13px; background: #fff; box-shadow: 0 3px 12px #253b5a0b; }
+.leave-page.leave-page .leave-balance-card { position: relative; overflow: hidden; align-items: flex-start; min-height: 150px; gap: 20px; padding: 20px 22px; }
+.leave-page.leave-page .leave-balance-annual { background: #e8f2ff; }
+.leave-page.leave-page .leave-balance-medical { background: #e9f8f0; }
+.leave-page.leave-page .leave-balance-icon { flex: 0 0 60px; width: 60px; height: 60px; border-radius: 15px; }
+.leave-page.leave-page .leave-balance-icon svg { width: 30px; height: 30px; }
+.leave-page.leave-page .leave-balance-content { position: relative; z-index: 1; gap: 5px; }
+.leave-page.leave-page .leave-balance-content > span { font-size: 16px; }
+.leave-page.leave-page .leave-balance-content .leave-balance-english { color: #425471; font-size: 13px; }
+.leave-page.leave-page .leave-balance-content strong { margin: 4px 0; font-size: 36px; }
+.leave-page.leave-page .leave-balance-decoration { position: absolute; right: 22px; bottom: 12px; color: #80b7f1; opacity: .17; pointer-events: none; }
+.leave-page.leave-page .leave-balance-medical .leave-balance-decoration { color: #69cba0; }
+.leave-page.leave-page .leave-types-panel { min-width: 0; padding: 14px; border: 1px solid #e8edf4; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px #253b5a0b; }
+.leave-page.leave-page .leave-types-panel h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: #192942; font-size: 15px; }
+.leave-page.leave-page .leave-types-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.leave-page.leave-page .leave-type-tile { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; border: 1px solid #e4eaf2; border-radius: 10px; background: #f8fafc; color: #18243c; font-size: 14px; }
+.leave-page.leave-page .leave-type-icon { display: grid; flex: 0 0 42px; height: 42px; place-items: center; border-radius: 11px; color: #1264bd; background: #e1efff; }
+.leave-page.leave-page .leave-type-tile-medical .leave-type-icon { color: #008b54; background: #ddf5e8; }
+.leave-page.leave-page .leave-type-tile-unpaid .leave-type-icon { color: #d76c00; background: #fff0dd; }
+.leave-page.leave-page .leave-type-tile-replacement .leave-type-icon { color: #7041ba; background: #eee8ff; }
+.leave-page.leave-page .leave-status-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 22px 0; }
+.leave-page.leave-page .leave-status-filters button { min-height: 36px; padding: 0 15px; border: 1px solid #dce4ef; border-radius: 8px; background: #fff; color: #26334a; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.leave-page.leave-page .leave-status-filters button.active { color: #fff; border-color: #87239b; background: #87239b; }
+.leave-page.leave-page .leave-status-filters button:focus-visible { outline: 2px solid #782191; outline-offset: 2px; }
+.leave-page.leave-page .leave-request-desktop-table { padding: 16px 22px 22px; }
+@media (max-width: 767.98px) {
+  .leave-page.leave-page { gap: 12px; }
+  .leave-page.leave-page > .leave-stats-grid { gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-card { position: relative; min-height: 136px; padding: 12px; gap: 8px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-icon { width: 38px; height: 38px; flex: none; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-icon svg { width: 21px; height: 21px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-content { gap: 3px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-content > span { font-size: 13px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-content .leave-balance-english { font-size: 11px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-content strong { margin: 2px 0; font-size: 25px; }
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-decoration { display: block; width: 52px; height: 52px; right: 7px; bottom: 8px; }
+  .leave-page.leave-page .leave-types-panel { padding: 12px 8px; }
+  .leave-page.leave-page .leave-types-panel h3 { padding-left: 4px; }
+  .leave-page.leave-page .leave-types-grid { gap: 0; }
+  .leave-page.leave-page .leave-type-tile { flex-direction: column; justify-content: center; gap: 6px; padding: 2px 3px; border: 0; border-right: 1px solid #edf0f5; border-radius: 0; background: transparent; font-size: 12px; }
+  .leave-page.leave-page .leave-type-tile:last-child { border-right: 0; }
+  .leave-page.leave-page .leave-type-icon { flex: none; width: 38px; height: 38px; }
+  .leave-page.leave-page .leave-type-icon svg { width: 21px; height: 21px; }
+  .leave-page.leave-page .leave-status-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 12px 12px 0; }
+  .leave-page.leave-page .leave-status-filters button { min-width: 0; padding: 0 3px; font-size: 12px; }
+  .leave-page.leave-page .leave-request-mobile-list { box-sizing: border-box; padding-top: 12px; }
+}
+
+/* Leave type descriptions and balance alignment. */
+.leave-page.leave-page .leave-balance-content { flex: 1 1 0; }
+.leave-page.leave-page .leave-balance-value { display: flex; flex-direction: column; align-items: center; width: calc(100% + 80px); margin-left: -80px; }
+.leave-page.leave-page .leave-balance-value strong { display: inline-flex; align-items: baseline; gap: 4px; }
+.leave-page.leave-page .leave-balance-value > small { color: #60718a; font-size: 12px; }
+.leave-page.leave-page .leave-types-grid { align-items: stretch; }
+.leave-page.leave-page .leave-type-tile { box-sizing: border-box; min-height: 76px; }
+.leave-page.leave-page .leave-type-copy { display: grid; min-width: 0; gap: 5px; }
+.leave-page.leave-page .leave-type-copy strong { color: #18243c; font-size: 14px; }
+.leave-page.leave-page .leave-type-copy > span { color: #60718a; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+@media (max-width: 767.98px) {
+  .leave-page.leave-page > .leave-stats-grid .leave-balance-content { flex: none; width: 100%; }
+  .leave-page.leave-page .leave-balance-value { width: 100%; margin-left: 0; }
+  .leave-page.leave-page .leave-types-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .leave-page.leave-page .leave-type-tile { flex-direction: row; justify-content: flex-start; gap: 9px; min-height: 76px; padding: 9px; border: 1px solid #e4eaf2; border-radius: 10px; background: #f8fafc; }
+  .leave-page.leave-page .leave-type-tile:last-child { border-right: 1px solid #e4eaf2; }
+  .leave-page.leave-page .leave-type-copy strong { font-size: 13px; }
+  .leave-page.leave-page .leave-type-copy > span { font-size: 11px; }
+}

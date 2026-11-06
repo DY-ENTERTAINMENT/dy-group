@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarCheck2, Plus, Wand2 } from 'lucide-react';
+import { CalendarCheck2, CalendarClock, HeartPulse, Info, Plus, Wallet, Wand2 } from 'lucide-react';
+import './LeavePageV2.css';
 import { useSearchParams } from 'react-router-dom';
-import { MonthSelect } from '../components/MonthSelect';
+import { MonthSelect, formatMonthLabel } from '../components/MonthSelect';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { SystemModal } from '../components/SystemModal';
 import { useAuth } from '../hooks/useAuth';
@@ -52,8 +53,12 @@ export function LeavePage() {
   const [clockInDates, setClockInDates] = useState<Set<string>>(new Set());
   const [selectedReplacement, setSelectedReplacement] = useState<LeaveRequestItem | null>(null);
   const [changeValues, setChangeValues] = useState<ReplacementWorkChangeFormValues>({ changeType: 'reschedule', reason: '' });
-  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(getCurrentMonth());
+  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | 'all'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<LeaveRequestStatus | 'all'>('all');
   const [restCycle, setRestCycle] = useState(getCurrentRestCycle());
   const [selectedRestDates, setSelectedRestDates] = useState<string[]>([]);
   const [formValues, setFormValues] = useState<LeaveFormValues>(emptyForm);
@@ -95,14 +100,15 @@ export function LeavePage() {
     const year = Number(yearText);
     const month = Number(monthText);
     const monthStart = `${selectedLeaveMonth}-01`;
-    const monthEnd = `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+    const monthEnd = selectedLeaveMonth === 'all' ? '' : `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
     return requests.filter((request) => {
-      const matchesMonth = request.start_date <= monthEnd && request.end_date >= monthStart;
+      const matchesMonth = selectedLeaveMonth === 'all' || (request.start_date <= monthEnd && request.end_date >= monthStart);
       const matchesType = selectedLeaveType === 'all' || request.leave_type === selectedLeaveType;
       return matchesMonth && matchesType;
     });
   }, [requests, selectedLeaveMonth, selectedLeaveType]);
+  const displayedRequests = selectedStatus === 'all' ? filteredRequests : filteredRequests.filter((request) => request.status === selectedStatus);
   const isCurrentRestCycle = restCycle === getCurrentRestCycle();
   const restLocked =
     !isCurrentRestCycle ||
@@ -328,13 +334,13 @@ export function LeavePage() {
     <section className="leave-page">
       <div className="view-tabs-row">
         <div className="page-heading">
-          <span>Leave</span>
-          <h2>请假</h2>
+          <h2>我的请假</h2>
+          <p className="leave-page-subtitle">查看假期余额、提交请假与申请记录</p>
         </div>
 
         <button className="secondary-action leave-apply-button" type="button" onClick={() => setShowLeaveModal(true)}>
           <Plus size={17} />
-          <span>提交申请</span>
+          <span>提交请假申请</span>
         </button>
       </div>
 
@@ -362,20 +368,37 @@ export function LeavePage() {
           {message ? <p className="form-success">{message}</p> : null}
 
           <div className="leave-stats-grid">
-            <BalanceCard label="年假" days={balances.annualRemaining} />
-            <BalanceCard label="病假" days={balances.medicalRemaining} />
+            <BalanceCard label="年假" days={balances.annualRemaining} kind="annual" unavailable={loading || Boolean(error)} />
+            <BalanceCard label="病假" days={balances.medicalRemaining} kind="medical" unavailable={loading || Boolean(error)} />
           </div>
+
+          <section className="leave-types-panel" aria-label="请假类型说明">
+            <h3><Info size={17} />请假类型说明</h3>
+            <div className="leave-types-grid">
+              {([
+                ['annual', CalendarCheck2, '使用可用年假余额'],
+                ['medical', HeartPulse, '按现有规则提交病假证明'],
+                ['unpaid', Wallet, '不扣除年假余额'],
+                ['replacement', CalendarClock, '按现有调休及补班规则办理'],
+              ] as const).map(([type, Icon, description]) => (
+                <div className={`leave-type-tile leave-type-tile-${type}`} key={type}>
+                  <span className="leave-type-icon"><Icon size={23} aria-hidden="true" /></span>
+                  <div className="leave-type-copy"><strong>{leaveTypeLabels[type]}</strong><span>{description}</span></div>
+                </div>
+              ))}
+            </div>
+          </section>
 
           <div className="staff-list-panel">
             <div className="list-header">
               <div className="leave-request-header-title">
-                <span>申请记录</span>
-                <h3>{filteredRequests.length} 条记录</h3>
+                <h3>我的申请记录</h3>
+                <span>{loading ? '正在读取' : error ? '读取状态请见提示' : `${displayedRequests.length} 条已加载记录（可能受返回上限限制）`}</span>
               </div>
               <div className="attendance-filters leave-request-filters">
                 <label className="form-field">
                   <span>月份</span>
-                  <MonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
+                  <LeaveMonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
                 </label>
                 <label className="form-field">
                   <span>请假类型</span>
@@ -387,12 +410,20 @@ export function LeavePage() {
               </div>
             </div>
 
+            <div className="leave-status-filters" role="group" aria-label="按审批状态筛选">
+              {([['all', '全部'], ...Object.entries(statusLabels)] as Array<[LeaveRequestStatus | 'all', string]>).map(([status, label]) => (
+                <button key={status} type="button" className={selectedStatus === status ? 'active' : ''} aria-pressed={selectedStatus === status} onClick={() => setSelectedStatus(status)}>{label}</button>
+              ))}
+            </div>
+
             {loading ? (
               <div className="table-state">正在读取请假记录...</div>
-            ) : filteredRequests.length === 0 ? (
-              <div className="table-state">暂无请假申请。</div>
+            ) : error && requests.length === 0 ? (
+              <div className="table-state">暂时无法读取申请记录，请稍后重试。</div>
+            ) : displayedRequests.length === 0 ? (
+              <div className="table-state leave-empty-state"><CalendarCheck2 size={24} aria-hidden="true" /><span>{requests.length === 0 ? '暂无请假申请。' : '当前筛选条件下暂无记录。'}</span></div>
             ) : (
-              <LeaveRequestTable requests={filteredRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable requests={displayedRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -427,12 +458,17 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function BalanceCard({ label, days }: { label: string; days: number }) {
+function BalanceCard({ label, days, kind, unavailable }: { label: string; days: number; kind: 'annual' | 'medical'; unavailable: boolean }) {
+  const Icon = kind === 'annual' ? CalendarCheck2 : HeartPulse;
   return (
-    <div className="leave-stat-card leave-balance-card">
-      <CalendarCheck2 size={20} />
-      <span>{label}</span>
-      <strong>剩余 {days} 天</strong>
+    <div className={`leave-stat-card leave-balance-card leave-balance-${kind}`}>
+      <div className="leave-balance-icon"><Icon size={24} /></div>
+      <Icon className="leave-balance-decoration" size={90} aria-hidden="true" />
+      <div className="leave-balance-content">
+        <span>{label}余额</span>
+        <small className="leave-balance-english">{kind === 'annual' ? 'Annual Leave' : 'Medical Leave'}</small>
+        <div className="leave-balance-value"><strong>{unavailable ? '—' : days} <small>天</small></strong><small>当前可用</small></div>
+      </div>
     </div>
   );
 }
@@ -606,6 +642,7 @@ function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesByS
         <table className="staff-table">
         <thead>
           <tr>
+            <th>申请日期</th>
             <th>假期类型</th>
             <th>日期</th>
             <th>原因</th>
@@ -617,7 +654,8 @@ function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesByS
         <tbody>
           {requests.map((request) => (
             <tr key={request.id}>
-              <td>{leaveTypeLabels[request.leave_type]}</td>
+              <td>{request.created_at.slice(0, 10)}</td>
+              <td><span className={`leave-record-type leave-record-type-${request.leave_type}`}>{leaveTypeLabels[request.leave_type]}</span></td>
               <td>{formatLeaveDate(request)}</td>
               <td>{request.reason}</td>
               <td>
@@ -637,10 +675,10 @@ function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesByS
       <div className="leave-request-mobile-list">
         {requests.map((request) => (
           <article className="leave-request-mobile-card" key={request.id}>
-            <MobileLeaveField label="假期类型" value={leaveTypeLabels[request.leave_type]} />
+            <div className="leave-record-mobile-heading"><span className={`leave-record-type leave-record-type-${request.leave_type}`}>{leaveTypeLabels[request.leave_type]}</span><span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span></div>
+            <MobileLeaveField label="申请日期" value={request.created_at.slice(0, 10)} />
             {request.leave_type === 'replacement' ? <><MobileLeaveField label="调休日" value={request.end_date} /><MobileLeaveField label="补班日" value={effectiveMakeupDatesBySource.get(request.id) ?? request.start_date} /></> : <MobileLeaveField label="日期" value={formatLeaveDate(request)} />}
             <MobileLeaveField label="原因" value={request.reason} />
-            <MobileLeaveField label="状态" value={<span className={`status-pill leave-status-${request.status}`}>{statusLabels[request.status]}</span>} />
             <MobileLeaveField label="审核备注" value={request.review_note || '-'} />
             {request.leave_type === 'replacement' ? <div className="leave-request-mobile-action">{renderChangeAction(request, true)}</div> : null}
           </article>
@@ -816,9 +854,10 @@ function getCurrentRestCycle() {
   return `${target.getFullYear()}-${`${target.getMonth() + 1}`.padStart(2, '0')}`;
 }
 
-function getCurrentMonth() {
-  const today = new Date();
-  return `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}`;
+function LeaveMonthSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const year = new Date().getFullYear();
+  const months = Array.from({ length: 60 }, (_, index) => `${year - 2 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`);
+  return <select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">全部月份（已加载）</option>{months.map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}</select>;
 }
 
 function getRestCycleRange(cycle: string) {
