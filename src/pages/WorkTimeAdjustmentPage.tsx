@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Clock3, FileText, Plus, RefreshCw, XCircle } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, Hourglass, Plus, RefreshCw, XCircle } from 'lucide-react';
+import { profileService } from '../services/profile.service';
+import './WorkTimeAdjustmentPage.css';
 import { SystemModal } from '../components/SystemModal';
 import {
   workTimeAdjustmentService,
@@ -26,6 +28,10 @@ const timeOptions = createTimeOptions();
 
 export function WorkTimeAdjustmentPage() {
   const editTimeSelectRefs = useRef<Record<string, HTMLSelectElement | null>>({});
+  const [standardTime, setStandardTime] = useState<Pick<import('../types/database').Employee, 'start_work_time' | 'end_work_time'> | null>(null);
+  const [month, setMonth] = useState(getMalaysiaMonth);
+  const [status, setStatus] = useState('all');
+  const [moreStatusesOpen, setMoreStatusesOpen] = useState(false);
   const [requests, setRequests] = useState<WorkTimeAdjustmentRequestItem[]>([]);
   const [formValues, setFormValues] = useState<FormValues>(emptyForm);
   const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
@@ -52,6 +58,7 @@ export function WorkTimeAdjustmentPage() {
     setLoading(true);
     setError('');
 
+    void profileService.getMyProfile().then((data) => setStandardTime(data.employee)).catch(() => setStandardTime(null));
     try {
       const requestList = await workTimeAdjustmentService.listMyRequests();
       setRequests(requestList);
@@ -177,76 +184,37 @@ export function WorkTimeAdjustmentPage() {
     }
   }
 
+  const monthRequests = requests.filter((request) => malaysiaMonthOf(request.created_at) === month);
+  const isProcessed = (request: WorkTimeAdjustmentRequestItem) => request.dates.length > 0 && request.dates.every((detail) => ['approved', 'rejected', 'cancelled', 'revoked'].includes(detail.status));
+  const pendingCount = monthRequests.filter((request) => request.dates.some((detail) => detail.status === 'pending')).length;
+  const processedCount = monthRequests.filter(isProcessed).length;
+  const visibleRequests = monthRequests.filter((request) => status === 'all' || (status === 'processed' ? isProcessed(request) : request.dates.some((detail) => detail.status === status))).slice().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const filters = [['all', '全部'], ['pending', '待审核'], ['processed', '已处理'], ['approved', '已批准'], ['rejected', '已拒绝'], ['cancelled', '已取消'], ['revoked', '已撤销']];
+  const selectedExtraStatus = filters.slice(3).find(([value]) => value === status);
+  const renderStatusFilter = ([value, label]: string[]) => (
+    <button type="button" key={value} className={status === value ? 'active' : ''} aria-pressed={status === value} onClick={() => setStatus(value)}>{label} ({value === 'all' ? monthRequests.length : value === 'processed' ? processedCount : monthRequests.filter((r) => r.dates.some((d) => d.status === value)).length})</button>
+  );
   return (
-    <section className="leave-page">
-      <div className="staff-toolbar">
-        <div className="page-heading">
-          <span>员工申请</span>
-          <h2>工时调整申请</h2>
-          <p>员工如因工作或临时安排需要调整当天工作时间，可提前提交申请。</p>
-        </div>
-
-        <div className="row-actions">
-          <button className="secondary-action" type="button" onClick={loadRequests} disabled={loading}>
-            <RefreshCw size={17} />
-            <span>{loading ? '读取中...' : '刷新'}</span>
-          </button>
-          <button className="primary-button compact-button" type="button" onClick={openCreateModal}>
-            <Plus size={17} />
-            <span>新增申请</span>
-          </button>
-        </div>
+    <section className="leave-page wta-page">
+      <div className="wta-standard"><div><span>当前标准工作时间</span><strong><Clock3 size={24} /> {formatCurrentStandardWorkTime(standardTime)}</strong></div><div className="wta-actions"><button className="secondary-action" type="button" onClick={loadRequests} disabled={loading}><RefreshCw size={17} />{loading ? '读取中...' : '刷新'}</button><button className="primary-button compact-button wta-create" type="button" onClick={openCreateModal}><Plus size={17} />新增申请</button></div></div>
+      {error ? <p className="form-alert">{error}</p> : null}{message ? <p className="form-success">{message}</p> : null}
+      <div className="wta-panel"><div className="wta-heading"><h3><FileText size={22} /> 我的申请记录</h3><div className="wta-stats">
+        <button type="button" aria-pressed={status === 'all'} onClick={() => setStatus('all')}><CalendarDays size={23} /><span><small>本月申请</small><strong>{monthRequests.length}</strong></span></button>
+        <button type="button" aria-pressed={status === 'pending'} onClick={() => setStatus('pending')}><Hourglass size={23} /><span><small>待审核</small><strong>{pendingCount}</strong></span></button>
+        <button type="button" aria-pressed={status === 'processed'} onClick={() => setStatus('processed')}><Check size={24} /><span><small>已处理</small><strong>{processedCount}</strong></span></button>
+      </div></div>
+      <div className="wta-month"><button type="button" aria-label="上个月" onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft size={18} /></button><strong>{month.slice(0, 4)}年{Number(month.slice(5))}月</strong><button type="button" aria-label="下个月" onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight size={18} /></button><button type="button" onClick={() => setMonth(getMalaysiaMonth())}><CalendarDays size={16} /> 返回本月</button></div>
+      <div className="wta-filters" aria-label="申请状态筛选">
+        <div className="wta-filter-row">{filters.slice(0, 3).map(renderStatusFilter)}<button type="button" className={selectedExtraStatus ? 'wta-more-selected' : ''} aria-expanded={moreStatusesOpen} aria-controls="wta-extra-statuses" onClick={() => setMoreStatusesOpen((open) => !open)}>更多{selectedExtraStatus ? ` · ${selectedExtraStatus[1]}` : ''}<ChevronDown size={16} className={moreStatusesOpen ? 'wta-more-open' : ''} /></button></div>
+        <div id="wta-extra-statuses" className="wta-filter-row wta-extra-filters" hidden={!moreStatusesOpen}>{filters.slice(3).map(renderStatusFilter)}</div>
       </div>
-
-      {error ? <p className="form-alert">{error}</p> : null}
-      {message ? <p className="form-success">{message}</p> : null}
-
-      <div className="staff-list-panel">
-        <div className="list-header">
-          <div>
-            <span>我的申请记录</span>
-            <h3>{requests.length} 条申请</h3>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="table-state">正在读取工时调整申请...</div>
-        ) : requests.length === 0 ? (
-          <div className="table-state">暂无工时调整申请。</div>
-        ) : (
-          <div className="registration-list">
-            {requests.map((request) => (
-              <article className="registration-item" key={request.id}>
-                <span>
-                  <strong>{formatDateRange(request.requested_start_date, request.requested_end_date)}</strong>
-                  <small>
-                    当前标准工作时间 {formatCurrentStandardWorkTime(request.currentStandardWorkTime)} ·{' '}
-                    {formatRequestAdjustmentSummary(request)}
-                  </small>
-                  <small>申请原因：{request.reason}</small>
-                  <small>申请时间：{formatDateTime(request.created_at)}</small>
-                  {request.attachment_path ? (
-                    <button
-                      className="text-link-button"
-                      type="button"
-                      onClick={() => handleOpenAttachment(request)}
-                      disabled={openingAttachmentPath === request.attachment_path}
-                    >
-                      <FileText size={15} />
-                      <span>{openingAttachmentPath === request.attachment_path ? '读取附件中...' : '查看附件'}</span>
-                    </button>
-                  ) : (
-                    <small>附件：未上传</small>
-                  )}
-                </span>
-                <em>{summarizeRequestStatus(request.dates)}</em>
-
+      {loading ? <div className="table-state">正在读取工时调整申请...</div> : visibleRequests.length === 0 ? <div className="table-state">该月份和状态暂无工时调整申请。</div> : <div className="wta-list">{visibleRequests.map((request) => <details className="wta-record" key={request.id}><summary><span className="wta-date"><CalendarDays size={19} /><strong>{formatDateRange(request.requested_start_date, request.requested_end_date)}</strong></span><span><small>原标准工作时间</small><strong>{formatTime(request.original_start_work_time)} 至 {formatTime(request.original_end_work_time)}</strong></span><span className="wta-adjusted"><small>申请调整后</small><strong>{formatRequestAdjustmentSummary(request)}</strong></span><span className="wta-reason"><small>申请原因</small><strong>{request.reason}</strong></span><span className="wta-badges">{request.dates.length ? [...new Set(request.dates.map((d) => d.status))].map((item) => <em key={item} className={`wta-status wta-status-${item}`}>{workTimeAdjustmentStatusLabels[item]}</em>) : '暂无明细'}</span><span className="wta-expand" aria-hidden="true"><ChevronDown size={20} /></span></summary><div className="wta-details"><p>申请时间：{formatDateTime(request.created_at)}</p><p>申请原因：{request.reason}</p>{request.attachment_path ? <button className="text-link-button" type="button" onClick={() => handleOpenAttachment(request)} disabled={openingAttachmentPath === request.attachment_path}><FileText size={15} />{openingAttachmentPath === request.attachment_path ? '读取附件中...' : '查看附件'}</button> : <p>附件：未上传</p>}
                 <div className="staff-table-wrap">
                   <table className="staff-table">
                     <thead>
                       <tr>
                         <th>日期</th>
-                        <th>当前标准工作时间</th>
+                        <th>原标准工作时间</th>
                         <th>调整后工作时间</th>
                         <th>状态</th>
                         <th>审核备注</th>
@@ -263,7 +231,7 @@ export function WorkTimeAdjustmentPage() {
                           <tr key={detail.id}>
                             <td>{formatDate(detail.work_date)}</td>
                             <td>
-                              {formatCurrentStandardWorkTime(request.currentStandardWorkTime)}
+                              {formatTime(detail.original_start_work_time)} 至 {formatTime(detail.original_end_work_time)}
                             </td>
                             <td>
                               {detail.status === 'pending' ? (
@@ -330,11 +298,7 @@ export function WorkTimeAdjustmentPage() {
                     </tbody>
                   </table>
                 </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
+      </div></details>)}</div>}</div>
 
       {formOpen ? (
         <SystemModal
@@ -486,28 +450,10 @@ function formatAdjustedEndTimePreview(startTime: string) {
   return `${dayOffset > 0 ? '次日 ' : ''}${hour}:${minute}`;
 }
 
-function summarizeRequestStatus(dates: WorkTimeAdjustmentRequestDate[]) {
-  if (dates.length === 0) {
-    return '暂无明细';
-  }
-
-  const pendingCount = dates.filter((detail) => detail.status === 'pending').length;
-  if (pendingCount > 0) {
-    return `${pendingCount} 天待审核`;
-  }
-
-  const approvedCount = dates.filter((detail) => detail.status === 'approved').length;
-  if (approvedCount === dates.length) {
-    return '全部已通过';
-  }
-
-  return '已处理';
-}
-
 function formatRequestAdjustmentSummary(request: WorkTimeAdjustmentRequestItem) {
   if (request.dates.length === 1) {
     const [detail] = request.dates;
-    return `当前调整后 ${formatTime(detail.adjusted_start_time)} 至 ${formatTime(detail.adjusted_end_time)}`;
+    return `${formatTime(detail.adjusted_start_time)} 至 ${formatTime(detail.adjusted_end_time)}`;
   }
 
   if (request.dates.length > 1) {
@@ -588,4 +534,14 @@ function getErrorMessage(error: unknown) {
   }
 
   return '未知错误';
+}
+function malaysiaMonthOf(value: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit' }).formatToParts(new Date(value));
+  return `${parts.find((part) => part.type === 'year')?.value}-${parts.find((part) => part.type === 'month')?.value}`;
+}
+function getMalaysiaMonth() { return malaysiaMonthOf(new Date().toISOString()); }
+function shiftMonth(value: string, offset: number) {
+  const [year, month] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
