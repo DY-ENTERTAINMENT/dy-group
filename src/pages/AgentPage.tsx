@@ -1,5 +1,6 @@
-﻿import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Eye, FileWarning, Leaf, Layers3, Plus, RefreshCw, Search, Send, Settings, Trash2, UserRound, X } from 'lucide-react';
+﻿import './AgentRevenueLayout.css';
+import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Eye, FileWarning, Leaf, Layers3, Plus, RefreshCw, Search, Send, Settings, Trash2, UserRound, X } from 'lucide-react';
 import { useRef } from 'react';
 import { revenueCycleService, type RevenueMonthContext, type MonthlyRevenueRecord } from '../services/revenue-cycle.service';
 import { rosterCycle, canWriteMonthly, isVerifiedMonthly, malaysiaMonth } from '../services/revenue-cycle-display';
@@ -3030,21 +3031,23 @@ function CurrentOperationTable(props: {
           <colgroup>
             <col className="agent-period-col-creator" />
             <col className="agent-period-col-platform" />
-            <col className="agent-period-col-type" />
+            <col className="agent-period-col-cycle" />
             {periods.map((period) => <col key={period.startIso} className="agent-period-col-period" />)}
             <col className="agent-period-col-month" />
+            <col className="agent-period-col-month" />
             <col className="agent-period-col-status" />
-            <col className="agent-period-col-note" />
+            <col className="agent-period-col-detail" />
           </colgroup>
           <thead>
             <tr>
               <th>主播</th>
               <th>平台</th>
-              <th>类型</th>
+              <th>计算方式</th>
               {periods.map((period) => <th key={period.startIso} className={period.startIso === selectedPeriodStart ? 'agent-period-head-selected' : ''}><PeriodHeader period={period} periods={periods} /></th>)}
-              <th>本月情况</th>
+              <th>月流水</th>
+              <th>本月总流水</th>
               <th>状态</th>
-              <th>备注</th>
+              <th aria-label="补充信息" />
             </tr>
           </thead>
           <tbody>{rows.map((row) => <OperationTableRow key={row.id} row={row} selectedPeriodStart={selectedPeriodStart} onOpen={onOpen} month={props.month} onMonthlySaved={props.onMonthlySaved} />)}</tbody>
@@ -3060,19 +3063,25 @@ function CurrentOperationTable(props: {
 
 function OperationTableRow({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void; month: string; onMonthlySaved: (record: MonthlyRevenueRecord | null) => void }) {
   const groups = splitEffectiveCycleRows(row);
+  const [expanded, setExpanded] = useState(false);
+  const notes = operationSupplementaryNotes(row);
   return <>{groups.map((part, index) => {
     const weekly = part.profiles.every(profile => profile.revenue_cycle === 'weekly');
     return <tr key={`${row.id}:${part.profiles[0].revenue_cycle ?? 'legacy'}`}>
-      {index === 0 ? <><td rowSpan={groups.length}><OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} /></td><td rowSpan={groups.length}><OperationPlatformList profiles={row.profiles} /></td><td rowSpan={groups.length}><OperationTypeList profiles={row.profiles} /></td></> : null}
-      {weekly ? part.periods.map(cell => <PeriodRevenueCell key={cell.period.startIso} cell={cell} selected={cell.period.startIso === selectedPeriodStart} onOpen={onOpen} />) : <td className="agent-period-cell" colSpan={Math.max(1,row.periods.length)}><div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 8 }}><EffectiveCycleArea profiles={part.profiles} month={month} onSaved={onMonthlySaved} periods={part.periods} /></div></td>}
-      <td>{weekly ? <OperationMonthSummary entries={summarizeOperationMonth(part.periods)} /> : part.profiles.filter(profile => profile.revenue_cycle === 'monthly').map(profile => { const record = (profile as CycleAwareProfile).revenueMonthContext?.monthly_record; return <div key={profile.id}>{platformLabels[profile.platform]} {record ? formatRevenueAmount(record.revenue_amount) : '—'} {getCreatorRevenueUnitLabel(profile.platform)}</div>; })}</td>
+      {index === 0 ? <><td rowSpan={groups.length}><OperationCreatorIdentity profiles={row.profiles} regionLabel={row.regionLabel} /></td><td rowSpan={groups.length}><OperationPlatformAndType profiles={row.profiles} /></td></> : null}
+      <td><span className="agent-revenue-cycle">{weekly ? '按周' : part.profiles.every(profile => profile.revenue_cycle === 'monthly') ? '按月' : part.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写' : '待核验'}</span></td>
+      {weekly ? part.periods.map(cell => <PeriodRevenueCell key={cell.period.startIso} cell={cell} selected={cell.period.startIso === selectedPeriodStart} onOpen={onOpen} />) : part.periods.map(cell => <td key={cell.period.startIso} className="agent-period-empty">—</td>)}
+      <td>{weekly ? <span className="agent-period-empty">—</span> : <EffectiveCycleArea profiles={part.profiles} month={month} onSaved={onMonthlySaved} periods={part.periods} />}</td>
+      <td>{weekly ? <OperationMonthSummary entries={summarizeOperationMonth(part.periods)} /> : <MonthlyOperationSummaries profiles={part.profiles} />}</td>
       <td>{weekly ? <OperationRowStatusBadge status={part.status} /> : part.profiles.every(profile => (profile as CycleAwareProfile).revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN') ? '周期待核验' : part.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写' : part.profiles.every(profile => profile.revenue_cycle === 'monthly') ? <OperationRowStatusBadge status={part.profiles.every(profile => Boolean((profile as CycleAwareProfile).revenueMonthContext?.monthly_record)) ? 'filled' : 'missing'} /> : '历史待核验'}</td>
-      <td className="agent-period-note">{part.profiles.map(profile => (profile as CycleAwareProfile).revenueMonthContext?.monthly_record?.agent_note).filter(Boolean).join(' / ') || row.latestNote || '-'}</td>
+      {index === 0 ? <td rowSpan={groups.length}>{notes.length ? <SupplementaryToggle expanded={expanded} onToggle={() => setExpanded(value => !value)} /> : null}</td> : null}
     </tr>;
-  })}</>;
+  })}{expanded && notes.length ? <tr className="agent-revenue-detail-row"><td colSpan={row.periods.length + 7}><SupplementaryNotes notes={notes} /></td></tr> : null}</>;
 }
 
 function OperationMobileCard({ row, selectedPeriodStart, onOpen, month, onMonthlySaved }: { month: string; onMonthlySaved: (record: MonthlyRevenueRecord | null) => void; row: OperationStreamerRow; selectedPeriodStart: string; onOpen: (row: OperationRow) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const notes = operationSupplementaryNotes(row);
   return (
     <article className="agent-operation-mobile-card agent-period-mobile-card">
       <div className="agent-operation-mobile-head">
@@ -3080,8 +3089,8 @@ function OperationMobileCard({ row, selectedPeriodStart, onOpen, month, onMonthl
         {row.profiles.every((profile) => !isWeeklyRevenuePendingEligible(profile)) ? <span>{row.status === 'unverified' ? '周期待核验' : row.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写流水' : row.profiles.some(profile => profile.revenue_cycle === 'monthly') ? (row.status === 'filled' ? '已填写' : '未填写') : '历史待核验'}</span> : <OperationStatusBadge status={row.status} />}
       </div>
       <div className="agent-period-mobile-meta">
-        <OperationPlatformList profiles={row.profiles} />
-        <OperationTypeList profiles={row.profiles} />
+        <OperationPlatformAndType profiles={row.profiles} />
+        {splitEffectiveCycleRows(row).map(part => <span className="agent-revenue-cycle" key={part.profiles[0].id}>{part.profiles.every(profile => profile.revenue_cycle === 'weekly') ? '按周' : part.profiles.every(profile => profile.revenue_cycle === 'monthly') ? '按月' : part.profiles.every(profile => profile.revenue_cycle === 'none') ? '无需填写' : '待核验'}</span>)}
       </div>
       <div className="agent-period-mobile-periods">
         {row.profiles.some(profile => profile.revenue_cycle === 'weekly') ? row.periods.map((originalCell) => { const cell = { ...originalCell, profiles: originalCell.profiles.filter(item => item.creator.revenue_cycle === 'weekly') }; return (
@@ -3089,13 +3098,13 @@ function OperationMobileCard({ row, selectedPeriodStart, onOpen, month, onMonthl
             <span>{formatOperationPeriodHeader(cell.period, row.periods.map((period) => period.period))}</span>
             <div>{cell.profiles.map((profile) => <PeriodRevenueEntry key={`${profile.creator.id}-${profile.period.startIso}`} item={profile} onOpen={onOpen} />)}</div>
           </section>
-        ); }) : null}{row.profiles.some(profile => profile.revenue_cycle !== 'weekly') ? <EffectiveCycleArea profiles={row.profiles.filter(profile => profile.revenue_cycle !== 'weekly')} month={month} onSaved={onMonthlySaved} periods={row.periods} /> : null}
+        ); }) : null}{row.profiles.some(profile => profile.revenue_cycle !== 'weekly') ? <section className="agent-period-mobile-period"><span>月流水 / 周期待核验</span><EffectiveCycleArea profiles={row.profiles.filter(profile => profile.revenue_cycle !== 'weekly')} month={month} onSaved={onMonthlySaved} periods={row.periods} /></section> : null}
       </div>
       <div className="agent-period-mobile-summary">
-        <span>本月情况</span>
-        <OperationMonthSummary entries={row.monthSummary} />{row.profiles.filter(profile => profile.revenue_cycle === 'monthly').map(profile => { const record = (profile as CycleAwareProfile).revenueMonthContext?.monthly_record; return <span key={profile.id}>{platformLabels[profile.platform]} {record ? formatRevenueAmount(record.revenue_amount) : '—'} {getCreatorRevenueUnitLabel(profile.platform)}</span>; })}
+        <span>本月总流水</span>
+        {row.profiles.some(profile => profile.revenue_cycle === 'weekly') ? <OperationMonthSummary entries={row.monthSummary} /> : null}<MonthlyOperationSummaries profiles={row.profiles} />
       </div>
-      <p>备注：{row.latestNote || '-'}</p>
+      {notes.length ? <div className="agent-revenue-mobile-details"><SupplementaryToggle expanded={expanded} onToggle={() => setExpanded(value => !value)} />{expanded ? <SupplementaryNotes notes={notes} /> : null}</div> : null}
     </article>
   );
 }
@@ -3143,12 +3152,27 @@ function RevenueValueEntry({ item, onOpen, disabled = false }: { item: Operation
   );
 }
 
-function OperationPlatformList({ profiles }: { profiles: CreatorProfile[] }) {
-  return <div className="agent-period-platform-list">{profiles.map((creator) => <PlatformPill key={creator.id} platform={creator.platform} />)}</div>;
+function OperationPlatformAndType({ profiles }: { profiles: CreatorProfile[] }) {
+  return <div className="agent-revenue-platform-types">{profiles.map((creator) => <div key={creator.id}><PlatformPill platform={creator.platform} /><CreatorTypeBadge type={creator.creator_type} /></div>)}</div>;
 }
 
-function OperationTypeList({ profiles }: { profiles: CreatorProfile[] }) {
-  return <div className="agent-period-type-list">{profiles.map((creator) => <CreatorTypeBadge key={creator.id} type={creator.creator_type} />)}</div>;
+function operationSupplementaryNotes(row: OperationStreamerRow): string[] {
+  return Array.from(new Set(splitEffectiveCycleRows(row).map(part => part.profiles.map(profile => (profile as CycleAwareProfile).revenueMonthContext?.monthly_record?.agent_note).filter(Boolean).join(' / ') || row.latestNote).filter(Boolean)));
+}
+
+function SupplementaryToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  return <button type="button" className="agent-revenue-detail-toggle" aria-label={expanded ? '收起备注' : '展开备注'} aria-expanded={expanded} onClick={onToggle}><ChevronDown size={18} aria-hidden="true" /></button>;
+}
+
+function SupplementaryNotes({ notes }: { notes: string[] }) {
+  return <div className="agent-revenue-notes"><strong>备注</strong>{notes.map((note, index) => <p key={index}>{note}</p>)}</div>;
+}
+
+function MonthlyOperationSummaries({ profiles }: { profiles: CreatorProfile[] }) {
+  return <>{profiles.filter(profile => profile.revenue_cycle === 'monthly').map(profile => {
+    const record = (profile as CycleAwareProfile).revenueMonthContext?.monthly_record;
+    return <OperationMonthSummary key={profile.id} entries={[{ platform: profile.platform, total: record?.revenue_amount ?? 0, hasRecord: Boolean(record) }]} />;
+  })}</>;
 }
 
 function OperationMonthSummary({ entries }: { entries: OperationMonthSummaryEntry[] }) {
@@ -3158,7 +3182,6 @@ function OperationMonthSummary({ entries }: { entries: OperationMonthSummaryEntr
     <div className="agent-period-month-summary">
       {filledEntries.map((entry) => (
         <span key={entry.platform} className={`agent-period-month-summary-line agent-period-month-summary-line--${entry.platform}`}>
-          {filledEntries.length > 1 ? <em>{platformLabels[entry.platform]}</em> : null}
           <b>{formatRevenueAmount(entry.total)}</b>
           <small>{getCreatorRevenueUnitLabel(entry.platform)}</small>
         </span>
@@ -3289,25 +3312,14 @@ function WeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; 
 }
 
 function OperationCreatorIdentity({ profiles, regionLabel }: { profiles: CreatorProfile[]; regionLabel: string }) {
-  return (
-    <div className="agent-period-creator-identity">
-      {profiles.map((profile) => {
-        const isTikTok = profile.platform === 'tiktok';
-        const username = profile.platform_account?.trim() || '未填写';
-        const platformId = profile.platform_user_id?.trim() || '未填写';
-        return (
-          <div key={profile.id} className={`agent-period-creator-platform agent-period-creator-platform--${profile.platform}`}>
-            <img src={isTikTok ? tiktokLogoUrl : douyinLogoUrl} alt={platformLabels[profile.platform]} />
-            <div>
-              <strong title={username}>{username}</strong>
-              <small title={platformId}>{platformId}</small>
-            </div>
-          </div>
-        );
-      })}
-      <small className="agent-period-creator-region">{regionLabel}</small>
+  return <div className="agent-revenue-identity">
+    <span className="agent-revenue-avatar" aria-hidden="true"><UserRound size={20} /></span>
+    <div className="agent-revenue-identity-copy">
+      <strong>{getOperationDisplayName(profiles)}</strong>
+      {profiles.map(profile => <small key={profile.id}>{[profile.platform_user_id, profile.platform_account].filter(Boolean).join(' / ') || '未填写'}</small>)}
+      <small>{regionLabel}</small>
     </div>
-  );
+  </div>;
 }
 
 function DirectWeeklyRevenueModal({ row, onClose, onSubmitted }: { row: OperationRow; onClose: () => void; onSubmitted: (record: WeeklyRevenueRecord) => void }) {

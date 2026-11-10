@@ -32,7 +32,7 @@ const context=(source='LEGACY_UNKNOWN',effective=null,can_write=true)=>({creator
 const creator=(id,platform='tiktok',current='monthly',ctx=context())=>({id,creator_entity_id:'entity-'+id,creator_name:id,platform,platform_user_id:id,platform_account:id,region_id:'MY',membership_status:'active',status:'active',creator_type:'5+1',joined_date:'2026-01-01',created_at:'2026-01-01',manager_employee_id:'owner',current_revenue_cycle:current,revenue_cycle:display.rosterCycle(current,ctx),revenueMonthContext:{...ctx,creator_profile_id:id}});
 const baseFilters={platform:'',revenueCycle:'',managerEmployeeId:'',creatorType:'',priority:'',search:'',status:''};
 const periods=Array.from({length:5},(_,i)=>({startIso:'2026-10-'+String(1+i*6).padStart(2,'0'),endIso:'2026-10-'+String(6+i*6).padStart(2,'0'),label:'period',shortLabel:'period',periodNo:i+1}));
-const agent=load('src/pages/AgentPage.tsx',{},'\nexport { buildOperationStreamerRows, filterOperationStreamerRows, summarizeEffectiveRevenueRows, splitEffectiveCycleRows, OperationTableRow };');
+const agent=load('src/pages/AgentPage.tsx',{'react':{useState: initial => [initial, () => {}]}},'\nexport { buildOperationStreamerRows, filterOperationStreamerRows, summarizeEffectiveRevenueRows, splitEffectiveCycleRows, OperationTableRow };');
 function test(name,fn){return Promise.resolve().then(fn).then(()=>{reports.push({name,status:'PASS'});console.log('PASS '+name);});}
 function walk(node,predicate){if(!node)return [];if(Array.isArray(node))return node.flatMap(n=>walk(n,predicate));if(typeof node!=='object')return [];return [...(predicate(node)?[node]:[]),...walk(node.props?.children,predicate),...walk(node.props?.footer,predicate)];}
 function hooks(){
@@ -71,7 +71,8 @@ await test('Verified monthly single cell and permission gate, units remain separ
   assert.equal(display.canWriteMonthly(t.revenueMonthContext),true);
   assert.equal(display.canWriteMonthly({...t.revenueMonthContext,can_write:false}),false);
   const render=agent.OperationTableRow({row:rows[0],selectedPeriodStart:periods[0].startIso,onOpen(){},month:'2026-10',onMonthlySaved(){}});
-  assert.equal(walk(render,n=>n.type==='td'&&n.props.colSpan===5).length,1);
+  assert.equal(walk(render,n=>n.type==='td'&&n.props.className==='agent-period-empty').length,5);
+  assert.equal(walk(render,n=>typeof n.type==='function'&&n.type.name==='EffectiveCycleArea').length,1);
   assert.equal(walk(render,n=>typeof n.type==='function'&&n.type.name==='PeriodRevenueCell').length,0);
 });
 await test('Legacy weekly five cells and none do not regress; manager filter isolates',()=>{

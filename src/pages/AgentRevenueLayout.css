@@ -1,0 +1,40 @@
+.agent-period-workbench .agent-operation-table-wrap { overflow-x: auto; }
+.agent-period-workbench .agent-period-table { min-width: 1200px; table-layout: auto; }
+.agent-period-workbench .agent-period-table th,
+.agent-period-workbench .agent-period-table td { padding: 8px 7px; }
+.agent-period-workbench .agent-period-col-creator { width: 190px; }
+.agent-period-workbench .agent-period-col-platform { width: 90px; }
+.agent-period-workbench .agent-period-col-cycle { width: 80px; }
+.agent-period-workbench .agent-period-col-period { width: 115px; }
+.agent-period-workbench .agent-period-col-month { width: 130px; }
+.agent-period-workbench .agent-period-col-status { width: 95px; }
+.agent-period-workbench .agent-period-col-detail { width: 44px; }
+.agent-period-workbench .agent-revenue-platform-types { display: grid; gap: 6px; justify-items: center; }
+.agent-period-workbench .agent-revenue-platform-types > div { display: grid; justify-items: center; gap: 4px; }
+.agent-period-workbench .agent-revenue-detail-toggle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; color: var(--muted); background: transparent; cursor: pointer; }
+.agent-period-workbench .agent-revenue-detail-toggle:hover { background: var(--panel-muted); }
+.agent-period-workbench .agent-revenue-detail-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.agent-period-workbench .agent-revenue-detail-row td { text-align: left; background: var(--panel-muted); }
+.agent-period-workbench .agent-revenue-notes { color: var(--text); text-align: left; overflow-wrap: anywhere; }
+.agent-period-workbench .agent-revenue-notes p { margin: 4px 0 0; white-space: pre-wrap; }
+.agent-period-workbench .agent-revenue-mobile-details { display: grid; justify-items: end; }
+.agent-period-workbench .agent-revenue-mobile-details .agent-revenue-notes { justify-self: stretch; padding: 8px; background: var(--panel-muted); border-radius: 6px; }
+.agent-period-workbench .agent-revenue-identity { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; }
+.agent-period-workbench .agent-revenue-avatar { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 50%; color: var(--muted); background: var(--panel-muted); }
+.agent-period-workbench .agent-revenue-identity-copy { min-width: 0; overflow-wrap: anywhere; }
+.agent-period-workbench .agent-revenue-identity-copy strong { display: block; color: var(--text); font-size: 14px; }
+.agent-period-workbench .agent-revenue-identity-copy small { display: block; color: var(--muted); font-size: 11px; line-height: 1.3; }
+.agent-period-workbench .agent-revenue-cycle { display: inline-block; padding: 3px 7px; border-radius: 6px; background: var(--panel-muted); color: var(--text); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.agent-period-workbench .agent-period-entry { padding: 5px; justify-items: end; text-align: right; }
+.agent-period-workbench .agent-period-entry .agent-period-revenue-amount b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.agent-period-workbench .agent-period-entry .agent-period-revenue-amount { white-space: nowrap; overflow-wrap: normal; }
+.agent-period-workbench .agent-period-month-summary { justify-items: end; font-variant-numeric: tabular-nums; }
+.agent-period-workbench .agent-period-month-summary-line { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; white-space: nowrap; }
+.agent-period-workbench .agent-period-month-summary-line small { margin: 0; }
+@media (max-width: 760px) {
+  .agent-period-workbench .agent-period-mobile-meta { justify-content: flex-start; }
+  .agent-period-workbench .agent-period-mobile-period { grid-template-columns: minmax(90px, 1fr) minmax(0, 1.4fr); align-items: center; padding: 6px 10px; }
+  .agent-period-workbench .agent-period-mobile-period > span,
+  .agent-period-workbench .agent-period-mobile-summary > span { text-align: left; }
+  .agent-period-workbench .agent-period-mobile-summary { text-align: left; }
+}
