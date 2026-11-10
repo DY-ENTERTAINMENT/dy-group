@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { CalendarCheck2, CalendarClock, HeartPulse, Info, Plus, Wallet, Wand2 } from 'lucide-react';
 import './LeavePageV2.css';
 import { useSearchParams } from 'react-router-dom';
@@ -42,6 +42,11 @@ const emptyForm: LeaveFormValues = {
 };
 
 export function LeavePage() {
+  const { user, profile } = useAuth();
+  return <LeavePageContent key={`${user?.id ?? ''}:${profile?.id ?? ''}`} />;
+}
+
+function LeavePageContent() {
   const { profile } = useAuth();
   const permissions = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,10 +58,7 @@ export function LeavePage() {
   const [clockInDates, setClockInDates] = useState<Set<string>>(new Set());
   const [selectedReplacement, setSelectedReplacement] = useState<LeaveRequestItem | null>(null);
   const [changeValues, setChangeValues] = useState<ReplacementWorkChangeFormValues>({ changeType: 'reschedule', reason: '' });
-  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [selectedLeaveMonth, setSelectedLeaveMonth] = useState(getMalaysiaMonth);
   const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<LeaveRequestStatus | 'all'>('all');
   const [restCycle, setRestCycle] = useState(getCurrentRestCycle());
@@ -68,6 +70,13 @@ export function LeavePage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [listError, setListError] = useState('');
+  const [balanceError, setBalanceError] = useState('');
+  const [changesError, setChangesError] = useState('');
+  const [clockError, setClockError] = useState('');
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [auxiliaryReady, setAuxiliaryReady] = useState(false);
+  const loadSequence = useRef(0);
 
   const restCycleRange = useMemo(() => getRestCycleRange(restCycle), [restCycle]);
   const restCalendarCells = useMemo(
@@ -100,10 +109,10 @@ export function LeavePage() {
     const year = Number(yearText);
     const month = Number(monthText);
     const monthStart = `${selectedLeaveMonth}-01`;
-    const monthEnd = selectedLeaveMonth === 'all' ? '' : `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+    const monthEnd = `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
     return requests.filter((request) => {
-      const matchesMonth = selectedLeaveMonth === 'all' || (request.start_date <= monthEnd && request.end_date >= monthStart);
+      const matchesMonth = request.start_date <= monthEnd && request.end_date >= monthStart;
       const matchesType = selectedLeaveType === 'all' || request.leave_type === selectedLeaveType;
       return matchesMonth && matchesType;
     });
@@ -119,6 +128,7 @@ export function LeavePage() {
     if (profile?.id) {
       void loadLeaveRequests(profile.id);
     }
+    return () => { loadSequence.current += 1; };
   }, [profile?.id]);
 
   usePullToRefresh(async () => {
@@ -144,19 +154,37 @@ export function LeavePage() {
       return;
     }
 
-    setLoading(true);
-    setError('');
-
+    const sequence = ++loadSequence.current;
+    const current = () => sequence === loadSequence.current;
+    setLoading(true); setBalanceLoading(true); setAuxiliaryReady(false);
+    setReplacementChanges([]); setClockInDates(new Set());
+    setListError(''); setBalanceError(''); setChangesError(''); setClockError('');
+    void Promise.allSettled([replacementWorkChangeService.listMyChanges(), replacementWorkChangeService.listMyClockInDates(profileId)]).then(([changes, clock]) => {
+      if (!current()) return;
+      if (changes.status === 'fulfilled') setReplacementChanges(changes.value);
+      else setChangesError(`读取调休变更失败：${getErrorMessage(changes.reason)}`);
+      if (clock.status === 'fulfilled') setClockInDates(clock.value);
+      else setClockError(`读取打卡记录失败：${getErrorMessage(clock.reason)}`);
+      setAuxiliaryReady(changes.status === 'fulfilled' && clock.status === 'fulfilled');
+    });
     try {
-      const [leaveRequests, changes, clockIns] = await Promise.all([leaveService.listMyLeaveRequests(profileId), replacementWorkChangeService.listMyChanges(), replacementWorkChangeService.listMyClockInDates(profileId)]);
+      const leaveRequests = await leaveService.listMyLeaveRequests(profileId);
+      if (!current()) return;
       setRequests(leaveRequests);
-      setReplacementChanges(changes);
-      setClockInDates(clockIns);
-      setBalances(await leaveService.getMyLeaveBalances(profileId, leaveRequests));
-    } catch (loadError) {
-      setError(`读取请假记录失败：${getErrorMessage(loadError)}`);
-    } finally {
       setLoading(false);
+      try {
+        const nextBalances = await leaveService.getMyLeaveBalances(profileId, leaveRequests);
+        if (current()) setBalances(nextBalances);
+      } catch (balanceLoadError) {
+        if (current()) setBalanceError(`读取假期余额失败：${getErrorMessage(balanceLoadError)}`);
+      }
+    } catch (loadError) {
+      if (current()) {
+        setRequests([]);
+        setListError(`读取请假记录失败，记录可能不完整，请重试：${getErrorMessage(loadError)}`);
+      }
+    } finally {
+      if (current()) { setLoading(false); setBalanceLoading(false); }
     }
   }
 
@@ -366,10 +394,11 @@ export function LeavePage() {
         <>
           {error ? <p className="form-alert">{error}</p> : null}
           {message ? <p className="form-success">{message}</p> : null}
+          {[listError, balanceError, changesError, clockError].filter(Boolean).map((item) => <p className="form-alert" key={item}>{item}</p>)}
 
           <div className="leave-stats-grid">
-            <BalanceCard label="年假" days={balances.annualRemaining} kind="annual" unavailable={loading || Boolean(error)} />
-            <BalanceCard label="病假" days={balances.medicalRemaining} kind="medical" unavailable={loading || Boolean(error)} />
+            <BalanceCard label="年假" days={balances.annualRemaining} kind="annual" unavailable={balanceLoading || Boolean(balanceError) || Boolean(listError)} />
+            <BalanceCard label="病假" days={balances.medicalRemaining} kind="medical" unavailable={balanceLoading || Boolean(balanceError) || Boolean(listError)} />
           </div>
 
           <section className="leave-types-panel" aria-label="请假类型说明">
@@ -393,12 +422,12 @@ export function LeavePage() {
             <div className="list-header">
               <div className="leave-request-header-title">
                 <h3>我的申请记录</h3>
-                <span>{loading ? '正在读取' : error ? '读取状态请见提示' : `${displayedRequests.length} 条已加载记录（可能受返回上限限制）`}</span>
+                <span>{loading ? '正在读取' : listError ? '读取失败，记录未完整加载' : `符合筛选条件 ${displayedRequests.length} 条`}</span>
               </div>
               <div className="attendance-filters leave-request-filters">
                 <label className="form-field">
                   <span>月份</span>
-                  <LeaveMonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} />
+                  <LeaveMonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} requests={requests} />
                 </label>
                 <label className="form-field">
                   <span>请假类型</span>
@@ -418,12 +447,12 @@ export function LeavePage() {
 
             {loading ? (
               <div className="table-state">正在读取请假记录...</div>
-            ) : error && requests.length === 0 ? (
+            ) : listError ? (
               <div className="table-state">暂时无法读取申请记录，请稍后重试。</div>
             ) : displayedRequests.length === 0 ? (
               <div className="table-state leave-empty-state"><CalendarCheck2 size={24} aria-hidden="true" /><span>{requests.length === 0 ? '暂无请假申请。' : '当前筛选条件下暂无记录。'}</span></div>
             ) : (
-              <LeaveRequestTable requests={displayedRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
+              <LeaveRequestTable auxiliaryReady={auxiliaryReady} requests={displayedRequests} pendingSourceIds={new Set(replacementChanges.filter((change) => change.status === 'pending').map((change) => change.source_replacement_leave_request_id))} effectiveMakeupDatesBySource={effectiveMakeupDatesBySource} clockInDates={clockInDates} onChangeRequest={(request) => { setSelectedReplacement(request); setChangeValues({ changeType: 'reschedule', reason: '' }); }} />
             )}
           </div>
         </>
@@ -627,10 +656,11 @@ function ReplacementWorkChangeModal({ request, currentMakeupDate, values, saving
   </SystemModal>;
 }
 
-function LeaveRequestTable({ requests, pendingSourceIds, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
+function LeaveRequestTable({ auxiliaryReady, requests, pendingSourceIds, effectiveMakeupDatesBySource, clockInDates, onChangeRequest }: { auxiliaryReady: boolean; requests: LeaveRequestItem[]; pendingSourceIds: Set<string>; effectiveMakeupDatesBySource: Map<string, string>; clockInDates: Set<string>; onChangeRequest: (request: LeaveRequestItem) => void }) {
   const isMobile = useMobileLeaveRequestLayout();
   const renderChangeAction = (request: LeaveRequestItem, showPending = false) => {
     if (request.leave_type !== 'replacement' || request.status !== 'approved') return null;
+    if (!auxiliaryReady) return null;
     if (pendingSourceIds.has(request.id)) return showPending ? <span className="leave-change-pending">变更审核中</span> : null;
     if (clockInDates.has(effectiveMakeupDatesBySource.get(request.id) ?? request.start_date)) return null;
     return <button className="secondary-button compact-button" type="button" onClick={() => onChangeRequest(request)}>+ 变更申请</button>;
@@ -854,10 +884,24 @@ function getCurrentRestCycle() {
   return `${target.getFullYear()}-${`${target.getMonth() + 1}`.padStart(2, '0')}`;
 }
 
-function LeaveMonthSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const year = new Date().getFullYear();
-  const months = Array.from({ length: 60 }, (_, index) => `${year - 2 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`);
-  return <select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">全部月份（已加载）</option>{months.map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}</select>;
+function LeaveMonthSelect({ value, onChange, requests }: { value: string; onChange: (value: string) => void; requests: LeaveRequestItem[] }) {
+  const months = new Set<string>();
+  months.add(value);
+  months.add(getMalaysiaMonth());
+  for (const request of requests) {
+    const end = request.end_date.slice(0, 7);
+    let [year, month] = request.start_date.slice(0, 7).split('-').map(Number);
+    while (`${year}-${String(month).padStart(2, '0')}` <= end) {
+      months.add(`${year}-${String(month).padStart(2, '0')}`);
+      if (++month === 13) { month = 1; year += 1; }
+    }
+  }
+  return <select value={value} onChange={(event) => onChange(event.target.value)}>{[...months].sort().reverse().map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}</select>;
+}
+
+function getMalaysiaMonth() {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
+  return `${parts.find((part) => part.type === 'year')!.value}-${parts.find((part) => part.type === 'month')!.value}`;
 }
 
 function getRestCycleRange(cycle: string) {

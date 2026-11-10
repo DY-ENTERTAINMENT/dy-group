@@ -95,22 +95,30 @@ type LeaveRequestRowWithEmployee = LeaveRequest & {
 
 export const leaveService = {
   async listMyLeaveRequests(profileId: string) {
-    const { data, error } = await supabase
-      .from('leave_requests')
-      .select(
-        `
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!authData.user || authData.user.id !== profileId) throw new Error('无法确认当前登录员工。');
+    const rows: LeaveRequestRowWithEmployee[] = [];
+    let cursor: Pick<LeaveRequest, 'created_at' | 'id'> | undefined;
+    while (true) {
+      let query = supabase.from('leave_requests').select(`
         *,
         employees:employee_id(id, full_name, phone, employee_code, region_id)
-      `,
-      )
-      .eq('profile_id', profileId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw error;
+      `).eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(500);
+      if (cursor) {
+        query = query.or(`created_at.lt."${cursor.created_at}",and(created_at.eq."${cursor.created_at}",id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      const page = (data ?? []) as unknown as LeaveRequestRowWithEmployee[];
+      if (page.length === 0) break;
+      rows.push(...page);
+      cursor = page[page.length - 1];
     }
-
-    return ((data ?? []) as unknown as LeaveRequestRowWithEmployee[]).map(mapLeaveRequestRow);
+    return rows.map(mapLeaveRequestRow);
   },
 
   async listPendingLeaveRequests() {
