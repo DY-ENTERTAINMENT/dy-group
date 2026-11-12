@@ -1,14 +1,17 @@
+import { DesignerReviewWorkspace, type DesignerReviewWorkspaceProps } from './DesignerReviewWorkspace';
 import { Download, Eye, FileText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { designerStageDeliverablesEnabled } from '../services/designer-stage-deliverables.feature';
 import { designerStageDeliverablesService, type DesignerStageDeliverable } from '../services/designer-stage-deliverables';
 
-type Props = { requestId: string; stageId: string | null | undefined; stageType: string | null | undefined; requestItemId: string | null | undefined; requestItems: unknown[] | null | undefined; requestItemsLoaded: boolean };
+type Props = { requestId: string; stageId: string | null | undefined; stageType: string | null | undefined; requestItemId: string | null | undefined; requestItems: unknown[] | null | undefined; requestItemsLoaded: boolean; preserveHistory?: boolean; previewPanel?: DesignerReviewWorkspaceProps };
 
-export function DesignerSubmittedDeliverables({ requestId, stageId, stageType, requestItemId, requestItems, requestItemsLoaded }: Props) {
+export function DesignerSubmittedDeliverables({ requestId, stageId, stageType, requestItemId, requestItems, requestItemsLoaded, previewPanel }: Props) {
+  previewPanel = import.meta.env.DEV ? previewPanel : undefined;
   const [files, setFiles] = useState<DesignerStageDeliverable[]>([]); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const alive = useRef(0);
-  const eligible = designerStageDeliverablesEnabled && Boolean(stageId) && stageType === 'design' && requestItemId === null && requestItemsLoaded && Array.isArray(requestItems) && requestItems.length === 0;
+  const eligible = !previewPanel && designerStageDeliverablesEnabled && Boolean(stageId) && stageType === 'design' && requestItemId === null && requestItemsLoaded && Array.isArray(requestItems) && requestItems.length === 0;
   useEffect(() => { const token = ++alive.current; setFiles([]); setError(''); if (!eligible || !stageId) return () => { alive.current++; }; setLoading(true); void designerStageDeliverablesService.list(stageId).then((rows) => { if (alive.current === token) setFiles(rows.filter((row) => row.submission_id !== null)); }).catch((reason) => { if (alive.current === token) setError(reason instanceof Error ? reason.message : '设计成果读取失败。'); }).finally(() => { if (alive.current === token) setLoading(false); }); return () => { alive.current++; }; }, [requestId, stageId, eligible]);
+  if (previewPanel) return <DesignerReviewWorkspace {...previewPanel} />;
   if (!eligible) return null;
   const groups = new Map<number, DesignerStageDeliverable[]>(); for (const file of files) { if (file.version_number === null) continue; groups.set(file.version_number, [...(groups.get(file.version_number) ?? []), file]); }
   const signed = async (file: DesignerStageDeliverable, download = false) => { try { const url = await designerStageDeliverablesService.preview(file.storage_path, download ? file.original_name : undefined); window.open(url, '_blank', 'noopener,noreferrer'); } catch (reason) { setError(reason instanceof Error ? reason.message : '预览链接获取失败。'); } };
