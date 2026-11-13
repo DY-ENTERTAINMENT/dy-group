@@ -13,6 +13,18 @@ type DeliverablesRpc={
 };
 type DeliverablesRpcClient={rpc<Name extends keyof DeliverablesRpc>(name:Name,args:DeliverablesRpc[Name]['Args']):Promise<{data:DeliverablesRpc[Name]['Returns']|null;error:{message:string}|null}>};
 const supabase=supabaseClient as typeof supabaseClient & DeliverablesRpcClient;
+export type LegacyReturnFeedback={submission_id:string;feedback:string;returned_at:string};
+export async function listLegacyReturnFeedback(stageId:string):Promise<LegacyReturnFeedback[]> {
+ const client=supabaseClient as unknown as {from:(name:string)=>{select:(columns:string)=>{eq:(column:string,value:string)=>Promise<{data:LegacyReturnFeedback[]|null;error:{message:string}|null}>}}};
+ const {data,error}=await client.from('designer_legacy_return_feedback').select('submission_id,feedback,returned_at').eq('stage_id',stageId);
+ if(error) throw new Error(error.message);
+ return data ?? [];
+}
+export async function reviewLegacySubmission(stageId:string,submissionId:string|null,accept:boolean,feedback:string|null,submittedAt:string):Promise<void> {
+ const client=supabaseClient as unknown as {rpc:(name:string,args:Record<string,unknown>)=>Promise<{error:{message:string}|null}>};
+ const {error}=await client.rpc('review_legacy_design_submission',{p_stage_id:stageId,p_submission_id:submissionId,p_accept:accept,p_feedback:feedback,p_expected_submitted_at:submittedAt});
+ if(error) throw new Error(error.message);
+}
 export type DeliverableContentType='image/jpeg'|'image/png'|'image/webp'|'application/pdf';
 export type DesignerStageDeliverable={id:string;request_id:string;stage_id:string;request_item_id:string|null;storage_path:string;original_name:string;content_type:DeliverableContentType;size_bytes:number;submission_id:string|null;version_number:number|null;created_at:string;submitted_at:string|null};
 const bucket='designer-stage-deliverables'; const submittingStageIds=new Set<string>(); const ext:Record<DeliverableContentType,string>={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'};
