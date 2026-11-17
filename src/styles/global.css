@@ -15900,3 +15900,11 @@ button.leave-chip:disabled {
 .designer-creator-option:hover,.designer-creator-option.is-active { background:#f2eef9; }
 .designer-creator-empty { padding:12px 10px; color:#746d82; font-weight:400; }
 .designer-creator-empty button { border:0; padding:4px; color:#55339e; background:transparent; cursor:pointer; font:inherit; text-decoration:underline; }
+
+/* Isolated designer return dialog. */
+.designer-return-modal .designer-return-reason { display:grid; min-width:0; gap:7px; }
+.designer-return-modal .designer-return-reason textarea { box-sizing:border-box; display:block; width:100%; min-width:0; min-height:88px; resize:vertical; border:1px solid #dcd5e8; border-radius:8px; padding:9px 10px; color:#302b3c; background:#fff; font:inherit; }
+.designer-return-modal .designer-return-confirm { display:flex; align-items:flex-start; gap:8px; margin-top:16px; }
+.designer-return-modal .designer-return-confirm input { flex:none; width:auto; margin:4px 0 0; }
+.designer-return-modal .designer-return-confirm span { min-width:0; overflow-wrap:anywhere; }
+@media (max-width:480px) { .designer-return-modal { max-width:calc(100vw - 24px); } .designer-return-modal .modal-footer { flex-wrap:wrap; } .designer-return-modal .modal-footer button { max-width:100%; } }
