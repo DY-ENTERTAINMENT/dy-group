@@ -12,5 +12,5 @@ export function DesignerReviewStageGate(props: ReviewConnectedProps) {
   const mode = useReviewStageMode(requestId, stageId, itemId);
   if (mode === 'active' || mode === 'paused') return <DesignerReviewConnected {...props} paused={mode === 'paused'} />;
   return <DesignerReviewWorkspace role={props.role} status="draft" pictures={[]} note="" submittedNote={null}
-    feedback={null} revisionCount={0} disabledReason={'\u8bbe\u8ba1\u5ba1\u6838\u672a\u542f\u7528\u6216\u6682\u65f6\u4e0d\u53ef\u7528\u3002'} />;
+    feedback={null} revisionCount={0} disabledReason={mode === 'off' ? '该设计阶段尚未启用方案 A。' : '无法确认该阶段的审核模式，请刷新后重试。'} />;
 }
