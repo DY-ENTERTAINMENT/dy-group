@@ -2474,6 +2474,7 @@ type OperationStreamerRow = {
   latestNote: string;
   monthSummary: OperationMonthSummaryEntry[];
   sortValue: number;
+  sortHasRecord: boolean;
   firstCreatedAt: number | null;
 };
 
@@ -2572,6 +2573,8 @@ function AgentPeriodRevenuePanel(props: {
   const effectiveMonths = useMemo(() => getMonthsForDateRange(effectiveDateRange), [effectiveDateRange]);
   const monthsToLoad = useMemo(() => uniqueValues([props.month, todayMonth, ...effectiveMonths].filter(Boolean)), [effectiveMonths, props.month, todayMonth]);
   const effectivePeriodOptions = useMemo(() => getRevenuePeriodsForDateRange(effectiveDateRange, periodsByMonth), [effectiveDateRange, periodsByMonth]);
+  const monthSortPeriods = useMemo(() => periodsByMonth[props.month] ?? [], [periodsByMonth, props.month]);
+  const loadedPeriodOptions = useMemo(() => Array.from(new Map([...effectivePeriodOptions, ...monthSortPeriods].map(period => [period.startIso, period])).values()), [effectivePeriodOptions, monthSortPeriods]);
   const selectedPeriod = useMemo(() => effectivePeriodOptions.find((period) => period.startIso === filters.periodStart) ?? effectivePeriodOptions[0], [effectivePeriodOptions, filters.periodStart]);
   const settingsMonth = effectiveMonths.length === 1 ? effectiveMonths[0] : props.month;
   const settingsMonthPeriods = periodsByMonth[settingsMonth] ?? [];
@@ -2649,7 +2652,7 @@ function AgentPeriodRevenuePanel(props: {
     setMessage('');
     setRecordsByPeriod({});
     setPreviousRecords({});
-    if (creatorProfileIds.length === 0 || effectivePeriodOptions.length === 0) return;
+    if (creatorProfileIds.length === 0 || loadedPeriodOptions.length === 0) return;
 
     setWeeklyLoading(true);
     setFeatureUnavailable(false);
@@ -2657,12 +2660,12 @@ function AgentPeriodRevenuePanel(props: {
       ? agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: currentPreviousPeriod.startIso })
       : Promise.resolve([]);
     Promise.all([
-      Promise.all(effectivePeriodOptions.map((period) => agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: period.startIso }))),
+      Promise.all(loadedPeriodOptions.map((period) => agentService.listWeeklyRevenueRecords({ creatorProfileIds, weekStartDate: period.startIso }))),
       previousPromise,
     ])
       .then(([periodItems, previousItems]) => {
         if (!active) return;
-        setRecordsByPeriod(Object.fromEntries(effectivePeriodOptions.map((period, index) => [
+        setRecordsByPeriod(Object.fromEntries(loadedPeriodOptions.map((period, index) => [
           period.startIso,
           Object.fromEntries((periodItems[index] ?? []).map((item) => [item.creator_profile_id, item])),
         ])));
@@ -2679,11 +2682,11 @@ function AgentPeriodRevenuePanel(props: {
     return () => {
       active = false;
     };
-  }, [currentPreviousPeriod, effectivePeriodOptions, sortedCreators, weeklyRefreshRevision]);
+  }, [currentPreviousPeriod, loadedPeriodOptions, sortedCreators, weeklyRefreshRevision]);
 
   const currentRows = useMemo(
-    () => buildOperationStreamerRows(sortedCreators, effectivePeriodOptions, recordsByPeriod, filters, todayIso),
-    [effectivePeriodOptions, filters, recordsByPeriod, sortedCreators, todayIso],
+    () => buildOperationStreamerRows(sortedCreators, effectivePeriodOptions, recordsByPeriod, filters, todayIso, props.month, monthSortPeriods),
+    [effectivePeriodOptions, filters, recordsByPeriod, sortedCreators, todayIso, props.month, monthSortPeriods],
   );
   const filteredCurrentRows = useMemo(() => filterOperationStreamerRows(currentRows, filters).sort(sortOperationStreamerRows), [currentRows, filters]);
   const summary = useMemo(() => summarizeEffectiveRevenueRows(currentRows), [currentRows]);
@@ -3780,6 +3783,8 @@ function buildOperationStreamerRows(
   recordsByPeriod: Record<string, Record<string, WeeklyRevenueRecord>>,
   filters: OperationFilters,
   todayIso: string,
+  month: string,
+  monthSortPeriods: RevenuePeriodRange[],
 ): OperationStreamerRow[] {
   const groups = groupOperationProfiles(creators);
   const normalizedSearch = filters.search.trim().toLowerCase();
@@ -3823,7 +3828,7 @@ function buildOperationStreamerRows(
       };
     });
     const rowStatus: OperationStatus = visibleProfiles.every(profile => (profile as CycleAwareProfile).revenueMonthContext?.cycle_source === 'LEGACY_UNKNOWN') ? 'unverified' : rowPeriods.some((period) => period.profiles.some((profile) => profile.status === 'missing')) || visibleProfiles.some(profile => isVerifiedMonthly((profile as CycleAwareProfile).revenueMonthContext) && !(profile as CycleAwareProfile).revenueMonthContext?.monthly_record) ? 'missing' : 'filled';
-    const revenueSort = getOperationRevenueSort(rowPeriods, filters.platform);
+    const revenueSort = getOperationRevenueSort(monthSortPeriods, recordsByPeriod, visibleProfiles, filters.platform, month);
     return [{
       id: getOperationGroupKey(visibleProfiles[0]),
       displayName: getOperationDisplayName(visibleProfiles),
@@ -3834,6 +3839,7 @@ function buildOperationStreamerRows(
       latestNote: getOperationLatestNote(rowPeriods),
       monthSummary: summarizeOperationMonth(rowPeriods.map(cell => ({ ...cell, profiles: cell.profiles.filter(item => isWeeklyRevenuePendingEligible(item.creator)) }))),
       sortValue: revenueSort.sortValue,
+      sortHasRecord: revenueSort.hasRecord,
       firstCreatedAt: revenueSort.firstCreatedAt,
     }];
   });
@@ -3915,19 +3921,30 @@ function summarizeOperationMonth(periods: OperationPeriodCell[]): OperationMonth
   return [summary.tiktok, summary.douyin];
 }
 
-function getOperationRevenueSort(periods: OperationPeriodCell[], platformFilter: OperationPlatformFilter) {
+function getOperationRevenueSort(periods: RevenuePeriodRange[], recordsByPeriod: Record<string, Record<string, WeeklyRevenueRecord>>, profiles: CreatorProfile[], platformFilter: OperationPlatformFilter, month: string) {
   const totals: Record<CreatorPlatform, number> = { tiktok: 0, douyin: 0 };
   const selectedPlatform = platformFilter === 'tiktok' || platformFilter === 'douyin' ? platformFilter : null;
-  const records = periods.flatMap((period) => period.profiles)
-    .filter((profile) => profile.record && (!selectedPlatform || profile.creator.platform === selectedPlatform));
+  const records = periods.flatMap((period) => profiles.flatMap((profile) => {
+    if ((selectedPlatform && profile.platform !== selectedPlatform) || (profile.revenue_cycle !== 'weekly' && profile.revenue_cycle && (profile as CycleAwareProfile).revenueMonthContext?.cycle_source !== 'LEGACY_UNKNOWN')) return [];
+    const record = recordsByPeriod[period.startIso]?.[profile.id];
+    if (!record) return [];
+    totals[profile.platform] += record.revenue_amount;
+    return [record];
+  }));
 
-  records.forEach((profile) => {
-    totals[profile.creator.platform] += profile.record!.revenue_amount;
+  const monthlyRecords = profiles.flatMap((profile) => {
+    const context = (profile as CycleAwareProfile).revenueMonthContext;
+    const record = context?.monthly_record;
+    if (profile.revenue_cycle !== 'monthly' || context?.cycle_source !== 'VERIFIED' || !record
+      || record.revenue_month.slice(0, 7) !== month || (selectedPlatform && profile.platform !== selectedPlatform)) return [];
+    totals[profile.platform] += record.revenue_amount;
+    return [record as MonthlyRevenueRecord & { created_at?: string | null }];
   });
 
   return {
     sortValue: selectedPlatform ? totals[selectedPlatform] : Math.max(totals.tiktok, totals.douyin),
-    firstCreatedAt: getFirstCreatedAt(records.map((profile) => profile.record!)),
+    hasRecord: records.length > 0 || monthlyRecords.length > 0,
+    firstCreatedAt: getFirstCreatedAt([...records, ...monthlyRecords]),
   };
 }
 
@@ -3962,6 +3979,7 @@ function filterOperationStreamerRows(rows: OperationStreamerRow[], filters: Oper
 
 
 function sortOperationStreamerRows(first: OperationStreamerRow, second: OperationStreamerRow) {
+  if (first.sortHasRecord !== second.sortHasRecord) return first.sortHasRecord ? -1 : 1;
   if (second.sortValue !== first.sortValue) return second.sortValue - first.sortValue;
   const firstCreatedAtCompare = compareFirstCreatedAt(first.firstCreatedAt, second.firstCreatedAt);
   if (firstCreatedAtCompare !== 0) return firstCreatedAtCompare;
