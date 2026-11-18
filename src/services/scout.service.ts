@@ -148,7 +148,7 @@ export type CreatorEntitySharedFormValues = {
   secondary_scout_employee_id: string;
   secondary_manager_employee_id: string;
   is_priority: boolean;
-  operation_status: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'other';
+  operation_status: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'left_guild' | 'other';
   operation_status_reason: string;
   platforms: CreatorEntityPlatformEditValues[];
 };
@@ -202,7 +202,7 @@ export type CreatorProfile = {
   scout_profile_id: string | null;
   manager_employee_id: string | null;
   is_priority?: boolean;
-  operation_status?: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'other';
+  operation_status?: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'left_guild' | 'other';
   operation_status_reason?: string | null;
   revenue_cycle?: 'weekly' | 'monthly' | 'none';
   revenue_input_mode?: 'direct' | 'cumulative';
@@ -714,7 +714,7 @@ export const scoutService = {
     if (error) throw error;
   },
 
-  async listCreators(filters: { personalProfileId?: string; platform?: string; regionId?: string; scoutEmployeeId?: string; managerEmployeeId?: string; creatorType?: string; status?: CreatorStatusFilter }) {
+  async listCreators(filters: { personalProfileId?: string; platform?: string; regionId?: string; scoutEmployeeId?: string; managerEmployeeId?: string; creatorType?: string; status?: CreatorStatusFilter; includeManagementSettings?: boolean }) {
     let query = db.from('creator_profiles').select(creatorSelect).order('joined_date', { ascending: false });
     const statusFilter = filters.status ?? 'active';
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
@@ -739,9 +739,29 @@ export const scoutService = {
 
     type CreatorRegistrationMetadata = { creator_entity_id: string; registration_type: CreatorRegistrationType | null; guild_joined_date: string | null };
     const metadataByEntityId = new Map<string, CreatorRegistrationMetadata>((metadataRows ?? []).map((metadata: CreatorRegistrationMetadata) => [metadata.creator_entity_id, metadata]));
+    const settingsByEntityId = new Map<string, CreatorEntityManagementSettings | undefined>();
+    if (filters.includeManagementSettings) {
+      // The direct entity relation can be hidden by RLS. Use the existing scoped RPC.
+      for (let index = 0; index < entityIds.length; index += 10) {
+        await Promise.all(entityIds.slice(index, index + 10).map(async (entityId) => {
+          const settings = await scoutService.getCreatorEntityManagementSettings(entityId);
+          const setting = settings[0];
+          if (!setting && creators.some((creator) => creator.creator_entity_id === entityId && (creator.status ?? 'active') === 'active')) {
+            throw new Error('无法读取主播运营状态，请检查权限后重试。');
+          }
+          settingsByEntityId.set(entityId, setting);
+        }));
+      }
+    }
     return creators.map((creator) => {
-      const metadata = creator.creator_entity_id ? metadataByEntityId.get(creator.creator_entity_id) : undefined;
-      return metadata ? { ...creator, registration_type: metadata.registration_type, guild_joined_date: metadata.guild_joined_date } : creator;
+      const entityId = creator.creator_entity_id;
+      const metadata = entityId ? metadataByEntityId.get(entityId) : undefined;
+      const setting = entityId ? settingsByEntityId.get(entityId) : undefined;
+      return {
+        ...creator,
+        ...(metadata ? { registration_type: metadata.registration_type, guild_joined_date: metadata.guild_joined_date } : {}),
+        ...(filters.includeManagementSettings && entityId ? { operation_status: setting?.operation_status, operation_status_reason: setting?.operation_status_reason ?? null, is_priority: setting?.is_priority ?? creator.is_priority } : {}),
+      };
     });
   },
 
@@ -856,6 +876,10 @@ export const scoutService = {
       p_operation_status: values.operation_status, p_operation_status_reason: values.operation_status_reason.trim() || null,
     });
     if (error) throw error;
+    const saved = await scoutService.getCreatorEntityManagementSettings(creatorEntityId);
+    if (!saved.length || saved.some((setting) => setting.operation_status !== values.operation_status)) {
+      throw new Error('无法确认运营状态已保存，请刷新后核对。');
+    }
   },
 
   async saveCreatorEntityRevenueSettings(creatorEntityId: string, values: CreatorEntitySharedFormValues) {
@@ -1172,7 +1196,7 @@ function mapCreatorRow(row: any): CreatorProfile {
     manager_employee_id: row.manager_employee_id,
     revenue_cycle: row.revenue_cycle === 'weekly' || row.revenue_cycle === 'monthly' || row.revenue_cycle === 'none' ? row.revenue_cycle : undefined,
     is_priority: creatorEntity?.is_priority === true,
-    operation_status: ['normal', 'paused', 'long_term_stopped', 'resigned', 'terminated', 'other'].includes(creatorEntity?.operation_status) ? creatorEntity.operation_status : 'normal',
+    operation_status: ['normal', 'paused', 'long_term_stopped', 'resigned', 'terminated', 'left_guild', 'other'].includes(creatorEntity?.operation_status) ? creatorEntity.operation_status : 'normal',
     operation_status_reason: typeof creatorEntity?.operation_status_reason === 'string' ? creatorEntity.operation_status_reason : null,
     creator_type: row.creator_type,
     status: row.status,

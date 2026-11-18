@@ -373,7 +373,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         scoutService.getOptions(),
         mode === 'personal-streamers'
           ? scoutService.listPersonalStreamerProfiles()
-          : scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? creatorStatusFilter : undefined }),
+          : scoutService.listCreators({ personalProfileId, status: mode === 'management-streamers' ? 'all' : undefined, includeManagementSettings: mode === 'management-streamers' }),
         mode === 'recruit-list' && profile?.id ? scoutService.listCandidates(profile.id) : Promise.resolve([]),
         mode === 'personal-recruiting' ? listPersonalDailyWorkLogsForWeek(dailyWorkWeek) : Promise.resolve([]),
         mode === 'management-recruiting' ? listManagementWorkloadStatsForView({ month, regionId: regionFilter, granularity: workloadGranularity, view: workloadView }) : Promise.resolve([]),
@@ -535,9 +535,11 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         await scoutService.createCreatorEntityWithPlatforms(creatorEntityForm);
         setMessage('主播已入公会。');
       }
+      const refreshedCreators = await loadData();
+      if (!refreshedCreators) throw new Error('保存后无法重新读取主播列表，请刷新后核对。');
       closeCreatorModal();
-      await loadData();
     } catch (saveError) {
+      setMessage('');
       if (editingCreatorEntityId) {
         const entityId = editingCreatorEntityId;
         const saveState = completedSteps.length > 0 ? `已保存：${completedSteps.join('、')}` : '未完成任何保存步骤';
@@ -564,7 +566,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
       );
       const refreshedCreators = await loadData();
       const refreshedGroup = refreshedCreators
-        ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId)
+        ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId, mode === 'management-streamers')
           .find((group) => group.profiles.some((creator) => creator.creator_entity_id === addingCreatorPlatform.creatorEntityId))
         : undefined;
       if (refreshedGroup) setSelectedCreatorGroup(refreshedGroup);
@@ -876,7 +878,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
 
     try {
       await scoutService.setCreatorStatus(creator.id, 'active', null);
-      setMessage('主播已恢复为在职。');
+      setMessage('主播资料已恢复为有效。');
       closeCreatorStatus();
       await loadData();
     } catch (statusError) {
@@ -1077,7 +1079,7 @@ export function ScoutPage({ mode }: ScoutPageProps) {
         )
       ) : null}
 
-      {associationOpen && associationCurrentEntityId && associationCurrentProfile ? <CrossPlatformAssociationModal currentProfile={associationCurrentProfile} currentEntityId={associationCurrentEntityId} onClose={() => { setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); }} onSuccess={() => { const associatedEntityId = associationCurrentEntityId; setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); setMessage('双平台账号已关联。'); void (async () => { const refreshedCreators = await loadData(); const refreshedGroup = refreshedCreators ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId).find((group) => group.profiles.some((profile) => profile.creator_entity_id === associatedEntityId)) : null; if (refreshedGroup) setSelectedCreatorGroup(refreshedGroup); if (associatedEntityId) { try { setCreatorEntityCollaborators(await scoutService.getCreatorEntityCollaborators(associatedEntityId)); } catch { setCreatorEntityCollaborators([]); } } })(); }} /> : null}
+      {associationOpen && associationCurrentEntityId && associationCurrentProfile ? <CrossPlatformAssociationModal currentProfile={associationCurrentProfile} currentEntityId={associationCurrentEntityId} onClose={() => { setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); }} onSuccess={() => { const associatedEntityId = associationCurrentEntityId; setAssociationOpen(false); setAssociationCurrentEntityId(null); setAssociationCurrentProfile(null); setMessage('双平台账号已关联。'); void (async () => { const refreshedCreators = await loadData(); const refreshedGroup = refreshedCreators ? groupCreatorProfiles(refreshedCreators, managerDisplayNameByCreatorId, mode === 'management-streamers').find((group) => group.profiles.some((profile) => profile.creator_entity_id === associatedEntityId)) : null; if (refreshedGroup) setSelectedCreatorGroup(refreshedGroup); if (associatedEntityId) { try { setCreatorEntityCollaborators(await scoutService.getCreatorEntityCollaborators(associatedEntityId)); } catch { setCreatorEntityCollaborators([]); } } })(); }} /> : null}
 
       {addingCreatorPlatform ? (
         <CreatorAdditionalPlatformModal
@@ -1764,7 +1766,7 @@ function CreatorStatsPanel({
 }) {
   const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
   const managerScopeGroups = useMemo(
-    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId), {
+    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId, isManagement), {
       month,
       searchQuery: creatorSearchQuery,
       platform: platformFilter,
@@ -1774,11 +1776,12 @@ function CreatorStatsPanel({
       creatorType: creatorTypeFilter,
       registrationType: creatorRegistrationTypeFilter,
       status: creatorStatusFilter,
+      isManagement,
       operationStatus: operationStatusFilter,
       revenueCycle: revenueCycleFilter,
       priority: priorityFilter,
     }),
-    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, isManagement, managerDisplayNameByCreatorId, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
   );
   const managerEmployeeIds = useMemo(
     () => new Set(managerScopeGroups.flatMap((group) => group.profiles.map((creator) => creator.manager_employee_id).filter((managerEmployeeId): managerEmployeeId is string => Boolean(managerEmployeeId)))),
@@ -1789,7 +1792,7 @@ function CreatorStatsPanel({
     [managerEmployeeIds, options.employees],
   );
   const creatorGroups = useMemo(
-    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId), {
+    () => filterCreatorGroups(groupCreatorProfiles(creators, managerDisplayNameByCreatorId, isManagement), {
       month,
       searchQuery: creatorSearchQuery,
       platform: platformFilter,
@@ -1799,11 +1802,12 @@ function CreatorStatsPanel({
       creatorType: creatorTypeFilter,
       registrationType: creatorRegistrationTypeFilter,
       status: creatorStatusFilter,
+      isManagement,
       operationStatus: operationStatusFilter,
       revenueCycle: revenueCycleFilter,
       priority: priorityFilter,
     }),
-    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, managerDisplayNameByCreatorId, managerFilter, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
+    [creatorRegistrationTypeFilter, creatorSearchQuery, creatorStatusFilter, creatorTypeFilter, creators, isManagement, managerDisplayNameByCreatorId, managerFilter, month, operationStatusFilter, platformFilter, priorityFilter, regionFilter, revenueCycleFilter, scoutFilter],
   );
   const summary = useMemo(() => summarizeCreatorGroups(creatorGroups), [creatorGroups]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -2004,14 +2008,13 @@ function CreatorFilters(props: {
         <option value="existing_creator">现有主播补录</option>
       </SelectField>
       {props.isManagement ? (
-        <SelectField label="状态" value={props.creatorStatusFilter} onChange={(value) => props.onCreatorStatusFilter(value as CreatorStatusFilter)}>
-          <option value="active">在职</option>
-          <option value="invalid">无效</option>
-          <option value="all">全部</option>
+        <SelectField label="资料状态" value={props.creatorStatusFilter} onChange={(value) => props.onCreatorStatusFilter(value as CreatorStatusFilter)}>
+          <option value="active">有效</option>
+          <option value="invalid">已失效</option>
         </SelectField>
       ) : null}
       <SelectField label="运营状态" value={props.operationStatusFilter} onChange={props.onOperationStatusFilter}>
-        <option value="">全部</option><option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="other">其他</option>
+        <option value="">全部</option><option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="left_guild">已退公会</option><option value="other">其他</option>
       </SelectField>
       <SelectField label="流水周期" value={props.revenueCycleFilter} onChange={props.onRevenueCycleFilter}>
         <option value="">全部</option><option value="weekly">周流水</option><option value="monthly">月流水</option><option value="none">无需流水</option>
@@ -2060,7 +2063,7 @@ function CreatorTable({ creatorGroups, showScout, onView, quickFilters }: { crea
             <th>区域</th>
             <th>经纪人</th>
             {showScout ? <th>星探</th> : null}
-            <th>状态</th>
+            <th>资料状态</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -2248,10 +2251,10 @@ function CreatorStatusBadge({ status, onQuickFilter }: { status: CreatorGroupSta
 }
 
 function CreatorManagementBadges({ creator, entityLevel = false, quickFilters }: { creator: CreatorProfile; entityLevel?: boolean; quickFilters?: CreatorQuickFilterHandlers }) {
-  const operationStatus = creator.operation_status ?? 'normal';
-  const operationLabels: Record<string, string> = { normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' };
-  const operationLabel = operationLabels[operationStatus] ?? '其他';
-  return entityLevel ? <span className="creator-management-badges">{creator.is_priority ? quickFilters ? <CreatorQuickFilterButton className="creator-management-badge creator-management-badge--priority" onClick={quickFilters.onPriority} ariaLabel="筛选重点关注主播">⭐ 重点关注</CreatorQuickFilterButton> : <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}{quickFilters ? <CreatorQuickFilterButton className={`creator-management-badge creator-management-badge--operation-${operationStatus}`} onClick={() => quickFilters.onOperationStatus(operationStatus)} ariaLabel={`筛选运营状态：${operationLabel}`}>{operationLabel}</CreatorQuickFilterButton> : <span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabel}</span>}</span> : null;
+  const operationStatus = creator.operation_status;
+  const operationLabels: Record<string, string> = { normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', left_guild: '已退公会', other: '其他' };
+  const operationLabel = operationStatus ? operationLabels[operationStatus] ?? '其他' : '运营状态未能读取';
+  return entityLevel ? <span className="creator-management-badges">{creator.is_priority ? quickFilters ? <CreatorQuickFilterButton className="creator-management-badge creator-management-badge--priority" onClick={quickFilters.onPriority} ariaLabel="筛选重点关注主播">⭐ 重点关注</CreatorQuickFilterButton> : <span className="creator-management-badge creator-management-badge--priority">⭐ 重点关注</span> : null}{quickFilters && operationStatus ? <CreatorQuickFilterButton className={`creator-management-badge creator-management-badge--operation-${operationStatus}`} onClick={() => quickFilters.onOperationStatus(operationStatus)} ariaLabel={`筛选运营状态：${operationLabel}`}>{operationLabel}</CreatorQuickFilterButton> : <span className={`creator-management-badge creator-management-badge--operation-${operationStatus}`}>{operationLabel}</span>}</span> : null;
 }
 
 function CreatorRevenueSettingMeta({ creator, onQuickFilter }: { creator: CreatorProfile; onQuickFilter?: (value: NonNullable<CreatorProfile['revenue_cycle']>) => void }) {
@@ -2344,7 +2347,7 @@ function CreatorDetailDrawer({
                 <DrawerField label={creator.platform === 'tiktok' ? 'TikTok User ID' : '抖音号'} value={creator.platform_public_id ?? '-'} />
                 <DrawerField label="加入日期" value={creator.joined_date} />
                 <DrawerField label="主播形式" value={creatorTypeLabels[creator.creator_type]} />
-                <DrawerField label="状态" value={<CreatorStatusBadge status={(creator.status ?? 'active') as CreatorStatus} />} />
+                <DrawerField label="状态" value={<CreatorStatusBadge status={getCreatorDisplayStatus(creator)} />} />
                 {canEdit || canManageStatus ? (
                   <div className="creator-platform-actions">
                     {canEdit ? (
@@ -2423,7 +2426,7 @@ function CreatorDetailDrawer({
   );
 }
 
-function getOperationStatusLabel(status: CreatorProfile['operation_status']) { return ({ normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', other: '其他' }[status ?? 'normal']); }
+function getOperationStatusLabel(status: CreatorProfile['operation_status']) { return status ? ({ normal: '正常开播', paused: '暂停开播', long_term_stopped: '长期停播', resigned: '已离职', terminated: '已解约', left_guild: '已退公会', other: '其他' }[status]) : '运营状态未能读取'; }
 function getRevenueCycleLabel(cycle: CreatorProfile['revenue_cycle']) { return ({ weekly: '周流水', monthly: '月流水', none: '无需流水' }[cycle ?? 'weekly']); }
 
 function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
@@ -2475,16 +2478,16 @@ function CreatorStatusModal({
   }
 
   async function submitRestore() {
-    const confirmed = window.confirm('确认将该主播恢复为“在职”？\n\n恢复后该主播会重新计入原本主播数量和招募统计，原历史流水也会重新显示。');
+    const confirmed = window.confirm('确认将该主播资料恢复为“有效”？\n\n恢复后该主播会重新计入原本主播数量和招募统计，原历史流水也会重新显示。');
     if (!confirmed) return;
     await onSetActive(creator);
   }
 
   return (
     <SystemModal
-      title="主播状态"
+      title="主播资料状态"
       subtitle={creator.creator_name}
-      ariaLabel="主播状态"
+      ariaLabel="主播资料状态"
       onClose={onClose}
       footer={
         <button className="secondary-button compact-button" type="button" onClick={onClose}>
@@ -2495,7 +2498,7 @@ function CreatorStatusModal({
       <form className="form-grid" onSubmit={submitInvalidReason}>
         <label className="form-field">
           <span>当前状态</span>
-          <strong>{isInvalid ? '无效' : '在职'}</strong>
+          <strong>{isInvalid ? '无效' : '有效'}</strong>
         </label>
         <label className="form-field">
           <span>操作选项</span>
@@ -4145,7 +4148,7 @@ function CreatorEntitySharedModal(props: {
             <option value="normal">普通</option><option value="priority">⭐ 重点关注</option>
           </SelectField>
           <SelectField label="运营状态" value={props.values.operation_status} onChange={(value) => updateValues({ operation_status: value as CreatorEntitySharedFormValues['operation_status'] })}>
-            <option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="other">其他</option>
+            <option value="normal">正常开播</option><option value="paused">暂停开播</option><option value="long_term_stopped">长期停播</option><option value="resigned">已离职</option><option value="terminated">已解约</option><option value="left_guild">已退公会</option><option value="other">其他</option>
           </SelectField>
           <label className="form-field form-field-wide"><span>运营状态原因</span><textarea value={props.values.operation_status_reason} onChange={(event) => updateValues({ operation_status_reason: event.target.value })} placeholder="选填" /></label></> : null}
 
@@ -4531,7 +4534,7 @@ function SearchableEmployeeSelect({
   );
 }
 
-function groupCreatorProfiles(creators: CreatorProfile[], managerDisplayNameByCreatorId: Record<string, string>): CreatorProfileGroup[] {
+function groupCreatorProfiles(creators: CreatorProfile[], managerDisplayNameByCreatorId: Record<string, string>, isManagement: boolean): CreatorProfileGroup[] {
   const groups = new Map<string, CreatorProfile[]>();
 
   creators.forEach((creator) => {
@@ -4547,7 +4550,7 @@ function groupCreatorProfiles(creators: CreatorProfile[], managerDisplayNameByCr
       profiles: sortedProfiles,
       managerName: getConsistentValue(sortedProfiles, (creator) => getCreatorManagerName(creator, managerDisplayNameByCreatorId)),
       scoutName: getCreatorScoutName(sortedProfiles),
-      status: getCreatorGroupStatus(sortedProfiles),
+      status: getCreatorGroupStatus(sortedProfiles, isManagement),
     };
   });
 }
@@ -4578,6 +4581,7 @@ function filterCreatorGroups(
     creatorType: string;
     registrationType: CreatorRegistrationType | '';
     status: CreatorStatusFilter;
+    isManagement: boolean;
     operationStatus: string;
     revenueCycle: string;
     priority: string;
@@ -4588,10 +4592,11 @@ function filterCreatorGroups(
   return groups.filter((group) => {
     const profiles = group.profiles;
     const hasProfile = (matches: (creator: CreatorProfile) => boolean) => profiles.some(matches);
-    const operationStatus = profiles[0]?.operation_status ?? 'normal';
+    const operationStatus = profiles[0]?.operation_status;
     const isPriority = profiles[0]?.is_priority ?? false;
 
     if (filters.operationStatus && operationStatus !== filters.operationStatus) return false;
+    if (filters.status !== 'all' && (filters.isManagement ? group.status !== filters.status : !profiles.some((creator) => getCreatorDisplayStatus(creator) === filters.status))) return false;
     if (filters.priority === 'priority' && !isPriority) return false;
     if (filters.priority === 'normal' && isPriority) return false;
     if (filters.platform === 'dual_platform') {
@@ -4607,7 +4612,6 @@ function filterCreatorGroups(
         && (!filters.managerId || creator.manager_employee_id === filters.managerId)
         && (!filters.creatorType || creator.creator_type === filters.creatorType)
         && (!filters.registrationType || creator.registration_type === filters.registrationType)
-        && (filters.status === 'all' || (creator.status ?? 'active') === filters.status)
         && (!filters.revenueCycle || revenueCycle === filters.revenueCycle)
         && (!searchQuery || [creator.creator_name, creator.platform_account, creator.platform_user_id, creator.platform_public_id ?? ''].some((value) => value.toLowerCase().includes(searchQuery)));
     })) return false;
@@ -4653,15 +4657,22 @@ function getCreatorScoutName(creators: CreatorProfile[]) {
   return scoutName === '-' ? '—' : scoutName;
 }
 
-function getCreatorGroupStatus(creators: CreatorProfile[]): CreatorGroupStatus {
-  const statuses = new Set(creators.map((creator) => creator.status ?? 'active'));
+function getCreatorDisplayStatus(creator: CreatorProfile): CreatorStatus {
+  if (creator.operation_status === 'resigned' || creator.operation_status === 'terminated' || creator.operation_status === 'left_guild') return 'invalid';
+  return creator.status ?? 'active';
+}
+
+function getCreatorGroupStatus(creators: CreatorProfile[], isManagement: boolean): CreatorGroupStatus {
+  if (isManagement && creators.some((creator) => creator.operation_status === 'resigned' || creator.operation_status === 'terminated' || creator.operation_status === 'left_guild')) return 'invalid';
+  const statuses = new Set(creators.map(getCreatorDisplayStatus));
+  if (isManagement) return statuses.has('active') ? 'active' : 'invalid';
   return statuses.size === 1 ? ([...statuses][0] as CreatorStatus) : 'mixed';
 }
 
 function getCreatorStatusLabel(status: CreatorGroupStatus) {
-  if (status === 'invalid') return '无效';
+  if (status === 'invalid') return '已失效';
   if (status === 'mixed') return '状态不同';
-  return '在职';
+  return '有效';
 }
 
 function getCreatorTypeDetail(creators: CreatorProfile[]) {

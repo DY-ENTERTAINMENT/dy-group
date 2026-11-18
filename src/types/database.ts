@@ -505,7 +505,7 @@ export type CreatorEntity = {
   scout_profile_id: string | null;
   manager_employee_id: string | null;
   is_priority?: boolean;
-  operation_status?: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'other';
+  operation_status?: 'normal' | 'paused' | 'long_term_stopped' | 'resigned' | 'terminated' | 'left_guild' | 'other';
   operation_status_reason?: string | null;
   operation_status_updated_at?: string;
   registration_type: 'new_onboarding' | 'existing_creator' | null;
