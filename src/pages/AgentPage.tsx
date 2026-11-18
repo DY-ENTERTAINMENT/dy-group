@@ -2774,17 +2774,20 @@ function AgentPeriodRevenuePanel(props: {
     <div className="staff-list-panel agent-operation-page agent-period-workbench">
       {message ? <p className="form-success agent-operation-alert">{message}</p> : null}
       {featureUnavailable ? <p className="form-alert agent-operation-alert">周期流水数据库 003 尚未启用，暂不能保存新周期流水。</p> : null}
-      {periodError ? <p className="form-alert agent-operation-alert">{periodError}</p> : null}{contextError ? <p className="form-alert agent-operation-alert">{contextError}</p> : null}{monthContexts.some(context => context.cycle_source === 'LEGACY_CURRENT_WEEKLY') ? <p className="field-help">旧档案按当前周流水设置兼容填写；历史周期仍未经核验，未创建历史基线。</p> : null}{monthContexts.some(context => context.cycle_source === 'LEGACY_UNKNOWN') ? <p className="form-alert agent-operation-alert">所选月份存在未经核验的历史周期：保留历史记录只读，不推断填写义务或适用周期统计。</p> : null}
+      {periodError ? <p className="form-alert agent-operation-alert">{periodError}</p> : null}{contextError ? <p className="form-alert agent-operation-alert">{contextError}</p> : null}{monthContexts.some(context => context.cycle_source === 'LEGACY_UNKNOWN') ? <p className="form-alert agent-operation-alert">所选月份存在未经核验的历史周期：保留历史记录只读，不推断填写义务或适用周期统计。</p> : null}
 
       {featureUnavailable ? null : (
         <>
-          <div className="agent-operation-kpi-grid">
+          <details className="agent-operation-overview">
+            <summary>数据总览</summary>
+            <div className="agent-operation-kpi-grid">
             <OperationKpiCard label="总人数" value={creatorEntityCount == null ? '-' : `${creatorEntityCount} 人`} detail="全部主播" tone="overview" />
             <OperationKpiCard label="TikTok 总钻石" value={formatRevenueAmount(summary.tiktokTotal)} detail="钻石" tone="tiktok" icon={<img src={tiktokLogoUrl} alt="" aria-hidden="true" />} />
             <OperationKpiCard label="抖音总音浪" value={formatRevenueAmount(summary.douyinTotal)} detail="音浪" tone="douyin" icon={<img src={douyinLogoUrl} alt="" aria-hidden="true" />} />
             <OperationKpiCard label="已填写" value={summary.filled} detail="可填写周期" tone="filled" />
             <OperationKpiCard label="未填写" value={summary.missing} detail="可填写周期" tone="missing" />
-          </div>
+            </div>
+          </details>
 
           {reminderPreviousPeriod && previousContextKey === expectedPreviousKey && sortedCreators.some(creator => isPreviousWeeklyReminderEligible(creator, previousContexts.find(context => context.creator_profile_id === creator.id))) ? (
             <div className={`agent-period-previous-alert agent-period-previous-alert--${previousMissingCount > 0 ? 'missing' : 'filled'}`}>

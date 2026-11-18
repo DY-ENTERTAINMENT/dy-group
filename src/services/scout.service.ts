@@ -109,6 +109,7 @@ export type CreatorFormValues = {
 
 export type CreatorPlatformFormValues = {
   enabled: boolean;
+  revenue_cycle: 'weekly' | 'monthly';
   joined_date: string;
   platform_user_id: string;
   platform_account: string;
@@ -798,7 +799,7 @@ export const scoutService = {
     const platforms = normalizeCreatorEntityPlatforms(values);
     if (platforms.length === 0) throw new Error('请至少选择一个平台。');
 
-    const { error } = await db.rpc('create_creator_entity_with_platforms_with_birthday', {
+    const { error } = await db.rpc('create_creator_entity_with_initial_cycles', {
       p_display_name: values.display_name.trim(),
       p_birthday: values.birthday || null,
       p_region_id: values.region_id || null,
@@ -1128,6 +1129,7 @@ function normalizeCreatorEntityPlatforms(values: CreatorEntityFormValues) {
         guild_joined_date: values.guild_joined_date,
         creator_name: values.display_name.trim(),
         creator_type: platformValues.creator_type,
+        revenue_cycle: platformValues.revenue_cycle,
         bank_account_name: platformValues.bank_account_name.trim() || null,
         bank_name: platformValues.bank_name.trim() || null,
         bank_account: platformValues.bank_account.trim() || null,

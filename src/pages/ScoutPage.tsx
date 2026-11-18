@@ -122,6 +122,7 @@ const emptyCreatorForm: CreatorFormValues = {
 function emptyCreatorPlatformForm(enabled = false): CreatorPlatformFormValues {
   return {
     enabled,
+    revenue_cycle: 'weekly',
     joined_date: today,
     platform_user_id: '',
     platform_account: '',
@@ -4311,6 +4312,9 @@ function CreatorModal(props: {
                   <TextField label={platform === 'tiktok' ? 'TikTok ID' : '抖音UID'} value={platformValues.platform_user_id} onChange={(value) => updatePlatform(platform, { platform_user_id: value })} required />
                   <TextField label={platform === 'tiktok' ? 'TikTok 用户名' : '抖音用户名'} value={platformValues.platform_account} onChange={(value) => updatePlatform(platform, { platform_account: value })} required />
                   <TextField label={platform === 'tiktok' ? 'User ID' : '抖音号'} value={platformValues.platform_public_id} onChange={(value) => updatePlatform(platform, { platform_public_id: value })} required />
+                  <SelectField label="流水计算方式" value={platformValues.revenue_cycle} onChange={(value) => updatePlatform(platform, { revenue_cycle: value as 'weekly' | 'monthly' })}>
+                    <option value="weekly">按周</option><option value="monthly">按月</option>
+                  </SelectField>
                   <SelectField label="主播形式" value={platformValues.creator_type} onChange={(value) => updatePlatform(platform, { creator_type: value as CreatorType })}>
                     {creatorTypes.map((type) => (
                       <option key={type} value={type}>
