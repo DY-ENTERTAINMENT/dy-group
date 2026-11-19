@@ -45,9 +45,6 @@ function normalizeMedicalAttachmentPath(value: string): string | null {
   return /^[0-9a-f]{8}-[0-9a-f-]{27,35}\/[A-Za-z0-9][A-Za-z0-9._-]*$/i.test(path) ? path : null;
 }
 
-function isMedicalAttachmentPublicUrl(value: string) {
-  try { return new URL(value).pathname.includes(MEDICAL_ATTACHMENT_PUBLIC_URL_MARKER); } catch { return false; }
-}
 
 export type LeaveRequestItem = LeaveRequest & {
   employee: Pick<Employee, 'id' | 'full_name' | 'phone' | 'employee_code' | 'region_id'> | null;
@@ -263,9 +260,8 @@ export const leaveService = {
     const path = normalizeMedicalAttachmentPath(value);
     if (!path) throw new Error('病假附件路径无效或不属于本系统。');
     const { data, error } = await supabase.storage.from(MEDICAL_BUCKET).createSignedUrl(path, Math.min(300, Math.max(30, expiresInSeconds)));
-    if (data?.signedUrl) return data.signedUrl;
-    if (isMedicalAttachmentPublicUrl(value)) return value;
-    throw error ?? new Error('无法读取病假附件，可能不存在或您没有权限。');
+    if (error || !data?.signedUrl) throw new Error('无法读取病假附件，可能不存在或您没有权限。');
+    return data.signedUrl;
   },
 
   async approveLeaveRequest(requestId: string) {

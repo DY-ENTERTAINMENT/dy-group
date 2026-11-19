@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { SystemModal } from '../components/SystemModal';
+import { MedicalProofThumbnail } from '../components/MedicalProofThumbnail';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { notifyLeavePendingApprovalsChanged } from '../hooks/useLeavePendingApprovalCount';
@@ -447,30 +448,6 @@ function HistoryPanel({
   </div>;
 }
 
-function MedicalProofThumbnail({ attachment, label }: { attachment: string | null; label: string }) {
-  const [url, setUrl] = useState('');
-  const [loading, setLoading] = useState(Boolean(attachment));
-  const [failed, setFailed] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    setUrl('');
-    setFailed(false);
-    setLoading(Boolean(attachment));
-    if (!attachment) return () => { active = false; };
-    void leaveService.getMedicalAttachmentSignedUrl(attachment, 120)
-      .then((signedUrl) => { if (active) setUrl(signedUrl); })
-      .catch(() => { if (active) setFailed(true); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [attachment]);
-
-  if (!attachment) return <span className="medical-proof-empty">—</span>;
-  if (loading) return <span className="medical-proof-state">加载中…</span>;
-  if (failed || !url) return <span className="medical-proof-state">不可读取</span>;
-  return <><button type="button" className="medical-proof-thumbnail" onClick={() => setOpen(true)} aria-label={`查看${label}`}><img src={url} alt={label} loading="lazy" /></button>{open ? <SystemModal title={label} ariaLabel={`${label}大图预览`} onClose={() => setOpen(false)} footer={<><a className="secondary-button compact-button" href={url} target="_blank" rel="noreferrer">打开原图</a><button className="secondary-button compact-button" type="button" onClick={() => setOpen(false)}>关闭</button></>}><img className="medical-proof-large" src={url} alt={label} /></SystemModal> : null}</>;
-}
 
 function isReplacementHistoryItem(row: LeaveReviewHistoryItem | ReplacementWorkChangeReviewHistoryItem): row is ReplacementWorkChangeReviewHistoryItem {
   return 'change_type' in row;

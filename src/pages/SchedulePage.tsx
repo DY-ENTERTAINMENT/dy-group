@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { MonthSelect } from '../components/MonthSelect';
 import { SystemModal } from '../components/SystemModal';
+import { MedicalProofThumbnail } from '../components/MedicalProofThumbnail';
 import { useAuth } from '../hooks/useAuth';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import {
@@ -469,6 +470,9 @@ export function SchedulePage() {
               ['审核时间', formatDateTime(selectedLeave.reviewed_at)],
             ]}
           />
+          {selectedLeave.leave_type === 'medical' ? (
+            <CalendarMedicalProof key={`${selectedLeave.leave_request_id}:${selectedLeave.employee_id}`} leave={selectedLeave} />
+          ) : null}
         </SystemModal>
       ) : null}
 
@@ -517,6 +521,25 @@ export function SchedulePage() {
       ) : null}
     </section>
   );
+}
+
+
+function CalendarMedicalProof({ leave }: { leave: LeaveCalendarItem }) {
+  const [proof, setProof] = useState<{ status: 'loading' | 'ready' | 'error'; path: string | null }>({ status: 'loading', path: null });
+
+  useEffect(() => {
+    let active = true;
+    setProof({ status: 'loading', path: null });
+    void scheduleService.getMedicalProof(leave.leave_request_id, leave.employee_id)
+      .then((path) => { if (active) setProof({ status: 'ready', path }); })
+      .catch(() => { if (active) setProof({ status: 'error', path: null }); });
+    return () => { active = false; };
+  }, [leave.leave_request_id, leave.employee_id]);
+
+  return <div className="modal-detail-item"><span>病假证明</span><div>
+    {proof.status === 'loading' ? '加载中…' : proof.status === 'error' ? '暂时无法读取' :
+      <MedicalProofThumbnail attachment={proof.path} label={`${leave.employee_name} 的病假证明`} emptyText="未上传病假证明" errorText="暂时无法读取" />}
+  </div></div>;
 }
 
 function DetailGrid({ items }: { items: Array<[string, string | null | undefined]> }) {

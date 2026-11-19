@@ -102,6 +102,16 @@ export const scheduleService = {
     };
   },
 
+  async getMedicalProof(leaveRequestId: string, employeeId: string): Promise<string | null> {
+    const { data, error } = await (supabase as any).rpc('get_calendar_medical_proof', {
+      p_leave_request_id: leaveRequestId,
+      p_employee_id: employeeId,
+    });
+    if (error) throw error;
+    if (!Array.isArray(data) || data.length !== 1) throw new Error('无法读取病假证明。');
+    return data[0].medical_attachment_path;
+  },
+
   async canCancelCalendarLeave() {
     const { data, error } = await supabase.rpc('current_user_can_cancel_calendar_leave');
 
