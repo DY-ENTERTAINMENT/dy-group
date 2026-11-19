@@ -87,8 +87,9 @@
 .leave-page.leave-page .leave-type-tile-medical .leave-type-icon { color: #008b54; background: #ddf5e8; }
 .leave-page.leave-page .leave-type-tile-unpaid .leave-type-icon { color: #d76c00; background: #fff0dd; }
 .leave-page.leave-page .leave-type-tile-replacement .leave-type-icon { color: #7041ba; background: #eee8ff; }
-.leave-page.leave-page .leave-status-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 22px 0; }
-.leave-page.leave-page .leave-status-filters button { min-height: 36px; padding: 0 15px; border: 1px solid #dce4ef; border-radius: 8px; background: #fff; color: #26334a; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.leave-page.leave-page .leave-request-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.leave-page.leave-page .leave-status-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 14px 22px 0; }
+.leave-page.leave-page .leave-status-filters button { min-width: 0; min-height: 36px; padding: 0 3px; border: 1px solid #dce4ef; border-radius: 8px; background: #fff; color: #26334a; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .leave-page.leave-page .leave-status-filters button.active { color: #fff; border-color: #87239b; background: #87239b; }
 .leave-page.leave-page .leave-status-filters button:focus-visible { outline: 2px solid #782191; outline-offset: 2px; }
 .leave-page.leave-page .leave-request-desktop-table { padding: 16px 22px 22px; }

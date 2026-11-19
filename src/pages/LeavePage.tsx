@@ -109,10 +109,12 @@ function LeavePageContent() {
     const year = Number(yearText);
     const month = Number(monthText);
     const monthStart = `${selectedLeaveMonth}-01`;
-    const monthEnd = `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+    const monthEnd = selectedLeaveMonth === 'all' ? '' : `${selectedLeaveMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
     return requests.filter((request) => {
-      const matchesMonth = request.start_date <= monthEnd && request.end_date >= monthStart;
+      const matchesMonth = selectedLeaveMonth === 'all' || (request.leave_type === 'replacement'
+        ? request.end_date >= monthStart && request.end_date <= monthEnd
+        : request.start_date <= monthEnd && request.end_date >= monthStart);
       const matchesType = selectedLeaveType === 'all' || request.leave_type === selectedLeaveType;
       return matchesMonth && matchesType;
     });
@@ -427,7 +429,7 @@ function LeavePageContent() {
               <div className="attendance-filters leave-request-filters">
                 <label className="form-field">
                   <span>月份</span>
-                  <LeaveMonthSelect value={selectedLeaveMonth} onChange={setSelectedLeaveMonth} requests={requests} />
+                  <LeaveMonthSelect value={selectedLeaveMonth} onChange={(month) => { setSelectedLeaveMonth(month); setSelectedStatus('all'); }} requests={requests} />
                 </label>
                 <label className="form-field">
                   <span>请假类型</span>
@@ -440,9 +442,10 @@ function LeavePageContent() {
             </div>
 
             <div className="leave-status-filters" role="group" aria-label="按审批状态筛选">
-              {([['all', '全部'], ...Object.entries(statusLabels)] as Array<[LeaveRequestStatus | 'all', string]>).map(([status, label]) => (
-                <button key={status} type="button" className={selectedStatus === status ? 'active' : ''} aria-pressed={selectedStatus === status} onClick={() => setSelectedStatus(status)}>{label}</button>
-              ))}
+              {([['all', '全部历史'], ...Object.entries(statusLabels)] as Array<[LeaveRequestStatus | 'all', string]>).map(([status, label]) => {
+                const active = selectedStatus === status && (status !== 'all' || selectedLeaveMonth === 'all');
+                return <button key={status} type="button" className={active ? 'active' : ''} aria-pressed={active} onClick={() => { setSelectedStatus(status); if (status === 'all') setSelectedLeaveMonth('all'); }}>{label}</button>;
+              })}
             </div>
 
             {loading ? (
@@ -886,17 +889,21 @@ function getCurrentRestCycle() {
 
 function LeaveMonthSelect({ value, onChange, requests }: { value: string; onChange: (value: string) => void; requests: LeaveRequestItem[] }) {
   const months = new Set<string>();
-  months.add(value);
+  if (value !== 'all') months.add(value);
   months.add(getMalaysiaMonth());
   for (const request of requests) {
     const end = request.end_date.slice(0, 7);
+    if (request.leave_type === 'replacement') {
+      months.add(end);
+      continue;
+    }
     let [year, month] = request.start_date.slice(0, 7).split('-').map(Number);
     while (`${year}-${String(month).padStart(2, '0')}` <= end) {
       months.add(`${year}-${String(month).padStart(2, '0')}`);
       if (++month === 13) { month = 1; year += 1; }
     }
   }
-  return <select value={value} onChange={(event) => onChange(event.target.value)}>{[...months].sort().reverse().map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}</select>;
+  return <select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">全部月份</option>{[...months].sort().reverse().map((month) => <option key={month} value={month}>{formatMonthLabel(month)}</option>)}</select>;
 }
 
 function getMalaysiaMonth() {
