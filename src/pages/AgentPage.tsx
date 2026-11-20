@@ -1,4 +1,5 @@
-﻿import './AgentRevenueLayout.css';
+import { RevenueImportPreview } from './RevenueImportPreview';
+import './AgentRevenueLayout.css';
 import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Eye, FileWarning, Leaf, Layers3, Plus, RefreshCw, Search, Send, Settings, Trash2, UserRound, X } from 'lucide-react';
 import { useRef } from 'react';
@@ -2497,6 +2498,7 @@ function AgentPeriodRevenuePanel(props: {
   onRefresh: () => void;
 }) {
   const permissions = usePermissions();
+  const [importOpen, setImportOpen] = useState(false);
   const todayIso = useMemo(() => formatLocalDate(new Date()), []);
   const todayMonth = todayIso.slice(0, 7);
   const monthDateRange = useMemo(() => getMonthDateRange(props.month), [props.month]);
@@ -2814,6 +2816,7 @@ function AgentPeriodRevenuePanel(props: {
             refreshing={props.loading || weeklyLoading || periodLoading}
             canSetPeriods={canSetPeriods}
             onOpenPeriodSettings={() => setPeriodModalOpen(true)}
+            onImport={(permissions.isSuperAdmin || permissions.canUse('agent-revenue-bulk-import')) ? () => setImportOpen(true) : undefined}
             onResetFilters={resetRowFilters}
           />
 
@@ -2834,6 +2837,8 @@ function AgentPeriodRevenuePanel(props: {
           />
         </>
       )}
+
+      {importOpen && (permissions.isSuperAdmin || permissions.canUse('agent-revenue-bulk-import')) ? <RevenueImportPreview onClose={() => setImportOpen(false)} /> : null}
 
       {!featureUnavailable && activeRow ? (
         <WeeklyRevenueModal
@@ -2877,6 +2882,7 @@ function OperationFilterBar(props: {
   onFilter: <Key extends keyof OperationFilters>(key: Key, value: OperationFilters[Key]) => void;
   onRegion: (value: string) => void;
   onRefresh: () => void;
+  onImport?: () => void;
   refreshing: boolean;
   canSetPeriods: boolean;
   onOpenPeriodSettings: () => void;
@@ -2964,6 +2970,7 @@ function OperationFilterBar(props: {
         ) : null}
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onResetFilters}>重置筛选</button>
         <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onRefresh} disabled={props.refreshing}><RefreshCw size={15} /><span>刷新</span></button>
+        {props.onImport ? <button className="secondary-button compact-button agent-operation-refresh-button" type="button" onClick={props.onImport}>批量导入流水</button> : null}
       </div>
     </div>
   );

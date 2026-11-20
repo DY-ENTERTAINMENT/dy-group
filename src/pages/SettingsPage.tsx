@@ -146,6 +146,8 @@ const permissionGroupKeys: Record<string, string> = {
   人事部: 'hr',
   管理: 'management',
 };
+const bulkImportPermissionKey = 'agent-revenue-bulk-import';
+type BulkImportEffect = 'none' | 'grant' | 'deny';
 const independentPermissionItems: PermissionItem[] = [
   {
     key: 'agent-revenue-period-settings',
@@ -770,6 +772,9 @@ function PermissionManagementPanel() {
   const [initialPermissionSnapshot, setInitialPermissionSnapshot] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [bulkEffect, setBulkEffect] = useState<BulkImportEffect>('none');
+  const [bulkAccess, setBulkAccess] = useState<PermissionAccess>({ view: false, use: false });
+  const [initialBulk, setInitialBulk] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -908,6 +913,10 @@ function PermissionManagementPanel() {
 
       if (target.type === 'employee') {
         const savedProfile = await permissionManagementService.getEmployeePermissions(target.employee.id);
+        const bulk = savedProfile.directOverrides.find(item => item.permission_key === bulkImportPermissionKey);
+        const effect: BulkImportEffect = bulk?.effect ?? 'none';
+        const access = { view: bulk?.effect === 'grant' && bulk.can_view || false, use: bulk?.effect === 'grant' && bulk.can_view && bulk.can_use || false };
+        setBulkEffect(effect); setBulkAccess(access); setInitialBulk(JSON.stringify({effect,access}));
         applyPermissionDraft({
           permissions: mergePermissionState(defaultPermissions, savedProfile.permissions),
           attendanceRequired: savedProfile.requireAttendance,
@@ -978,7 +987,7 @@ function PermissionManagementPanel() {
       }
 
       if (modalTarget.type === 'employee') {
-        await permissionManagementService.saveEmployeePermissions({
+        if (isDirty || JSON.stringify({effect: bulkEffect, access: bulkAccess}) === initialBulk) await permissionManagementService.saveEmployeePermissions({
           employeeId: modalTarget.employee.id,
           requireAttendance: attendanceRequired,
           regionIds: managedRegionIds,
@@ -986,6 +995,10 @@ function PermissionManagementPanel() {
           specialPermissionTemplates,
           permissions: employeePermissions,
         });
+        if (JSON.stringify({effect: bulkEffect, access: bulkAccess}) !== initialBulk) {
+          await permissionManagementService.saveBulkImportOverride(modalTarget.employee.id, bulkEffect, bulkAccess);
+          setInitialBulk(JSON.stringify({effect: bulkEffect, access: bulkAccess}));
+        }
         setEmployees((current) =>
           current.map((employee) =>
             employee.id === modalTarget.employee.id ? { ...employee, require_attendance: attendanceRequired } : employee,
@@ -1274,6 +1287,12 @@ function PermissionManagementPanel() {
                 </div>
               </PermissionBlock>
 
+              <PermissionBlock title="流水批量导入">
+                <p>独立权限，仅认个人明确授权；不继承经纪人、职称或特殊权限模板。拒绝优先，撤销个人授权后不能使用。</p>
+                <label className="form-field"><span>个人授权</span><select value={bulkEffect} onChange={e => setBulkEffect(e.target.value as BulkImportEffect)}><option value="none">撤销个人授权</option><option value="grant">明确授权</option><option value="deny">明确拒绝</option></select></label>
+                <label className="permission-check"><input type="checkbox" disabled={bulkEffect !== 'grant'} checked={bulkEffect === 'grant' && bulkAccess.view} onChange={e => setBulkAccess({view:e.target.checked,use:e.target.checked && bulkAccess.use})} /><span>查阅</span></label>
+                <label className="permission-check"><input type="checkbox" disabled={bulkEffect !== 'grant' || !bulkAccess.view} checked={bulkEffect === 'grant' && bulkAccess.use} onChange={e => setBulkAccess({view:bulkAccess.view,use:e.target.checked})} /><span>使用</span></label>
+              </PermissionBlock>
               <PermissionBlock title="星探指定资格">
                 <p>允许该员工被指定为主播的主星探或协同星探，不代表页面访问权限。</p>
                 <label className="permission-check">

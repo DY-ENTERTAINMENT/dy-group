@@ -120,6 +120,13 @@ export const permissionRuntimeService = {
 
     mergePermissionRows(permissions, overrideResult.data ?? []);
 
+    // Failure or an undeployed candidate must deny the new permission only.
+    permissions['agent-revenue-bulk-import'] = { view: false, use: false };
+    try {
+      const [view, use] = await Promise.all(['view','use'].map(p_action => db.rpc('can_preview_creator_revenue_import', { p_action })));
+      permissions['agent-revenue-bulk-import'] = { view: !view.error && view.data === true, use: !use.error && use.data === true && !view.error && view.data === true };
+    } catch { /* fail closed */ }
+
     return { role: profile.role, permissions, regionFeaturePermissions: await getRegionFeaturePermissions() };
   },
 

@@ -105,10 +105,10 @@ export const permissionManagementService = {
     const { error: deleteError } = await db
       .from('special_permission_template_items')
       .delete()
-      .eq('special_permission_template_id', template.id);
+      .eq('special_permission_template_id', template.id).neq('permission_key', 'agent-revenue-bulk-import');
     if (deleteError) throw deleteError;
 
-    const rows = permissionStateToRows(permissions).map((row) => ({
+    const rows = permissionStateToRows(permissions).filter(row => row.permission_key !== 'agent-revenue-bulk-import').map((row) => ({
       special_permission_template_id: template.id,
       permission_key: row.permission_key,
       can_view: row.can_view,
@@ -170,6 +170,17 @@ export const permissionManagementService = {
     };
   },
 
+  async saveBulkImportOverride(employeeId: string, effect: 'none' | 'grant' | 'deny', access: PermissionAccess) {
+    const key = 'agent-revenue-bulk-import';
+    if (effect === 'none') {
+      const { error } = await db.from('employee_permission_overrides').delete().eq('employee_id', employeeId).eq('permission_key', key);
+      if (error) throw error;
+      return;
+    }
+    const { error } = await db.from('employee_permission_overrides').upsert({ employee_id: employeeId, permission_key: key, effect, can_view: effect === 'deny' || access.view, can_use: effect === 'deny' || (access.view && access.use), updated_at: new Date().toISOString() }, { onConflict: 'employee_id,permission_key' });
+    if (error) throw error;
+  },
+
   async saveEmployeePermissions(input: {
     employeeId: string;
     requireAttendance: boolean;
@@ -228,10 +239,10 @@ export const permissionManagementService = {
       if (error) throw error;
     }
 
-    const { error: deleteOverridesError } = await db.from('employee_permission_overrides').delete().eq('employee_id', input.employeeId);
+    const { error: deleteOverridesError } = await db.from('employee_permission_overrides').delete().eq('employee_id', input.employeeId).neq('permission_key', 'agent-revenue-bulk-import');
     if (deleteOverridesError) throw deleteOverridesError;
 
-    const overrideRows = permissionStateToRows(input.permissions).map((row) => ({
+    const overrideRows = permissionStateToRows(input.permissions).filter(row => row.permission_key !== 'agent-revenue-bulk-import').map((row) => ({
       employee_id: input.employeeId,
       permission_key: row.permission_key,
       can_view: row.can_view,
