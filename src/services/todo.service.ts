@@ -39,8 +39,8 @@ export const todoService = {
 
   async syncTodayRecurringTodos() {
     const userId = await getCurrentUserId();
-    const today = new Date();
-    const dueDate = toDateKey(today);
+    const dueDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const today = new Date(`${dueDate}T00:00:00Z`);
     const recurringItems = await this.getMyRecurringTodos();
     const dueItems = recurringItems.filter((item) => isRecurringTodoDue(item, today));
 
@@ -49,35 +49,27 @@ export const todoService = {
     }
 
     const dueIds = dueItems.map((item) => item.id);
-    const { data: existing, error: existingError } = await supabase
-      .from('todo_items')
-      .select('recurring_todo_id')
-      .eq('profile_id', userId)
-      .eq('due_date', dueDate)
-      .in('recurring_todo_id', dueIds);
-
-    if (existingError) {
-      throw existingError;
-    }
-
-    const existingIds = new Set((existing ?? []).map((item) => item.recurring_todo_id).filter(Boolean));
-    const missingItems = dueItems.filter((item) => !existingIds.has(item.id));
-
-    if (missingItems.length === 0) {
-      return;
-    }
-
-    const payload = missingItems.map((item) => ({
-      profile_id: userId,
-      recurring_todo_id: item.id,
-      title: item.title,
-      due_date: dueDate,
-    }));
-
-    const { error } = await supabase.from('todo_items').insert(payload);
-
-    if (error) {
-      throw error;
+    // Re-read on a concurrent duplicate and retry only missing recurring items.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data: existing, error: existingError } = await supabase
+        .from('todo_items')
+        .select('recurring_todo_id')
+        .eq('profile_id', userId)
+        .eq('due_date', dueDate)
+        .in('recurring_todo_id', dueIds);
+      if (existingError) throw existingError;
+      const existingIds = new Set((existing ?? []).map((item) => item.recurring_todo_id).filter(Boolean));
+      const missingItems = dueItems.filter((item) => !existingIds.has(item.id));
+      if (missingItems.length === 0) return;
+      const payload = missingItems.map((item) => ({
+        profile_id: userId,
+        recurring_todo_id: item.id,
+        title: item.title,
+        due_date: dueDate,
+      }));
+      const { error } = await supabase.from('todo_items').insert(payload);
+      if (!error) return;
+      if (error.code !== '23505' || attempt === 1) throw error;
     }
   },
 
@@ -242,13 +234,13 @@ function normalizeRecurringTodoPayload(values: RecurringTodoPayload) {
 }
 
 function isRecurringTodoDue(item: RecurringTodoItem, date: Date) {
-  const weekday = date.getDay();
-  const day = date.getDate();
+  const weekday = date.getUTCDay();
+  const day = date.getUTCDate();
 
   if (item.frequency === 'daily') return true;
   if (item.frequency === 'weekly') return item.weekly_days.includes(weekday);
   if (item.frequency === 'monthly') return item.monthly_day === day;
-  if (item.frequency === 'month_end') return day === getLastDayOfMonth(date);
+  if (item.frequency === 'month_end') return day === new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
 
   return false;
 }
@@ -268,17 +260,6 @@ function getRecurringSortOrder(item: RecurringTodoItem) {
   if (item.frequency === 'monthly') return 40 + (item.monthly_day ?? 1);
   if (item.frequency === 'month_end') return 80;
   return 90;
-}
-
-function getLastDayOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 async function getCurrentUserId() {
