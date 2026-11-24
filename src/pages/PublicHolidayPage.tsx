@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Edit3, Plus, Search, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, Edit3, Globe2, MapPin, Plus, Search, Trash2 } from 'lucide-react';
+import './PublicHolidayPage.css';
 import { SystemModal } from '../components/SystemModal';
 import {
   GLOBAL_REGION_VALUE,
@@ -26,11 +27,12 @@ const emptyForm: PublicHolidayFormValues = {
 export function PublicHolidayPage() {
   const permissions = usePermissions();
   const canUsePublicHolidays = permissions.canUse('public-holidays');
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [year, setYear] = useState(() => Number(getMalaysiaToday().slice(0, 4)));
   const [regionFilter, setRegionFilter] = useState('');
   const [search, setSearch] = useState('');
   const [regions, setRegions] = useState<Region[]>([]);
   const [holidays, setHolidays] = useState<PublicHolidayListItem[]>([]);
+  const loadSequence = useRef(0);
   const [formValues, setFormValues] = useState<PublicHolidayFormValues>(emptyForm);
   const [editingHoliday, setEditingHoliday] = useState<PublicHolidayListItem | null>(null);
   const [deletingHoliday, setDeletingHoliday] = useState<PublicHolidayListItem | null>(null);
@@ -43,16 +45,15 @@ export function PublicHolidayPage() {
 
   const filteredHolidays = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return holidays;
-
     return holidays.filter((holiday) =>
-      [holiday.holiday_name, holiday.note, holiday.region?.code, holiday.region?.name]
+      (regionFilter === '' || (regionFilter === GLOBAL_REGION_VALUE ? holiday.region_id === null : holiday.region_id === regionFilter)) &&
+      (!keyword || [holiday.holiday_name, holiday.note, holiday.region?.code, holiday.region?.name]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-        .includes(keyword),
+        .includes(keyword)),
     );
-  }, [holidays, search]);
+  }, [holidays, search, regionFilter]);
 
   useEffect(() => {
     void loadInitialData();
@@ -60,7 +61,7 @@ export function PublicHolidayPage() {
 
   useEffect(() => {
     void loadHolidays();
-  }, [year, regionFilter]);
+  }, [year]);
 
   async function loadInitialData() {
     try {
@@ -72,16 +73,17 @@ export function PublicHolidayPage() {
   }
 
   async function loadHolidays() {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError('');
 
     try {
-      const holidayList = await publicHolidayService.listPublicHolidays(year, regionFilter);
-      setHolidays(holidayList);
+      const holidayList = await publicHolidayService.listPublicHolidays(year, '');
+      if (sequence === loadSequence.current) setHolidays(holidayList);
     } catch (loadError) {
-      setError(`读取公共假期失败：${getErrorMessage(loadError)}`);
+      if (sequence === loadSequence.current) setError(`读取公共假期失败：${getErrorMessage(loadError)}`);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }
 
@@ -89,7 +91,7 @@ export function PublicHolidayPage() {
     setEditingHoliday(null);
     setFormValues({
       ...emptyForm,
-      holiday_date: `${year}-01-01`,
+      holiday_date: year === Number(getMalaysiaToday().slice(0, 4)) ? getMalaysiaToday() : `${year}-01-01`,
     });
     setFormOpen(true);
     setError('');
@@ -121,6 +123,11 @@ export function PublicHolidayPage() {
       return;
     }
 
+    if (!editingHoliday && !formValues.holiday_date.startsWith(`${year}-`)) {
+      setError(`日期必须属于 ${year} 年；如需新增其他年份，请关闭弹窗后切换年份。`);
+      return;
+    }
+
     setSaving(true);
     setError('');
     setMessage('');
@@ -131,7 +138,11 @@ export function PublicHolidayPage() {
         setMessage('公共假期已更新。');
       } else {
         await publicHolidayService.createPublicHoliday(formValues);
-        setMessage('公共假期已新增。');
+        const region = regions.find((item) => item.id === formValues.region_id);
+        const matchesRegion = !regionFilter || (regionFilter === GLOBAL_REGION_VALUE ? !formValues.region_id : regionFilter === formValues.region_id);
+        const keyword = search.trim().toLowerCase();
+        const matchesSearch = !keyword || [holidayName, formValues.note, region?.code, region?.name].filter(Boolean).join(' ').toLowerCase().includes(keyword);
+        setMessage(`公共假期已新增：${holidayName}，${formValues.holiday_date}，${region?.code ?? '全部区域'}。${!matchesRegion || !matchesSearch ? '当前区域或搜索筛选不包含此记录，请调整筛选查看，勿重复新增。' : ''}`);
       }
 
       setFormOpen(false);
@@ -168,15 +179,17 @@ export function PublicHolidayPage() {
   }
 
   return (
-    <section className="public-holiday-page">
+    <section className="public-holiday-page ph-v2">
       {error ? <p className="form-alert">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
 
       <div className="staff-list-panel">
         <div className="list-header public-holiday-header holiday-management-header">
           <div className="holiday-management-title">
-            <span>人事部</span>
-            <h3>公共假期</h3>
+            <div className="ph-title-heading"><span className="ph-title-icon"><CalendarDays size={30} /></span><div>
+            <h3>公共假期管理</h3>
+            <p>管理公司年度公共假期及区域假期安排</p>
+            </div></div>
             <div className="row-actions holiday-management-tabs">
               <button className="secondary-button compact-button" type="button">公共假期</button>
               <button className="secondary-button compact-button" type="button" onClick={() => setActiveTab('activities')}>公司活动</button>
@@ -190,20 +203,24 @@ export function PublicHolidayPage() {
           ) : null}
         </div>
 
-        <div className="attendance-filters public-holiday-filters">
+        <div className="ph-stats">
+          {[
+            { label: '年度假期', count: holidays.length, tone: 'blue', icon: CalendarDays, filter: '' },
+            { label: '全部区域', count: holidays.filter((h) => h.region_id === null).length, tone: 'purple', icon: Globe2, filter: GLOBAL_REGION_VALUE },
+            { label: 'KCH 假期', count: holidays.filter((h) => h.region_id !== null && h.region?.code?.toUpperCase() === 'KCH').length, tone: 'cyan', icon: MapPin, filter: regions.find((region) => region.code.toUpperCase() === 'KCH')?.id },
+            { label: 'KL 假期', count: holidays.filter((h) => h.region_id !== null && h.region?.code?.toUpperCase() === 'KL').length, tone: 'orange', icon: MapPin, filter: regions.find((region) => region.code.toUpperCase() === 'KL')?.id },
+          ].map(({ label, count, tone, icon: Icon, filter }) => <button type="button" className={`ph-stat ${tone}`} key={label} disabled={filter === undefined} aria-pressed={filter !== undefined && regionFilter === filter} onClick={() => { if (filter !== undefined) setRegionFilter(filter); }}><span className="ph-stat-heading"><span className="ph-stat-icon"><Icon size={24} /></span><span className="ph-stat-label">{label}</span></span><strong>{loading ? '—' : count}</strong><small>条记录</small></button>)}
+        </div>
+        <div className="attendance-filters public-holiday-filters ph-filters">
           <label className="form-field">
-            <span>年份</span>
-            <input
-              type="number"
-              min="2020"
-              max="2100"
-              value={year}
-              onChange={(event) => setYear(Number(event.target.value) || new Date().getFullYear())}
-            />
+            <span className="ph-sr">年份</span>
+            <div className="ph-year"><button type="button" aria-label="上一年" onClick={() => setYear((value) => Math.max(2020, value - 1))} disabled={year <= 2020}><ChevronLeft size={18} /></button>
+            <select aria-label="年份" value={year} onChange={(event) => setYear(Number(event.target.value))}>{Array.from({ length: 81 }, (_, index) => 2020 + index).map((value) => <option key={value} value={value}>{value} 年</option>)}</select>
+            <button type="button" aria-label="下一年" onClick={() => setYear((value) => Math.min(2100, value + 1))} disabled={year >= 2100}><ChevronRight size={18} /></button></div>
           </label>
 
           <label className="form-field">
-            <span>区域</span>
+            <span className="ph-sr">区域</span>
             <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
               <option value="">全部记录</option>
               <option value={GLOBAL_REGION_VALUE}>全部区域</option>
@@ -229,15 +246,15 @@ export function PublicHolidayPage() {
         {loading ? (
           <div className="table-state">正在读取公共假期...</div>
         ) : filteredHolidays.length === 0 ? (
-          <div className="table-state">暂无公共假期。</div>
+          <div className="table-state">{holidays.length === 0 ? '该年份暂无公共假期记录' : '当前筛选条件下暂无公共假期记录'}</div>
         ) : (
           <div className="staff-table-wrap">
             <table className="staff-table">
               <thead>
                 <tr>
-                  <th>假期名称</th>
                   <th>日期</th>
-                  <th>区域</th>
+                  <th>假期名称</th>
+                  <th>适用区域</th>
                   <th>备注</th>
                   {canUsePublicHolidays ? <th>操作</th> : null}
                 </tr>
@@ -245,26 +262,24 @@ export function PublicHolidayPage() {
               <tbody>
                 {filteredHolidays.map((holiday) => (
                   <tr key={holiday.id}>
-                    <td>
+                    <td data-label="日期"><span className="ph-date">{holiday.holiday_date}</span><span className="ph-weekday">{formatWeekday(holiday.holiday_date)}</span></td>
+                    <td data-label="假期名称">
                       <strong>{holiday.holiday_name}</strong>
                     </td>
-                    <td>{formatDate(holiday.holiday_date)}</td>
-                    <td>{formatRegion(holiday)}</td>
-                    <td>{holiday.note || '-'}</td>
+                    <td data-label="适用区域"><span className={`ph-region ${regionTone(holiday)}`}>{formatRegion(holiday)}</span></td>
+                    <td data-label="备注">{holiday.note || '-'}</td>
                     {canUsePublicHolidays ? (
-                      <td>
-                        <div className="row-actions">
-                          <button className="secondary-button compact-button" type="button" onClick={() => openEditModal(holiday)}>
+                      <td data-label="操作">
+                        <div className="ph-actions">
+                          <button title="编辑" aria-label={`编辑 ${holiday.holiday_name}`} type="button" onClick={() => openEditModal(holiday)}>
                             <Edit3 size={15} />
-                            编辑
                           </button>
                           <button
-                            className="secondary-button compact-button danger-text-button"
+                            title="删除" aria-label={`删除 ${holiday.holiday_name}`}
                             type="button"
                             onClick={() => setDeletingHoliday(holiday)}
                           >
                             <Trash2 size={15} />
-                            删除
                           </button>
                         </div>
                       </td>
@@ -279,21 +294,25 @@ export function PublicHolidayPage() {
 
       {formOpen ? (
         <SystemModal
+          className="ph-v2-modal"
+          wide={false}
           title={editingHoliday ? '编辑公共假期' : '新增公共假期'}
           ariaLabel={editingHoliday ? '编辑公共假期' : '新增公共假期'}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           footer={
             <>
               <button className="secondary-button compact-button" type="button" onClick={() => setFormOpen(false)} disabled={saving}>
-                关闭
+                取消
               </button>
               <button className="primary-button compact-button" type="button" onClick={handleSubmit} disabled={saving}>
-                保存
+                {editingHoliday ? '保存' : '确认新增'}
               </button>
             </>
           }
         >
           <div className="form-grid single">
+            {!editingHoliday ? <div className="ph-year-notice"><CalendarDays size={20} />当前设置年份：<strong>{year} 年</strong></div> : null}
+            {error ? <p className="form-alert" role="alert">{error}</p> : null}
             <label className="form-field">
               <span>假期名称</span>
               <input
@@ -304,28 +323,18 @@ export function PublicHolidayPage() {
             </label>
 
             <label className="form-field">
-              <span>日期</span>
+              <span>假期日期</span>
               <input
                 type="date"
+                min={editingHoliday ? undefined : `${year}-01-01`}
+                max={editingHoliday ? undefined : `${year}-12-31`}
                 value={formValues.holiday_date}
                 onChange={(event) => setFormValues((current) => ({ ...current, holiday_date: event.target.value }))}
               />
+              {!editingHoliday ? <small className="ph-date-notice">仅可选择 {year} 年内的日期（{year}-01-01 至 {year}-12-31）。如需新增其他年份，请先关闭弹窗并切换年份。</small> : null}
             </label>
 
-            <label className="form-field">
-              <span>适用区域</span>
-              <select
-                value={formValues.region_id}
-                onChange={(event) => setFormValues((current) => ({ ...current, region_id: event.target.value }))}
-              >
-                <option value="">全部区域</option>
-                {regions.map((region) => (
-                  <option key={region.id} value={region.id}>
-                    {region.code}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <fieldset className="ph-region-options"><legend>适用区域</legend>{[{ id: '', code: '全部区域', name: '' }, ...regions].map((region) => <label key={region.id}><input type="radio" name="holiday-region" value={region.id} checked={formValues.region_id === region.id} onChange={(event) => setFormValues((current) => ({ ...current, region_id: event.target.value }))} />{region.code}{region.name ? ` — ${region.name}` : ''}</label>)}</fieldset>
 
             <label className="form-field">
               <span>备注（可选）</span>
@@ -459,6 +468,24 @@ function getCompanyActivityDisplayStatus(item: CompanyActivityListItem, today: s
 function getTodayDateKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function getMalaysiaToday() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function formatWeekday(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(new Date(year, month - 1, day));
+}
+
+function regionTone(holiday: PublicHolidayListItem) {
+  if (!holiday.region_id) return 'purple';
+  if (holiday.region?.code?.toUpperCase() === 'KCH') return 'cyan';
+  if (holiday.region?.code?.toUpperCase() === 'KL') return 'orange';
+  return 'neutral';
 }
 
 function formatRegion(holiday: PublicHolidayListItem) {
