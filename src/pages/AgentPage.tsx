@@ -2838,7 +2838,7 @@ function AgentPeriodRevenuePanel(props: {
         </>
       )}
 
-      {importOpen && (permissions.isSuperAdmin || permissions.canUse('agent-revenue-bulk-import')) ? <RevenueImportPreview onClose={() => setImportOpen(false)} /> : null}
+      {importOpen && (permissions.isSuperAdmin || permissions.canUse('agent-revenue-bulk-import')) ? <RevenueImportPreview onClose={() => setImportOpen(false)} onSaved={refreshRevenueWorkbench} /> : null}
 
       {!featureUnavailable && activeRow ? (
         <WeeklyRevenueModal
