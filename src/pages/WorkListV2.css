@@ -95,3 +95,18 @@
 .wv-stats > .wv-stat-category[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #6a9ce6; }
 .wv-stats > .wv-stat-completed[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #69b77c; }
 .wv-stats > .wv-stat:focus-visible { outline: 2px solid #7651ce; outline-offset: 2px; }
+
+/* Drag feedback stays above the list without intercepting pointer hit testing. */
+.wv-category, .wv-independent, .wv-task, .wv-sub, .wv-category-body, .wv-unassigned { position: relative; }
+.wv-drop-before::before, .wv-drop-after::after { content: ''; position: absolute; z-index: 5; left: 4px; right: 4px; height: 3px; border-radius: 4px; background: #8056df; pointer-events: none; }
+.wv-drop-before::before { top: -2px; }
+.wv-drop-after::after { bottom: -2px; }
+.wv-drag-ghost { position: fixed; z-index: 2000; max-width: min(260px, 70vw); padding: 10px 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #b8a0ee; border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 8px 24px #34205b40; pointer-events: none; }
+.wv-grip { user-select: none; -webkit-user-select: none; }
+
+/* Reserve an animated insertion gap while keeping the original data unchanged. */
+.wv-list > .wv-category, .wv-list > .wv-independent, .wv-task-wrap, .wv-sub { transition: margin 180ms ease; }
+.wv-task-wrap { position: relative; }
+.wv-is-dragging > .wv-category.wv-drop-before, .wv-is-dragging > .wv-independent.wv-drop-before, .wv-is-dragging .wv-task-wrap.wv-drop-before, .wv-is-dragging .wv-sub.wv-drop-before { margin-top: 28px; }
+.wv-is-dragging > .wv-category.wv-drop-after, .wv-is-dragging > .wv-independent.wv-drop-after, .wv-is-dragging .wv-task-wrap.wv-drop-after, .wv-is-dragging .wv-sub.wv-drop-after { margin-bottom: 28px; }
+@media (prefers-reduced-motion: reduce) { .wv-list > .wv-category, .wv-list > .wv-independent, .wv-task-wrap, .wv-sub { transition: none; } }
